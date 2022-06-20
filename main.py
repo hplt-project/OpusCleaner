@@ -6,6 +6,7 @@ from itertools import chain
 from pydantic import BaseModel, parse_obj_as
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 from enum import Enum
 import json
 import subprocess
@@ -161,6 +162,11 @@ def api_get_filtered_dataset(name:str, filters:list[FilterStep]) -> list[dict[st
 @app.get('/filters/')
 def api_get_filters():
     return FILTERS
+
+
+@app.get('/')
+def redirect_to_interface():
+    return RedirectResponse('/static/index.html')
 
 
 if __name__ == '__main__':

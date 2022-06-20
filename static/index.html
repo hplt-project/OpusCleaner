@@ -3,39 +3,125 @@
 	<head>
 		<title>Beep boop</title>
 		<style>
+			html, body {
+				margin: 0;
+				padding: 0;
+				height: 100%;
+			}
+
+			body {
+				font: 16px/24px sans-serif;
+			}
+
 			#app {
+				height: 100%;
 				display: flex;
+				flex-direction: column;
+			}
+
+			.controls {
+				flex: 0;
+				padding: 1em;
+				border-bottom: 1px solid #ccc;
+			}
+
+			.main {
+				flex: 1;
+				display: flex;
+				overflow: hidden;
+			}
+
+			.sample {
+				flex: 1 1 auto;
+				overflow-y: auto;
+			}
+
+			.sample table {
+				table-layout: fixed;
+			}
+
+			.sample table td {
+				width: 50%;
+			}
+
+			.sample.display-as-rows table thead {
+				display: none;
+			}
+
+			.sample.display-as-rows table tr {
+				display: block;
+				margin-bottom: 1em;
+			}
+
+			.sample.display-as-rows table td {
+				display: block;
+				width: auto;
+			}
+
+			.sample.display-as-rows td[lang]::before {
+				content: attr(lang) ': ';
+				display: inline-block;
+				margin: 0 0.5em 0 0;
+				opacity: 0.5;
+			}
+
+			.filters {
+				flex: 0 0 300px;
+				border-left: 1px solid #ccc;
+			}
+
+			.filter-steps {
+				border-top: 1px solid #ccc;
 			}
 		</style>
 	</head>
 	<body>
 		<div id="app">
-			<select v-model="selectedDataset">
-				<option v-for="dataset in datasets" v-bind:value="dataset">{{ dataset.name }}</option>
-			</select>
+			<div class="controls">
+				<label>
+					Dataset:
+					<select v-model="selectedDataset">
+						<option v-for="dataset in datasets" v-bind:value="dataset">{{ dataset.name }}</option>
+					</select>
+				</label>
 
-			<div class="sample">
-				<table>
-					<tr v-for="(entry, i) in sample" v-bind:key="i">
-						<td v-for="(text, lang) in entry" v-bind:key="lang" v-bind:lang="lang">{{text}}</td>
-					</tr>
-				</table>
+				<label>
+					<input type="checkbox" v-model="displayAsRows">
+					Display as rows
+				</label>
 			</div>
 
-			<div class="filters">
-				<ul class="available-filters">
-					<li v-for="(filter, name) in filters">
-						<span v-bind:title="filter.command">{{name}}</span>
-						<button v-on:click="addFilterStep(name, filter)">Add</button>
-					</li>
-				</ul>
+			<div class="main">
+				<div v-bind:class="{'sample':true, 'display-as-rows': displayAsRows}">
+					<table>
+						<thead>
+							<tr>
+								<th v-for="lang in sampleColumns">{{lang}}</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr v-for="(entry, i) in sample" v-bind:key="i">
+								<td v-for="(text, lang) in entry" v-bind:key="lang" v-bind:lang="lang">{{text}}</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
 
-				<ol class="filter-steps">
-					<li v-for="(filterStep, i) in filterSteps">
-						<span>{{ filterStep.filter }}</span>
-						<button v-on:click="removeFilterStep(i)">Remove</button>
-					</li>
-				</ol>
+				<div class="filters">
+					<ul class="available-filters">
+						<li v-for="(filter, name) in filters">
+							<span v-bind:title="filter.command">{{name}}</span>
+							<button v-on:click="addFilterStep(name, filter)">Add</button>
+						</li>
+					</ul>
+
+					<ol class="filter-steps">
+						<li v-for="(filterStep, i) in filterSteps">
+							<span>{{ filterStep.filter }}</span>
+							<button v-on:click="removeFilterStep(i)">Remove</button>
+						</li>
+					</ol>
+				</div>
 			</div>
 		</div>
 		<!-- because Safari, unfortunately, does not do importmap yet? -->
@@ -53,6 +139,7 @@
 			createApp({
 				data() {
 					return {
+						displayAsRows: false,
 						datasets: [],
 						selectedDataset: null,
 						sample: [],
@@ -64,6 +151,12 @@
 				async mounted() {
 					this.reloadDatasets();
 					this.reloadFilters();
+				},
+
+				computed: {
+					sampleColumns() {
+						return this.sample.length > 0 ? Object.keys(this.sample[0]) : []
+					}
 				},
 
 				watch: {

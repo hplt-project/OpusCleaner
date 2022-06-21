@@ -73,6 +73,10 @@
 			.filter-steps {
 				border-top: 1px solid #ccc;
 			}
+
+			.filter-steps label {
+				display: block;
+			}
 		</style>
 	</head>
 	<body>
@@ -96,7 +100,7 @@
 					<table>
 						<thead>
 							<tr>
-								<th v-for="lang in sampleColumns">{{lang}}</th>
+								<th v-for="lang in languages">{{lang}}</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -118,6 +122,16 @@
 					<ol class="filter-steps">
 						<li v-for="(filterStep, i) in filterSteps">
 							<span>{{ filterStep.filter }}</span>
+							<label>
+								<span>Column</span>
+								<select v-if="filterRequiresLanguage(filterStep)" v-model="filterStep.language">
+									<option v-for="lang in languages">{{lang}}</option>
+								</select>
+							</label>
+							<label v-for="(parameter, name) in filterDefinition(filterStep).parameters">
+								<span>{{ name }}</span>
+								<input type="text" v-model="filterStep.parameters[name]">
+							</label>
 							<button v-on:click="removeFilterStep(i)">Remove</button>
 						</li>
 					</ol>
@@ -136,14 +150,14 @@
 		<script type="module">
 			import {createApp} from 'vue';
 
-			createApp({
+			window.$app = createApp({
 				data() {
 					return {
 						displayAsRows: false,
 						datasets: [],
 						selectedDataset: null,
 						sample: [],
-						filters: [],
+						filters: {},
 						filterSteps: []
 					};
 				},
@@ -154,8 +168,8 @@
 				},
 
 				computed: {
-					sampleColumns() {
-						return this.sample.length > 0 ? Object.keys(this.sample[0]) : []
+					languages() {
+						return this.selectedDataset ? Array.from(Object.keys(this.selectedDataset.columns)).sort() : []
 					}
 				},
 
@@ -189,17 +203,28 @@
 							},
 							body: JSON.stringify(this.filterSteps)
 						});
-						this.sample = await response.json();
+
+						if (response.ok)
+							this.sample = await response.json();
+						else
+							throw new Error(`Could not fetch sample: ${JSON.stringify(await response.json())}`)
 					},
 					addFilterStep(name, filter) {
 						this.filterSteps.push({
 							filter: name,
-							parameters: {}
-						})
+							language: this.filterRequiresLanguage({filter:name}) ? this.languages[0] : null,
+							parameters: Object.fromEntries(Object.keys(filter.parameters).map(key => [key, null]))
+						});
 					},
 					removeFilterStep(i) {
 						this.filterSteps.splice(i);
-					}
+					},
+					filterDefinition(filterStep) {
+						return this.filters[filterStep.filter];
+					},
+					filterRequiresLanguage(filterStep) {
+						return this.filterDefinition(filterStep).type == 'monolingual';
+					},
 				},
 			}).mount('#app');
 		</script>

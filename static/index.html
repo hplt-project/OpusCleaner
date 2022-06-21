@@ -21,7 +21,6 @@
 
 			.controls {
 				flex: 0;
-				padding: 1em;
 				border-bottom: 1px solid #ccc;
 			}
 
@@ -70,12 +69,37 @@
 				border-left: 1px solid #ccc;
 			}
 
+			.filter {
+				display: flex;
+			}
+
+			.filter .filter-name {
+				flex: 2;
+			}
+
+			.filter .filter-type {
+				flex: 1;
+				font-size: 0.8em;
+				padding-left: 0.5em;
+			}
+
+			.filter .add-filter-btn {
+				flex: 0;
+				align-self: center;
+			}
+
 			.filter-steps {
 				border-top: 1px solid #ccc;
 			}
 
 			.filter-steps label {
 				display: block;
+			}
+
+			.controls, .available-filters, .filter-steps {
+				margin: 0;
+				padding: 0.5em 1em;
+				list-style: none;
 			}
 		</style>
 	</head>
@@ -113,9 +137,10 @@
 
 				<div class="filters">
 					<ul class="available-filters">
-						<li v-for="(filter, name) in filters">
-							<span v-bind:title="filter.command">{{name}}</span>
-							<button v-on:click="addFilterStep(name, filter)">Add</button>
+						<li v-for="(filter, name) in filters" class="filter">
+							<span v-bind:title="filter.command" class="filter-name">{{name}}</span>
+							<span class="filter-type">{{filter.type}}</span>
+							<button v-on:click="addFilterStep(name, filter)" class="add-filter-btn">Add</button>
 						</li>
 					</ul>
 

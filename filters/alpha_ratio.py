@@ -6,6 +6,19 @@ import argparse
 import re
 from clean_common import CHARS
 
+FILTER_PARAM = { "filter_alpha_ratio": {
+        "command": "filters/alpha_ratio.py --src-lang $LANG1 --trg-lang $LANG2 --ratio-words-src $SRCWORDRAT\
+         --ratio-words-trg $TRGWORDRAT --ratio-alpha-src $SRCALPHARAT --ratio-alpha-trg $TRGALPHARAT",
+        "parameters": {
+            "LANG1": {"type": "str", "allowed_values": CHARS.keys()},
+            "LANG2": {"type": "str", "allowed_values": CHARS.keys() + None},
+            "SRCWORDRAT": {"type": "float"},
+            "TRGWORDRAT": {"type": "float"},
+            "SRCALPHARAT": {"type": "float"},
+            "TRGALPHARAT": {"type": "float"}
+        }
+    }
+}
 
 def parse_user_args():
     """Parse the arguments necessary for this filter"""

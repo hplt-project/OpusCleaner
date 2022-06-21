@@ -4,6 +4,13 @@ from sys import stdin, stdout, stderr
 from typing import Optional
 import argparse
 
+FILTER_PARAM = { "src_trg_ratio": {
+        "command": "filters/src_trg_ratio.py --ratio-length $RATIO",
+        "parameters": {
+            "RATIO": {"type": "float"}
+        }
+    }
+}
 
 def parse_user_args():
     """Parse the arguments necessary for this filter"""
@@ -42,4 +49,4 @@ def clean_parallel(ratio: float, debug: Optional[bool]=True) -> None:
 
 if __name__ == '__main__':
     args = parse_user_args()
-    clean_parallel(args.ratio_length, args.args.debug)
+    clean_parallel(args.ratio_length, args.debug)

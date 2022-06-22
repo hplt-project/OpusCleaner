@@ -7,7 +7,7 @@ import argparse
 FILTER_PARAM = { "src_trg_ratio": {
         "command": "filters/src_trg_ratio.py --ratio-length $RATIO",
         "parameters": {
-            "RATIO": {"type": "float"}
+            "RATIO": {"type": "float", "default": 0.5}
         }
     }
 }
@@ -16,7 +16,7 @@ def parse_user_args():
     """Parse the arguments necessary for this filter"""
     parser = argparse.ArgumentParser()
     parser.add_argument("--ratio-length", default=0.6, type=float)
-    parser.add_argument("--debug", action='store_true')
+    parser.add_argument("--debug", default=True, action='store_true')
     return parser.parse_args()
 
 def clean_parallel(ratio: float, debug: Optional[bool]=True) -> None:
@@ -24,7 +24,7 @@ def clean_parallel(ratio: float, debug: Optional[bool]=True) -> None:
     for line in stdin:
         fields = line.strip().split('\t')
         if len(fields) != 2:
-            stderr.write(f'SINGLE/MULTIPLE_LINES\t{line.strip()}')
+            stderr.write(f'SINGLE/MULTIPLE_LINES\t{line}')
             continue
 
         src = fields[-2].strip()
@@ -32,7 +32,8 @@ def clean_parallel(ratio: float, debug: Optional[bool]=True) -> None:
 
         # Remove identical lines
         if src.lower() == trg.lower():
-            stderr.write(f'IDENTICAL\t{src}\t{trg}')
+            if debug:
+                stderr.write(f'IDENTICAL\t{src}\t{trg}\n')
             continue
 
         src_toks = src.split()
@@ -43,7 +44,7 @@ def clean_parallel(ratio: float, debug: Optional[bool]=True) -> None:
         ratio_len = src_len / float(trg_len)
         if ratio_len < ratio or ratio_len > (1. / ratio):
             if debug:
-                stderr.write(f'RATIO_LENGTH\t{src}\t{trg}')
+                stderr.write(f'RATIO_LENGTH: {ratio_len}\t{src}\t{trg}\n')
         else:
             stdout.write(line)
 

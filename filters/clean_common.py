@@ -2,6 +2,7 @@
 """Common filtering code to be used by various submodules"""
 
 CHARS = {
+    'ar': r'[\u0600-\u06FF]', # This is not entirely right, as it also includes farsi symbols and whatnot
     'bg': r'[АаБбВвГгДддЕеЖжЗзИиЙйКкkasЛлМмНнОоПпРрСсТтУуФфХхЦцЧчШшЩщЪъЬьЮюЯя]',
     'bn': r'[\u0980-\u09FF]', # bangla
     'ca': r'[a-zÀàÈèÉéÍíÒòÓóÚúÇç]',

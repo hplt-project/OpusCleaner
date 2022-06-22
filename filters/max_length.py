@@ -7,8 +7,8 @@ import argparse
 FILTER_PARAM = { "max_length": {
         "command": "filters/max_length.py --max-length $MAXLENGTH --min-length $MINLENGTH",
         "parameters": {
-            "MAXLENGTH": {"type": "int"},
-            "MINLENGTH": {"type": "int"}
+            "MAXLENGTH": {"type": "int", "default": 150},
+            "MINLENGTH": {"type": "int", "default": 1}
         }
     }
 }
@@ -18,7 +18,7 @@ def parse_user_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--max-length", default=150, type=float)
     parser.add_argument("--min-length", default=1, type=float)
-    parser.add_argument("--debug", action='store_true')
+    parser.add_argument("--debug", default=True, action='store_true')
     return parser.parse_args()
 
 def clean_parallel(max_length: float, min_length: float, debug: Optional[bool]=True) -> None:
@@ -48,7 +48,7 @@ def clean_parallel(max_length: float, min_length: float, debug: Optional[bool]=T
         if srcpass and trgpass:
             stdout.write(line)
         elif debug:
-            stderr.write(f'LENGTH\t{src}\t{trg}')
+            stderr.write(f'LENGTH\t{src}\t{trg}\n')
 
 
 if __name__ == '__main__':

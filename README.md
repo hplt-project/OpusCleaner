@@ -15,7 +15,7 @@ First, get some datasets together, e.g.
 ```sh
 mkdir -p data
 mtdata get -l ara-eng -tr OPUS-elrc_2922-v1-ara-eng --compress -o data
-mtdata get -l fra-eng -tr OPUS-elitr-eva-v1-eng-fra --compress -o data
+mtdata get -l fra-eng -tr OPUS-elitr_eca-v1-eng-fra --compress -o data
 ```
 
 Then for development:

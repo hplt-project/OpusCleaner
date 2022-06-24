@@ -1,7 +1,7 @@
 import os
 import gzip
 import sys
-from typing import Optional, Iterable, TypeVar
+from typing import Optional, Iterable, TypeVar, Union, Literal
 from contextlib import ExitStack
 from itertools import chain
 from pydantic import BaseModel, parse_obj_as, validator
@@ -44,9 +44,37 @@ class FilterType(Enum):
     MONOLINGUAL = "monolingual"
 
 
-class FilterParameter(BaseModel):
-    # TODO
-    pass
+class FilterParameterFloat(BaseModel):
+    type: Literal["float"]
+    min: Optional[float]
+    max: Optional[float]
+    default: Optional[float]
+
+
+class FilterParameterInt(BaseModel):
+    type: Literal["int"]
+    min: Optional[int]
+    max: Optional[int]
+    default: Optional[int]
+
+
+class FilterParameterBool(BaseModel):
+    type: Literal["bool"]
+    default: Optional[bool]
+
+
+class FilterParameterStr(BaseModel):
+    type: Literal["str"]
+    default: Optional[str]
+    allowed_values: Optional[list[str]]
+
+
+FilterParameter = Union[
+    FilterParameterFloat,
+    FilterParameterInt,
+    FilterParameterBool,
+    FilterParameterStr
+]
 
 
 class Filter(BaseModel):

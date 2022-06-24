@@ -84,9 +84,10 @@ FilterParameter = Union[
 
 class Filter(BaseModel):
     type: FilterType
-    name: str
+    name: str # comes from filename by default
+    description: Optional[str]
     command: str
-    basedir: Optional[str]
+    basedir: Optional[str] # same as .json file by default
     parameters: dict[str,FilterParameter]
 
 
@@ -135,10 +136,14 @@ def list_filters(path) -> Iterable[Filter]:
             print(f"Could not parse {filename}: {e}", file=sys.stderr)
 
 
-#TODO: Get this filter list from parsing json files
-FILTERS: dict[str,Filter] = {
-    definition.name: definition for definition in list_filters(FILTER_PATH)
-}
+
+FILTERS: dict[str,Filter] = {}
+
+def reload_filters():
+    global FILTERS
+    FILTERS = {definition.name: definition for definition in list_filters(FILTER_PATH)}
+
+reload_filters()
 
 
 T = TypeVar("T")
@@ -169,7 +174,12 @@ def compute_sample(name:str, columns:list[tuple[str,os.DirEntry]]):
             fout.write(b'\t'.join(line.rstrip(b'\n') for line in pair) + b'\n')
 
 
-def get_sample(name:str, filters:list[FilterStep]) -> list[dict[str,str]]:
+class FilterOutput(BaseModel):
+    stdout: list[dict[str,str]]
+    stderr: Optional[str]
+
+
+def get_sample(name:str, filters:list[FilterStep]) -> FilterOutput:
     columns: list[tuple[str,os.DirEntry]] = sorted(list_datasets(DATA_PATH).get(name).items(), key=lambda pair: pair[0])
     langs = [lang for lang, _ in columns]
 
@@ -182,11 +192,16 @@ def get_sample(name:str, filters:list[FilterStep]) -> list[dict[str,str]]:
 
     filter_hash = ''
 
+    p_filter_stderr:Optional[bytes] = None
+
     for i, filter_step in enumerate(filters):
         filter_definition = FILTERS[filter_step.filter]
         filter_json = json.dumps(filter_step.dict(), sort_keys=True)
         filter_hash = hashlib.sha256((filter_hash + filter_json).encode()).hexdigest()
-        if not os.path.exists(sample_path(name, langs) + filter_hash) or True:
+        
+        # If we already have this cached, skip it. Unless it is the last step,
+        # we always re-execute that one for debug output etc.
+        if not os.path.exists(sample_path(name, langs) + filter_hash) or i + 1 == len(filters):
             with TemporaryFile('w+b') as fout:
                 # Decompress input
                 p_gunzip = subprocess.Popen(['pigz', '-cd', sample_file], stdout=subprocess.PIPE)
@@ -215,7 +230,7 @@ def get_sample(name:str, filters:list[FilterStep]) -> list[dict[str,str]]:
                 # Check exit codes, testing most obvious problems first.
                 _, p_filter_stderr = p_filter.communicate()
                 if p_filter.returncode != 0:
-                    raise Exception(f"Step {i}: {filter_step.filter} failed:\n{p_filter_stderr}")
+                    raise Exception(f"Step {i}: {filter_step.filter} failed:\n{p_filter_stderr!s}")
 
                 if p_gunzip.wait() != 0:
                     raise Exception(f"Decompression of input {sample_file} for step {i} failed. Previous step might have caused an error?")
@@ -233,7 +248,9 @@ def get_sample(name:str, filters:list[FilterStep]) -> list[dict[str,str]]:
 
     # Read the sample data as a dict[lang:str: line:str]
     with gzip.open(sample_file, 'rt') as fh:
-        return [dict(zip(langs, line.rstrip('\n').split('\t'))) for line in fh]
+        return FilterOutput(
+            stdout=[dict(zip(langs, line.rstrip('\n').split('\t'))) for line in fh],
+            stderr=p_filter_stderr.decode() if p_filter_stderr is not None else None)
 
 
 app = FastAPI()
@@ -252,17 +269,18 @@ def api_list_datasets() -> list[Dataset]:
 
 
 @app.get('/datasets/{name}/sample')
-def api_get_dataset(name:str) -> list[dict[str,str]]:
+def api_get_dataset(name:str) -> FilterOutput:
     return get_sample(name, [])
 
 
 @app.post('/datasets/{name}/sample')
-def api_get_filtered_dataset(name:str, filters:list[FilterStep]) -> list[dict[str,str]]:
+def api_get_filtered_dataset(name:str, filters:list[FilterStep]) -> FilterOutput:
     return get_sample(name, filters)
 
 
 @app.get('/filters/')
 def api_get_filters():
+    reload_filters()
     return FILTERS
 
 

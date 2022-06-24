@@ -7,6 +7,7 @@
 				margin: 0;
 				padding: 0;
 				height: 100%;
+				overflow: hidden;
 			}
 
 			body {
@@ -28,6 +29,24 @@
 				flex: 1;
 				display: flex;
 				overflow: hidden;
+			}
+
+			.filter-output {
+				display: flex;
+				flex-direction: column;
+				flex: 1 1 auto;
+/*				overflow: hidden;*/
+			}
+
+			.filter-error {
+				border-top: 1px solid #ccc;
+				flex: 0 0 auto;
+				overflow: hidden;
+				overflow-y: auto;
+			}
+
+			.filter-error pre {
+				white-space: pre-wrap;
 			}
 
 			.sample {
@@ -65,8 +84,20 @@
 			}
 
 			.filters {
+				display: flex;
+				flex-direction: column;
 				flex: 0 0 300px;
 				border-left: 1px solid #ccc;
+			}
+
+			.available-filters {
+				flex: 0;
+			}
+
+			.filter-steps {
+				flex: 1;
+				border-top: 1px solid #ccc;
+				overflow-y: auto;
 			}
 
 			.filter {
@@ -88,8 +119,11 @@
 				align-self: center;
 			}
 
-			.filter-steps {
-				border-top: 1px solid #ccc;
+			.filter-steps li {
+				background: #ccc;
+				border-radius: 4px;
+				padding: 0.5em;
+				margin: 0 0 1em 0;
 			}
 
 			.filter-steps label {
@@ -120,25 +154,30 @@
 			</div>
 
 			<div class="main">
-				<div v-bind:class="{'sample':true, 'display-as-rows': displayAsRows}">
-					<table>
-						<thead>
-							<tr>
-								<th v-for="lang in languages">{{lang}}</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr v-for="(entry, i) in sample" v-bind:key="i">
-								<td v-for="(text, lang) in entry" v-bind:key="lang" v-bind:lang="lang">{{text}}</td>
-							</tr>
-						</tbody>
-					</table>
+				<div class="filter-output">
+					<div v-bind:class="{'sample':true, 'display-as-rows': displayAsRows}">
+						<table>
+							<thead>
+								<tr>
+									<th v-for="lang in languages">{{lang}}</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr v-for="(entry, i) in sample.stdout" v-bind:key="i">
+									<td v-for="(text, lang) in entry" v-bind:key="lang" v-bind:lang="lang">{{text}}</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+					<div class="filter-error" v-if="sample.stderr">
+						<pre>{{ sample.stderr }}</pre>
+					</div>
 				</div>
 
 				<div class="filters">
 					<ul class="available-filters">
 						<li v-for="(filter, name) in filters" class="filter">
-							<span v-bind:title="filter.command" class="filter-name">{{name}}</span>
+							<span v-bind:title="filter.description" class="filter-name">{{name}}</span>
 							<span class="filter-type">{{filter.type}}</span>
 							<button v-on:click="addFilterStep(name, filter)" class="add-filter-btn">Add</button>
 						</li>
@@ -244,7 +283,7 @@
 						if (response.ok)
 							this.sample = await response.json();
 						else
-							throw new Error(`Could not fetch sample: ${JSON.stringify(await response.json())}`)
+							this.sample = {stdout: [], stderr: await response.text()};
 					},
 					addFilterStep(name, filter) {
 						this.filterSteps.push({

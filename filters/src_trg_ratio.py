@@ -1,25 +1,18 @@
 #!/usr/bin/env python3
 """Filters the lines based on the ratio between num_src_tokens and num_trg_tokens"""
 from sys import stdin, stdout, stderr
-from typing import Optional
 import argparse
 
-FILTER_PARAM = { "src_trg_ratio": {
-        "command": "filters/src_trg_ratio.py --ratio-length $RATIO",
-        "parameters": {
-            "RATIO": {"type": "float", "default": 0.5}
-        }
-    }
-}
 
 def parse_user_args():
     """Parse the arguments necessary for this filter"""
     parser = argparse.ArgumentParser()
     parser.add_argument("--ratio-length", default=0.6, type=float)
-    parser.add_argument("--debug", default=True, action='store_true')
+    parser.add_argument("--debug", action='store_true')
     return parser.parse_args()
 
-def clean_parallel(ratio: float, debug: Optional[bool]=True) -> None:
+
+def clean_parallel(ratio: float, debug: bool=True) -> None:
     """Cleans the parallel dataset based on the ratio of source to target tokens and vice versa"""
     for line in stdin:
         fields = line.strip().split('\t')
@@ -47,6 +40,7 @@ def clean_parallel(ratio: float, debug: Optional[bool]=True) -> None:
                 stderr.write(f'RATIO_LENGTH: {ratio_len}\t{src}\t{trg}\n')
         else:
             stdout.write(line)
+
 
 if __name__ == '__main__':
     args = parse_user_args()

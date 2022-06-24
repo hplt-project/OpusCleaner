@@ -1,0 +1,6 @@
+{
+    "description": "Fix encoding issues found in the French side of the ELITR ECA corpus",
+    "type": "monolingual",
+    "command": "./fix_elitr_eca.py",
+    "parameters": {}
+}

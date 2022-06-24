@@ -1,5 +1,6 @@
 import os
 import gzip
+import sys
 from typing import Optional, Iterable, TypeVar
 from contextlib import ExitStack
 from itertools import chain
@@ -11,6 +12,7 @@ from enum import Enum
 import json
 import subprocess
 import hashlib
+from glob import glob
 from tempfile import TemporaryFile
 from shutil import copyfileobj
 
@@ -19,6 +21,12 @@ from sample import sample
 
 
 DATA_PATH = 'data/train-parts'
+
+FILTER_PATH = 'filters/*.json'
+
+# col.py is used to apply a monolingual filter to a bilingual dataset. Needs
+# to be absolute since filters can run from different cwds.
+COL_PY = os.path.abspath('./col.py')
 
 
 class File(BaseModel):
@@ -45,6 +53,7 @@ class Filter(BaseModel):
     type: FilterType
     name: str
     command: str
+    basedir: Optional[str]
     parameters: dict[str,FilterParameter]
 
 
@@ -80,31 +89,22 @@ class FilterStep(BaseModel):
         return language
 
 
+def list_filters(path) -> Iterable[Filter]:
+    for filename in glob(path, recursive=True):
+        try:
+            with open(filename) as fh:
+                defaults = {
+                    "name": os.path.splitext(os.path.basename(filename))[0],
+                    "basedir": os.path.dirname(filename)
+                }
+                yield parse_obj_as(Filter, {**defaults, **json.load(fh)})
+        except Exception as e:
+            print(f"Could not parse {filename}: {e}", file=sys.stderr)
+
+
 #TODO: Get this filter list from parsing json files
 FILTERS: dict[str,Filter] = {
-    definition.name: definition for definition in parse_obj_as(list[Filter], [
-        {
-            "name": "remove-empty-lines",
-            "type": "bilingual",
-            "command": r"grep -vE '^\s*\t|\t\s*$'",
-            "parameters": {}
-        },
-        {
-            "name": "clean-parallel",
-            "type": "bilingual",
-            "command": "filters/clean_parallel.py -l1 $LANG1 -l2 $LANG2",
-            "parameters": {
-                "LANG1": {},
-                "LANG2": {}
-            }
-        },
-        {
-            "name": "fix-elitr-eca",
-            "type": "monolingual",
-            "command": "filters/fix-elitr-eca.py",
-            "parameters": {}
-        }
-    ])
+    definition.name: definition for definition in list_filters(FILTER_PATH)
 }
 
 
@@ -150,6 +150,7 @@ def get_sample(name:str, filters:list[FilterStep]) -> list[dict[str,str]]:
     filter_hash = ''
 
     for i, filter_step in enumerate(filters):
+        filter_definition = FILTERS[filter_step.filter]
         filter_json = json.dumps(filter_step.dict(), sort_keys=True)
         filter_hash = hashlib.sha256((filter_hash + filter_json).encode()).hexdigest()
         if not os.path.exists(sample_path(name, langs) + filter_hash) or True:
@@ -161,26 +162,27 @@ def get_sample(name:str, filters:list[FilterStep]) -> list[dict[str,str]]:
                 p_gzip = subprocess.Popen(['pigz', '-9c'], stdin=subprocess.PIPE, stdout=fout)
 
                 filter_env = os.environ.copy()
-                for name, props in FILTERS[filter_step.filter].parameters.items():
+                for name, props in filter_definition.parameters.items():
                     filter_env[name] = filter_step.parameters[name]
 
-                if FILTERS[filter_step.filter].type == FilterType.BILINGUAL:
-                    command = [FILTERS[filter_step.filter].command]
-                elif FILTERS[filter_step.filter].type == FilterType.MONOLINGUAL:
+                if filter_definition.type == FilterType.BILINGUAL:
+                    command = [filter_definition.command]
+                elif filter_definition.type == FilterType.MONOLINGUAL:
                     column = langs.index(none_throws(filter_step.language))
-                    command = [f'./col.py {column} {FILTERS[filter_step.filter].command}']
+                    command = [f'{COL_PY} {column} {filter_definition.command}']
                 else:
                     raise NotImplementedError()
                 
-                p_filter = subprocess.Popen(command, env=filter_env, stdin=p_gunzip.stdout, stdout=p_gzip.stdin, shell=True)
+                p_filter = subprocess.Popen(command, env=filter_env, stdin=p_gunzip.stdout, stdout=p_gzip.stdin, shell=True, cwd=filter_definition.basedir)
                 
                 # Disconnect from the pipes only used by the spawned processes
                 none_throws(p_gunzip.stdout).close()
                 none_throws(p_gzip.stdin).close()
 
                 # Check exit codes, testing most obvious problems first.
-                if p_filter.wait() != 0:
-                    raise Exception(f"Step {i}: {filter_step.filter} failed")
+                _, p_filter_stderr = p_filter.communicate()
+                if p_filter.returncode != 0:
+                    raise Exception(f"Step {i}: {filter_step.filter} failed:\n{p_filter_stderr}")
 
                 if p_gunzip.wait() != 0:
                     raise Exception(f"Decompression of input {sample_file} for step {i} failed. Previous step might have caused an error?")

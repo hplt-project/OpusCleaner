@@ -6,20 +6,6 @@ import argparse
 import re
 from clean_common import CHARS
 
-FILTER_PARAM = { "filter_alpha_ratio": {
-        "command": "filters/alpha_ratio.py --src-lang $LANG1 --trg-lang $LANG2 --ratio-words-src $SRCWORDRAT\
-         --ratio-words-trg $TRGWORDRAT --ratio-alpha-src $SRCALPHARAT --ratio-alpha-trg $TRGALPHARAT",
-        "parameters": {
-            "LANG1": {"type": "str", "allowed_values": list(CHARS.keys())},
-            "LANG2": {"type": "str", "allowed_values": list(CHARS.keys()) + [None]},
-            "SRCWORDRAT": {"type": "float", "default": 0.4},
-            "TRGWORDRAT": {"type": "float", "default": 0.4},
-            "SRCALPHARAT": {"type": "float", "default": 0.5},
-            "TRGALPHARAT": {"type": "float", "default": 0.5}
-        }
-    }
-}
-
 def parse_user_args():
     """Parse the arguments necessary for this filter"""
     parser = argparse.ArgumentParser()
@@ -27,14 +13,14 @@ def parse_user_args():
     parser.add_argument("--ratio-words-trg", default=0.6, type=float, help='Ratio between words and non words (eg numbers, foreign words) in a trg sentence.')
     parser.add_argument("--ratio-alpha-src", default=0.4, type=float, help='Ratio between characters from the src language compared to all characters (eg numbers, emoji, punctuation, etc...)')
     parser.add_argument("--ratio-alpha-trg", default=0.4, type=float, help='Ratio between characters from the trg language compared to all characters (eg numbers, emoji, punctuation, etc...)')
-    parser.add_argument("--src-lang", default="en", type=str)
-    parser.add_argument("--trg-lang", type=str)
-    parser.add_argument("--debug", default=True, action='store_true')
+    parser.add_argument("--src-lang", default="en", type=str, choices=list(CHARS.keys()))
+    parser.add_argument("--trg-lang", type=str, choices=list(CHARS.keys()))
+    parser.add_argument("--debug", action='store_true')
     return parser.parse_args()
 
 def clean_parallel(src_lang: str, ratio_words_src: float, ratio_alpha_src: float,\
-trg_lang: Optional[str]=None, ratio_words_trg: Optional[float]=None, ratio_alpha_trg: Optional[float]=None,\
- debug: Optional[bool]=True) -> None:
+trg_lang: Optional[str], ratio_words_trg: float, ratio_alpha_trg: float,\
+ debug: bool = True) -> None:
     """Cleans the parallel (or monolingual) dataset based on the number of characters"""
     for line in stdin:
         fields = line.strip().split('\t')
@@ -82,9 +68,5 @@ trg_lang: Optional[str]=None, ratio_words_trg: Optional[float]=None, ratio_alpha
 
 if __name__ == '__main__':
     args = parse_user_args()
-    if args.src_lang not in CHARS:
-        stderr.write(f'Source language {args.src_lang} is not supported. Please add support for it in filters/clean_common.py')
-    if args.trg_lang is not None and args.trg_lang not in CHARS:
-        stderr.write(f'Target language {args.trg_lang} is not supported. Please add support for it in filters/clean_common.py')
     clean_parallel(src_lang=args.src_lang, ratio_words_src=args.ratio_words_src, ratio_alpha_src=args.ratio_alpha_src,\
         trg_lang=args.trg_lang, ratio_words_trg=args.ratio_words_trg, ratio_alpha_trg=args.ratio_alpha_trg, debug=args.debug)

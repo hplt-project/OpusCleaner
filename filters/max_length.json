@@ -1,0 +1,20 @@
+{
+    "description": "Filters a parallel or mono dataset based on line lengths",
+    "command": "./max_length.py --max-length $MAXLENGTH --min-length $MINLENGTH",
+    "parameters":
+    {
+        "MAXLENGTH":
+        {
+            "type": "int",
+            "default": 150,
+            "min": 0
+        },
+        "MINLENGTH":
+        {
+            "type": "int",
+            "default": 1,
+            "min": 0
+        }
+    },
+    "type": "monolingual"
+}

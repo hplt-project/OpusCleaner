@@ -1,27 +1,19 @@
 #!/usr/bin/env python3
 """Filters a parallel or mono dataset based on line lengths"""
 from sys import stdin, stdout, stderr
-from typing import Optional
 import argparse
 
-FILTER_PARAM = { "max_length": {
-        "command": "filters/max_length.py --max-length $MAXLENGTH --min-length $MINLENGTH",
-        "parameters": {
-            "MAXLENGTH": {"type": "int", "default": 150},
-            "MINLENGTH": {"type": "int", "default": 1}
-        }
-    }
-}
 
 def parse_user_args():
     """Parse the arguments necessary for this filter"""
     parser = argparse.ArgumentParser()
     parser.add_argument("--max-length", default=150, type=float)
     parser.add_argument("--min-length", default=1, type=float)
-    parser.add_argument("--debug", default=True, action='store_true')
+    parser.add_argument("--debug", action='store_true')
     return parser.parse_args()
 
-def clean_parallel(max_length: float, min_length: float, debug: Optional[bool]=True) -> None:
+
+def clean_parallel(max_length: float, min_length: float, debug: bool=True) -> None:
     """Cleans the parallel or mono dataset based on line lengths"""
     for line in stdin:
         fields = line.strip().split('\t')
@@ -33,15 +25,15 @@ def clean_parallel(max_length: float, min_length: float, debug: Optional[bool]=T
             trg = fields[-1].strip()
 
         srctok = src.split()
-        trgtok = trg.split()
-
         srcpass: bool = (len(srctok) < max_length and len(srctok) > min_length)
+
         trgpass: bool
 
         # Check lengths
         if trg is None:
             trgpass = True
         else:
+            trgtok = trg.split()
             trgpass = (len(trgtok) < max_length and len(trgtok) > min_length)
 
         # write

@@ -44,26 +44,31 @@ class FilterType(Enum):
     MONOLINGUAL = "monolingual"
 
 
-class FilterParameterFloat(BaseModel):
+class FilterParameterBase(BaseModel):
+    type: str
+    help: Optional[str]
+
+
+class FilterParameterFloat(FilterParameterBase):
     type: Literal["float"]
     min: Optional[float]
     max: Optional[float]
     default: Optional[float]
 
 
-class FilterParameterInt(BaseModel):
+class FilterParameterInt(FilterParameterBase):
     type: Literal["int"]
     min: Optional[int]
     max: Optional[int]
     default: Optional[int]
 
 
-class FilterParameterBool(BaseModel):
+class FilterParameterBool(FilterParameterBase):
     type: Literal["bool"]
     default: Optional[bool]
 
 
-class FilterParameterStr(BaseModel):
+class FilterParameterStr(FilterParameterBase):
     type: Literal["str"]
     default: Optional[str]
     allowed_values: Optional[list[str]]

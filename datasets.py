@@ -1,7 +1,7 @@
 import os
 from itertools import groupby
 
-def list_datasets(path):
+def list_datasets(path) -> dict[str,dict[str,os.DirEntry]]:
 	with os.scandir(path) as entries:
 		files = [
 			entry

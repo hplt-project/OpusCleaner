@@ -1,7 +1,7 @@
 import os
 import gzip
 import sys
-from typing import Optional, Iterable, TypeVar, Union, Literal
+from typing import Optional, Iterable, TypeVar, Union, Literal, Any
 from contextlib import ExitStack
 from itertools import chain
 from pydantic import BaseModel, parse_obj_as, validator
@@ -48,6 +48,9 @@ class FilterParameterBase(BaseModel):
     type: str
     help: Optional[str]
 
+    def export(self, value: Any) -> str:
+        return str(value)
+
 
 class FilterParameterFloat(FilterParameterBase):
     type: Literal["float"]
@@ -66,6 +69,9 @@ class FilterParameterInt(FilterParameterBase):
 class FilterParameterBool(FilterParameterBase):
     type: Literal["bool"]
     default: Optional[bool]
+
+    def export(self, value: Any) -> str:
+        return "1" if value else ""
 
 
 class FilterParameterStr(FilterParameterBase):
@@ -93,7 +99,7 @@ class Filter(BaseModel):
 
 class FilterStep(BaseModel):
     filter: str
-    parameters: dict[str,str]
+    parameters: dict[str,Any]
     language: Optional[str]
 
     @validator('filter')
@@ -180,7 +186,7 @@ class FilterOutput(BaseModel):
 
 
 def get_sample(name:str, filters:list[FilterStep]) -> FilterOutput:
-    columns: list[tuple[str,os.DirEntry]] = sorted(list_datasets(DATA_PATH).get(name).items(), key=lambda pair: pair[0])
+    columns: list[tuple[str,os.DirEntry]] = sorted(list_datasets(DATA_PATH)[name].items(), key=lambda pair: pair[0])
     langs = [lang for lang, _ in columns]
 
     # If we don't have a sample stored, generate one. Doing it in bytes because
@@ -211,7 +217,7 @@ def get_sample(name:str, filters:list[FilterStep]) -> FilterOutput:
 
                 filter_env = os.environ.copy()
                 for name, props in filter_definition.parameters.items():
-                    filter_env[name] = filter_step.parameters[name]
+                    filter_env[name] = props.export(filter_step.parameters[name])
 
                 if filter_definition.type == FilterType.BILINGUAL:
                     command = [filter_definition.command]
@@ -221,7 +227,7 @@ def get_sample(name:str, filters:list[FilterStep]) -> FilterOutput:
                 else:
                     raise NotImplementedError()
                 
-                p_filter = subprocess.Popen(command, env=filter_env, stdin=p_gunzip.stdout, stdout=p_gzip.stdin, shell=True, cwd=filter_definition.basedir)
+                p_filter = subprocess.Popen(command, env=filter_env, stdin=p_gunzip.stdout, stdout=p_gzip.stdin, stderr=subprocess.PIPE, shell=True, cwd=filter_definition.basedir)
                 
                 # Disconnect from the pipes only used by the spawned processes
                 none_throws(p_gunzip.stdout).close()
@@ -287,27 +293,4 @@ def api_get_filters():
 @app.get('/')
 def redirect_to_interface():
     return RedirectResponse('/static/index.html')
-
-
-if __name__ == '__main__':
-    from pprint import pprint
-
-    filters = [
-        {
-            'filter': 'remove-empty-lines',
-            'parameters': {}
-        },
-        {
-            'filter': 'fix-elitr-eca',
-            'parameters': {}
-        },
-        {
-            'filter': 'clean-parallel',
-            'parameters': {
-                'LANG1': 'eng',
-                'LANG2': 'fra'
-            }
-        }
-        ]
-    pprint(get_sample('OPUS-elitr_eca-v1-eng-fra', parse_obj_as(list[FilterStep], filters)))
 

@@ -1,6 +1,6 @@
 {
     "description": "Filters the lines based on the ratio between alphabetic characters in a line from the language and others",
-    "command": "./alpha_ratio.py --src-lang $LANG1 ${LANG2:+--trg-lang $LANG2} --ratio-words-src $SRCWORDRAT --ratio-words-trg $TRGWORDRAT --ratio-alpha-src $SRCALPHARAT --ratio-alpha-trg $TRGALPHARAT",
+    "command": "./alpha_ratio.py --src-lang $LANG1 ${LANG2:+--trg-lang $LANG2} --ratio-words-src $SRCWORDRAT --ratio-words-trg $TRGWORDRAT --ratio-alpha-src $SRCALPHARAT --ratio-alpha-trg $TRGALPHARAT ${DEBUG:+--debug}",
     "parameters":
     {
         "LANG1":
@@ -111,6 +111,12 @@
             "type": "float",
             "default": 0.5,
             "help": "Ratio between characters from the trg language compared to all characters (eg numbers, emoji, punctuation, etc...)"
+        },
+        "DEBUG":
+        {
+            "type": "bool",
+            "default": false,
+            "help": "Print reason for each line that is filtered out"
         }
     },
     "type": "bilingual"

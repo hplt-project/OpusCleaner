@@ -155,7 +155,19 @@
 							</label>
 							<label v-for="(parameter, name) in filterDefinition(filterStep).parameters">
 								<span>{{ name }}</span>
-								<input type="text" v-model="filterStep.parameters[name]">
+								<select v-if="parameter.type == 'str' && parameter.allowed_values" v-model="filterStep.parameters[name]">
+									<option v-for="value in parameter.allowed_values" v-bind:value="value">{{value}}</option>
+								</select>
+								<input v-else-if="parameter.type == 'bool'" type="checkbox" v-model="filterStep.parameters[name]">
+								<input v-else-if="parameter.type == 'int' || parameter.type == 'float'"
+									type="number"
+									v-model="filterStep.parameters[name]"
+									v-bind:min="parameter.min"
+									v-bind:max="parameter.max"
+									v-bind:step="parameter.type == 'int' ? 1 : 0.1">
+								<input v-else type="text" v-model="filterStep.parameters[name]">
+								
+								<small v-if="parameter.help">{{parameter.help}}</small>
 							</label>
 							<button v-on:click="removeFilterStep(i)">Remove</button>
 						</li>
@@ -238,7 +250,7 @@
 						this.filterSteps.push({
 							filter: name,
 							language: this.filterRequiresLanguage({filter:name}) ? this.languages[0] : null,
-							parameters: Object.fromEntries(Object.keys(filter.parameters).map(key => [key, null]))
+							parameters: Object.fromEntries(Object.entries(filter.parameters).map(([key, parameter]) => [key, parameter.default]))
 						});
 					},
 					removeFilterStep(i) {

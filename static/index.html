@@ -1,7 +1,9 @@
 <!DOCTYPE html>
 <html>
 	<head>
-		<title>Beep boop</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title>Empty Train</title>
 		<style>
 			html, body {
 				margin: 0;
@@ -151,6 +153,8 @@
 					<input type="checkbox" v-model="displayAsRows">
 					Display as rows
 				</label>
+
+				<button v-on:click="saveFilterSteps" v-bind:disabled="!filterStepsChangedSinceLastSave">Save filtering steps</button>
 			</div>
 
 			<div class="main">
@@ -226,6 +230,18 @@
 		<script type="module">
 			import {createApp} from 'vue';
 
+			function cyrb53(str, seed = 0) {
+				let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
+				for (let i = 0, ch; i < str.length; i++) {
+					ch = str.charCodeAt(i);
+					h1 = Math.imul(h1 ^ ch, 2654435761);
+					h2 = Math.imul(h2 ^ ch, 1597334677);
+				}
+				h1 = Math.imul(h1 ^ (h1>>>16), 2246822507) ^ Math.imul(h2 ^ (h2>>>13), 3266489909);
+				h2 = Math.imul(h2 ^ (h2>>>16), 2246822507) ^ Math.imul(h1 ^ (h1>>>13), 3266489909);
+				return 4294967296 * (2097151 & h2) + (h1>>>0);
+			}
+
 			window.$app = createApp({
 				data() {
 					return {
@@ -234,43 +250,51 @@
 						selectedDataset: null,
 						sample: [],
 						filters: {},
-						filterSteps: []
+						filterSteps: [],
+						filterStepsLastSave: null
 					};
 				},
 
 				async mounted() {
-					this.reloadDatasets();
-					this.reloadFilters();
+					this.fetchDatasets();
+					this.fetchFilters();
 				},
 
 				computed: {
 					languages() {
 						return this.selectedDataset ? Array.from(Object.keys(this.selectedDataset.columns)).sort() : []
+					},
+					filterStepsStateHash() {
+						return cyrb53(JSON.stringify(this.filterSteps));
+					},
+					filterStepsChangedSinceLastSave() {
+						return this.filterStepsLastSave !== this.filterStepsStateHash;
 					}
 				},
 
 				watch: {
 					selectedDataset() {
-						this.reloadSample();
+						this.fetchSample();
+						this.fetchFilterSteps();
 					},
 					filterSteps: {
 						deep: true,
 						handler() {
-							this.reloadSample()
+							this.fetchSample()
 						}
 					}
 				},
 
 				methods: {
-					async reloadDatasets() {
+					async fetchDatasets() {
 						const response = await fetch('/datasets/');
 						this.datasets = await response.json();
 					},
-					async reloadFilters() {
+					async fetchFilters() {
 						const response = await fetch('/filters/');
 						this.filters = await response.json();
 					},
-					async reloadSample() {
+					async fetchSample() {
 						const response = await fetch(`/datasets/${encodeURIComponent(this.selectedDataset.name)}/sample`, {
 							method: 'POST',
 							headers: {
@@ -284,6 +308,28 @@
 							this.sample = await response.json();
 						else
 							this.sample = {stdout: [], stderr: await response.text()};
+					},
+					async fetchFilterSteps() {
+						const response = await fetch(`/datasets/${encodeURIComponent(this.selectedDataset.name)}/configuration`)
+						this.filterSteps = await response.json();
+						this.filterStepsLastSave = this.filterStepsStateHash;
+					},
+					async saveFilterSteps() {
+						const hash = this.filterStepsStateHash;
+
+						const response = await fetch(`/datasets/${encodeURIComponent(this.selectedDataset.name)}/configuration`, {
+							method: 'POST',
+							headers: {
+								'Content-Type': 'application/json',
+								'Accept': 'application/json'
+							},
+							body: JSON.stringify(this.filterSteps)
+						});
+
+						if (response.ok)
+							this.filterStepsLastSave = hash;
+						else
+							alert(await response.text());
 					},
 					addFilterStep(name, filter) {
 						this.filterSteps.push({

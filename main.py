@@ -15,6 +15,7 @@ import hashlib
 from glob import glob
 from tempfile import TemporaryFile
 from shutil import copyfileobj
+from pprint import pprint
 
 from datasets import list_datasets
 from sample import sample
@@ -282,6 +283,25 @@ def api_get_dataset(name:str) -> FilterOutput:
 @app.post('/datasets/{name}/sample')
 def api_get_filtered_dataset(name:str, filters:list[FilterStep]) -> FilterOutput:
     return get_sample(name, filters)
+
+
+def filter_configuration_path(name:str) -> str:
+    return os.path.join(DATA_PATH, f'{name}.filters.json')
+
+
+@app.get('/datasets/{name}/configuration')
+def api_get_dataset_filters(name:str) -> list[FilterStep]:
+    if not os.path.exists(filter_configuration_path(name)):
+        return []
+
+    with open(filter_configuration_path(name), 'r') as fh:
+        return parse_obj_as(list[FilterStep], json.load(fh))
+
+
+@app.post('/datasets/{name}/configuration')
+def api_update_dataset_filters(name:str, filters:list[FilterStep]):
+    with open(filter_configuration_path(name), 'w') as fh:
+        return json.dump([step.dict() for step in filters], fh)
 
 
 @app.get('/filters/')

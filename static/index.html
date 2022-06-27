@@ -128,14 +128,19 @@
 			}
 
 			.filter-steps li {
-				background: #ccc;
-				border-radius: 4px;
-				padding: 0.5em;
-				margin: 0 0 1em 0;
+				margin: 1em 0;
+				position: relative;
 			}
 
-			.filter-steps label {
-				display: block;
+			.filter-steps li:not(:last-child)::after {
+				content: '';
+				width: 0;
+				height: 0;
+				border-top: 1em solid #ccc;
+				border-left: 1em solid transparent;
+				border-right: 1em solid transparent;
+				position: absolute;
+				left: calc(50% - 1em);
 			}
 
 			.controls, .available-filters, .filter-steps {
@@ -143,6 +148,56 @@
 				padding: 0.5em 1em;
 				list-style: none;
 			}
+
+			input[type=number] {
+				width: 5em;
+			}
+
+			input[type=checkbox] {
+				width: 1em;
+			}
+
+			.property-list {
+				border: 1px solid #ccc;
+				border-radius: 4px;
+			}
+
+			.property-list > *:not(:last-child) {
+				border-bottom: 1px solid #ccc;
+			}
+
+			.property-list > header {
+				background: #ccc;
+			}
+
+			.property-list > header > button {
+				align-self: flex-end;
+			}
+
+			.property-list > * {
+				padding: 0.5em;
+				display: flex;
+				flex-wrap: wrap;
+			}
+
+			.property-list > * > * {
+				flex: 0;
+				align-self: center;
+			}
+
+			.property-list > * > *:first-child {
+				flex: 1;
+				align-self: flex-start;
+			}
+
+			.property-list > * > small {
+				flex: 1 0 100%;
+			}
+
+			.property-list > * > input[type=checkbox] {
+				flex-basis: 1em;
+			}
+
 		</style>
 	</head>
 	<body>
@@ -194,31 +249,34 @@
 					</ul>
 
 					<ol class="filter-steps">
-						<li v-for="(filterStep, i) in filterSteps">
-							<span>{{ filterStep.filter }}</span>
-							<label>
-								<span>Column</span>
-								<select v-if="filterRequiresLanguage(filterStep)" v-model="filterStep.language">
+						<li v-for="(filterStep, i) in filterSteps" class="property-list">
+							<header>
+								<span>{{ filterStep.filter }}</span>
+								<button v-on:click="removeFilterStep(i)">Remove</button>
+							</header>
+							<div v-if="filterRequiresLanguage(filterStep)">
+								<label v-bind:for="`step-${i}-column`">Column</label>
+								<select v-bind:id="`step-${i}-column`" v-model="filterStep.language">
 									<option v-for="lang in languages">{{lang}}</option>
 								</select>
-							</label>
-							<label v-for="(parameter, name) in filterDefinition(filterStep).parameters">
-								<span>{{ name }}</span>
-								<select v-if="parameter.type == 'str' && parameter.allowed_values" v-model="filterStep.parameters[name]">
+							</div>
+							<div v-for="(parameter, name) in filterDefinition(filterStep).parameters">
+								<label v-bind:for="`step-${i}-${name}`">{{ name }}</label>
+								<select v-if="parameter.type == 'str' && parameter.allowed_values" v-model="filterStep.parameters[name]" v-bind:id="`step-${i}-${name}`">
 									<option v-for="value in parameter.allowed_values" v-bind:value="value">{{value}}</option>
 								</select>
-								<input v-else-if="parameter.type == 'bool'" type="checkbox" v-model="filterStep.parameters[name]">
+								<input v-else-if="parameter.type == 'bool'" type="checkbox" v-model="filterStep.parameters[name]" v-bind:id="`step-${i}-${name}`">
 								<input v-else-if="parameter.type == 'int' || parameter.type == 'float'"
 									type="number"
 									v-model="filterStep.parameters[name]"
+									v-bind:id="`step-${i}-${name}`"
 									v-bind:min="parameter.min"
 									v-bind:max="parameter.max"
 									v-bind:step="parameter.type == 'int' ? 1 : 0.1">
-								<input v-else type="text" v-model="filterStep.parameters[name]">
+								<input v-else type="text" v-model="filterStep.parameters[name]" v-bind:id="`step-${i}-${name}`">
 								
-								<small v-if="parameter.help">{{parameter.help}}</small>
-							</label>
-							<button v-on:click="removeFilterStep(i)">Remove</button>
+								<small v-if="parameter.help" class="property-list-description">{{parameter.help}}</small>
+							</div>
 						</li>
 					</ol>
 				</div>

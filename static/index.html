@@ -20,6 +20,12 @@
 				height: 100%;
 				display: flex;
 				flex-direction: column;
+				opacity: 0;
+				transition: opacity ease-in-out 150ms;
+			}
+
+			#app[data-v-app] {
+				opacity: 1.0;
 			}
 
 			.controls {

@@ -64,10 +64,17 @@
 
 			.sample table {
 				table-layout: fixed;
+				border-collapse: collapse;
 			}
 
 			.sample table td {
 				width: 50%;
+				padding: 0.25em 0.5em;
+				vertical-align: top;
+			}
+
+			.sample table tr:nth-child(2n) td {
+				background: #eef;
 			}
 
 			.sample.display-as-rows table thead {

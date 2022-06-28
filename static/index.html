@@ -129,10 +129,15 @@
 
 			.filter-steps li {
 				margin: 1em 0;
-				position: relative;
+				position: relative; /* for ::after arrow */
+				background: white; /* for draggable */
 			}
 
-			.filter-steps li:not(:last-child)::after {
+			.filter-steps li.selected {
+				box-shadow: 0 0 0 4px rgba(0, 0, 255, 0.5);
+			}
+
+			.filter-steps li:not(:last-child):not(.selected)::after {
 				content: '';
 				width: 0;
 				height: 0;
@@ -240,45 +245,58 @@
 				</div>
 
 				<div class="filters">
-					<ul class="available-filters">
-						<li v-for="(filter, name) in filters" class="filter">
-							<span v-bind:title="filter.description" class="filter-name">{{name}}</span>
-							<span class="filter-type">{{filter.type}}</span>
-							<button v-on:click="addFilterStep(name, filter)" class="add-filter-btn">Add</button>
-						</li>
-					</ul>
+					<draggable tag="ul" class="available-filters"
+						v-model="filters" item-key="name"
+						v-bind:group="{name:'filters', pull:'clone', put:false}"
+						v-bind:sort="false"
+						v-bind:clone="createFilterStep">
+						<template v-slot:item="{element:filter}">
+							<li class="filter">
+								<span v-bind:title="filter.description" class="filter-name">{{filter.name}}</span>
+								<span class="filter-type">{{filter.type}}</span>
+								<button v-on:click="addFilterStep(name, filter)" class="add-filter-btn">Add</button>
+							</li>
+						</template>
+					</draggable>
 
-					<ol class="filter-steps">
-						<li v-for="(filterStep, i) in filterSteps" class="property-list">
-							<header>
-								<span>{{ filterStep.filter }}</span>
-								<button v-on:click="removeFilterStep(i)">Remove</button>
-							</header>
-							<div v-if="filterRequiresLanguage(filterStep)">
-								<label v-bind:for="`step-${i}-column`">Column</label>
-								<select v-bind:id="`step-${i}-column`" v-model="filterStep.language">
-									<option v-for="lang in languages">{{lang}}</option>
-								</select>
-							</div>
-							<div v-for="(parameter, name) in filterDefinition(filterStep).parameters">
-								<label v-bind:for="`step-${i}-${name}`">{{ name }}</label>
-								<select v-if="parameter.type == 'str' && parameter.allowed_values" v-model="filterStep.parameters[name]" v-bind:id="`step-${i}-${name}`">
-									<option v-for="value in parameter.allowed_values" v-bind:value="value">{{value}}</option>
-								</select>
-								<input v-else-if="parameter.type == 'bool'" type="checkbox" v-model="filterStep.parameters[name]" v-bind:id="`step-${i}-${name}`">
-								<input v-else-if="parameter.type == 'int' || parameter.type == 'float'"
-									type="number"
-									v-model="filterStep.parameters[name]"
-									v-bind:id="`step-${i}-${name}`"
-									v-bind:min="parameter.min"
-									v-bind:max="parameter.max"
-									v-bind:step="parameter.type == 'int' ? 1 : 0.1">
-								<input v-else type="text" v-model="filterStep.parameters[name]" v-bind:id="`step-${i}-${name}`">
-								
-								<small v-if="parameter.help" class="property-list-description">{{parameter.help}}</small>
-							</div>
-						</li>
-					</ol>
+					<draggable tag="ol" class="filter-steps"
+						v-model="filterSteps" item-key="stamp" 
+						v-bind:group="{name:'filters'}"
+						v-bind:multi-drag="true"
+						v-bind:multi-drag-key="multiDragKey"
+						selected-class="selected">
+						<template v-slot:item="{element:filterStep, index:i}">
+							<li class="property-list">
+								<header>
+									<span>{{ filterStep.filter }}</span>
+									<button v-on:click="removeFilterStep(i)">Remove</button>
+								</header>
+								<div v-if="filterRequiresLanguage(filterStep)">
+									<label v-bind:for="`step-${i}-column`">Column</label>
+									<select v-bind:id="`step-${i}-column`" v-model="filterStep.language">
+										<option v-for="lang in languages">{{lang}}</option>
+									</select>
+								</div>
+								<div v-for="(parameter, name) in filterDefinition(filterStep).parameters">
+									<label v-bind:for="`step-${i}-${name}`">{{ name }}</label>
+									<select v-if="parameter.type == 'str' && parameter.allowed_values" v-model="filterStep.parameters[name]" v-bind:id="`step-${i}-${name}`">
+										<option v-for="value in parameter.allowed_values" v-bind:value="value">{{value}}</option>
+									</select>
+									<input v-else-if="parameter.type == 'bool'" type="checkbox" v-model="filterStep.parameters[name]" v-bind:id="`step-${i}-${name}`">
+									<input v-else-if="parameter.type == 'int' || parameter.type == 'float'"
+										type="number"
+										v-model="filterStep.parameters[name]"
+										v-bind:id="`step-${i}-${name}`"
+										v-bind:min="parameter.min"
+										v-bind:max="parameter.max"
+										v-bind:step="parameter.type == 'int' ? 1 : 0.1">
+									<input v-else type="text" v-model="filterStep.parameters[name]" v-bind:id="`step-${i}-${name}`">
+									
+									<small v-if="parameter.help" class="property-list-description">{{parameter.help}}</small>
+								</div>
+							</li>
+						</template>
+					</draggable>
 				</div>
 			</div>
 		</div>
@@ -287,13 +305,19 @@
 		<script type="importmap">
 			{
 				"imports": {
-					"vue": "https://unpkg.com/vue@3/dist/vue.esm-browser.js"
+					"vue": "https://unpkg.com/vue@3/dist/vue.esm-browser.js",
+					"sortablejs": "https://unpkg.com/sortablejs@1.15.0/modular/sortable.complete.esm.js",
+					"vuedraggable": "https://unpkg.com/vuedraggable@4.1.0/src/vuedraggable.js"
 				}
 			}
 		</script>
 		<script type="module">
+			// Docs for Vue@3: https://vuejs.org/guide/introduction.html
 			import {createApp} from 'vue';
+			// Docs for draggable@4: https://github.com/SortableJS/vue.draggable.next
+			import draggable from 'vuedraggable';
 
+			// Simple hash function for creating string hashes
 			function cyrb53(str, seed = 0) {
 				let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
 				for (let i = 0, ch; i < str.length; i++) {
@@ -306,22 +330,17 @@
 				return 4294967296 * (2097151 & h2) + (h1>>>0);
 			}
 
-			window.$app = createApp({
+			const app = createApp({
 				data() {
 					return {
 						displayAsRows: false,
 						datasets: [],
 						selectedDataset: null,
 						sample: [],
-						filters: {},
+						filters: [],
 						filterSteps: [],
 						filterStepsLastSave: null
 					};
-				},
-
-				async mounted() {
-					this.fetchDatasets();
-					this.fetchFilters();
 				},
 
 				computed: {
@@ -333,6 +352,9 @@
 					},
 					filterStepsChangedSinceLastSave() {
 						return this.filterStepsLastSave !== this.filterStepsStateHash;
+					},
+					multiDragKey() {
+						return navigator.platform.match(/^(iP|Mac)/) ? 'Meta' : 'Control';
 					}
 				},
 
@@ -349,6 +371,20 @@
 					}
 				},
 
+				created() {
+					this._serial = 0;
+					this._stamps = new WeakMap();
+				},
+
+				async mounted() {
+					this.fetchDatasets();
+					this.fetchFilters();
+				},
+
+				components: {
+					draggable,
+				},
+
 				methods: {
 					async fetchDatasets() {
 						const response = await fetch('/datasets/');
@@ -356,7 +392,8 @@
 					},
 					async fetchFilters() {
 						const response = await fetch('/filters/');
-						this.filters = await response.json();
+						// Turn the {name:Filter} map into a [Filter] list and fold the 'name' attribute into the Filter.name property.
+						this.filters = Array.from(Object.entries(await response.json()), ([name, value]) => Object.assign(value, {name}));
 					},
 					async fetchSample() {
 						const response = await fetch(`/datasets/${encodeURIComponent(this.selectedDataset.name)}/sample`, {
@@ -395,24 +432,38 @@
 						else
 							alert(await response.text());
 					},
-					addFilterStep(name, filter) {
-						this.filterSteps.push({
-							filter: name,
-							language: this.filterRequiresLanguage({filter:name}) ? this.languages[0] : null,
+					createFilterStep(filter) {
+						return {
+							filter: filter.name,
+							language: this.filterRequiresLanguage({filter:filter.name}) ? this.languages[0] : null,
 							parameters: Object.fromEntries(Object.entries(filter.parameters).map(([key, parameter]) => [key, parameter.default]))
-						});
+						}
+					},
+					addFilterStep(filter) {
+						this.filterSteps.push(this.createFilterStep(filter));
 					},
 					removeFilterStep(i) {
 						this.filterSteps.splice(i);
 					},
 					filterDefinition(filterStep) {
-						return this.filters[filterStep.filter];
+						return this.filters.find(filter => filter.name === filterStep.filter);
 					},
 					filterRequiresLanguage(filterStep) {
 						return this.filterDefinition(filterStep).type == 'monolingual';
 					},
-				},
-			}).mount('#app');
+					stamp(obj) {
+						if (!this._stamps.has(obj))
+							this._stamps.set(obj, ++this._serial);
+						return this._stamps.get(obj);
+					}
+				}
+			})
+
+			app.mount('#app');
+
+			window.$app = app; // for debugging
+
+
 		</script>
 	</body>
 </html>

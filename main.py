@@ -23,7 +23,7 @@ from sample import sample
 
 DATA_PATH = 'data/train-parts'
 
-FILTER_PATH = 'filters/*.json'
+FILTER_PATH = 'filters/descriptors/*.json'
 
 # col.py is used to apply a monolingual filter to a bilingual dataset. Needs
 # to be absolute since filters can run from different cwds.

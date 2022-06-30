@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Filters the lines based on the ratio between alphabetic characters in a line from the language and others"""
 from sys import stdin, stdout, stderr
 from typing import Optional
 import argparse
@@ -8,7 +7,7 @@ from clean_common import CHARS
 
 def parse_user_args():
     """Parse the arguments necessary for this filter"""
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Filters the lines based on the ratio between alphabetic characters in a line from the language and others")
     parser.add_argument("--ratio-words-src", default=0.6, type=float, help='Ratio between words and non words (eg numbers, foreign words) in a src sentence.')
     parser.add_argument("--ratio-words-trg", default=0.6, type=float, help='Ratio between words and non words (eg numbers, foreign words) in a trg sentence.')
     parser.add_argument("--ratio-alpha-src", default=0.4, type=float, help='Ratio between characters from the src language compared to all characters (eg numbers, emoji, punctuation, etc...)')

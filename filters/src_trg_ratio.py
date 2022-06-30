@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-"""Filters the lines based on the ratio between num_src_tokens and num_trg_tokens"""
 from sys import stdin, stdout, stderr
 import argparse
 
 
 def parse_user_args():
     """Parse the arguments necessary for this filter"""
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Filters the lines based on the ratio between num_src_tokens and num_trg_tokens")
     parser.add_argument("--ratio-length", default=0.6, type=float)
     parser.add_argument("--debug", action='store_true')
     return parser.parse_args()

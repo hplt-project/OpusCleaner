@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import sys
 import re
+import argparse
+
 
 mapping = [
 	("\u0083", "É"),	# D<U+0083>CLARATION
@@ -19,6 +21,7 @@ mapping = [
 	("Ő", "'"),  # lŐexercice
 ]
 
+
 class Translator:
 	def __init__(self, mapping):
 		self.mapping = {entry[0]: entry[1] for entry in mapping}
@@ -28,7 +31,14 @@ class Translator:
 	def __call__(self, input):
 		return re.sub(self.pattern, self.callback, input)
 
+
+def parse_user_args():
+    parser = argparse.ArgumentParser(description="Fixes select encoding issues on the French side of the ELITR ECA dataset.")
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
+	args = parse_user_args()
 	for line in sys.stdin:
 		sys.stdout.write(Translator(mapping)(line))
 

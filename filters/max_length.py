@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-"""Filters a parallel or mono dataset based on line lengths"""
 from sys import stdin, stdout, stderr
 import argparse
 
 
 def parse_user_args():
     """Parse the arguments necessary for this filter"""
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Filters a parallel or mono dataset based on line lengths")
     parser.add_argument("--max-length", default=150, type=float)
     parser.add_argument("--min-length", default=1, type=float)
     parser.add_argument("--debug", action='store_true')

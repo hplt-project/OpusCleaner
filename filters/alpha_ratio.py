@@ -1,10 +1,57 @@
 #!/usr/bin/env python3
 """Filters the lines based on the ratio between alphabetic characters in a line from the language and others"""
 from sys import stdin, stdout, stderr
-from typing import Optional
+from typing import Optional, List
 import argparse
 import re
 from clean_common import CHARS
+import json
+
+def create_json_str(parser_list: List, filestr: str, docstr: str):
+    """Creates a json string from the argparser __dict__['_actions']"""
+    json_out = {}
+    json_out["description"] = docstr
+    param_dict = {}
+
+    for i, argument in enumerate(parser_list):
+        # We need to skip [0], as this is the prepended `--help`
+        current_str = {}
+        if i == 0:
+            if argument.option_strings[0] == '-h' or argument.option_strings[0] == '--help':
+                continue
+            else:
+                stderr.write(f"Something is wrong, expected first line to be --help, got: {argument.option_strings[0]} instead.\n")
+                exit(2)
+        else:
+            current_str["switch"] = argument.option_strings[0]
+            current_str["substitute"] = argument.option_strings[0].replace('-','').upper()
+
+            # Denotes something without an argument
+            if argument.type != None:
+                current_str["type"] = argument.type.__class__.__name__
+            current_str["default"] = argument.default
+            current_str["help"] = argument.help
+
+            if argument.choices is not None:
+                current_str["allowed_values"] = argument.choices
+            current_str["required"] = argument.required
+
+            # Add to the parameter dict
+            param_dict[current_str["substitute"]] = current_str
+    json_out["parameters"] = param_dict
+
+    json_out["command"] = "./" + filestr
+    for _, value in param_dict.items():
+        json_out["command"] = json_out["command"] + " "
+        if "type" in value:
+            json_out["command"] = json_out["command"] + value["switch"] + " $" + value["substitute"]
+        else: # Captures debug, but should also capture other types
+            json_out["command"] = json_out["command"] + " ${" + value["substitute"] + "+" + value["switch"] + "}"
+    print(json.dumps(json_out, indent=4))
+
+
+
+
 
 def parse_user_args():
     """Parse the arguments necessary for this filter"""
@@ -14,8 +61,12 @@ def parse_user_args():
     parser.add_argument("--ratio-alpha-src", default=0.4, type=float, help='Ratio between characters from the src language compared to all characters (eg numbers, emoji, punctuation, etc...)')
     parser.add_argument("--ratio-alpha-trg", default=0.4, type=float, help='Ratio between characters from the trg language compared to all characters (eg numbers, emoji, punctuation, etc...)')
     parser.add_argument("--src-lang", default="en", type=str, choices=list(CHARS.keys()))
-    parser.add_argument("--trg-lang", type=str, choices=list(CHARS.keys()))
+    parser.add_argument("--trg-lang", default="None", type=str, choices=list(CHARS.keys()) + ["None"])
     parser.add_argument("--debug", action='store_true')
+
+    # Try dumping:
+    create_json_str(parser.__dict__['_actions'], __file__, __doc__)
+
     return parser.parse_args()
 
 def clean_parallel(src_lang: str, ratio_words_src: float, ratio_alpha_src: float,\
@@ -68,5 +119,5 @@ trg_lang: Optional[str], ratio_words_trg: float, ratio_alpha_trg: float,\
 
 if __name__ == '__main__':
     args = parse_user_args()
-    clean_parallel(src_lang=args.src_lang, ratio_words_src=args.ratio_words_src, ratio_alpha_src=args.ratio_alpha_src,\
-        trg_lang=args.trg_lang, ratio_words_trg=args.ratio_words_trg, ratio_alpha_trg=args.ratio_alpha_trg, debug=args.debug)
+    #clean_parallel(src_lang=args.src_lang, ratio_words_src=args.ratio_words_src, ratio_alpha_src=args.ratio_alpha_src,\
+    #    trg_lang=args.trg_lang, ratio_words_trg=args.ratio_words_trg, ratio_alpha_trg=args.ratio_alpha_trg, debug=args.debug)

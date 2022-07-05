@@ -9,6 +9,11 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse, StreamingResponse
 from fastapi.encoders import jsonable_encoder
+import anyio
+from starlette.datastructures import URL
+from starlette.exceptions import HTTPException
+from starlette.responses import FileResponse, RedirectResponse, Response
+from starlette.types import Scope
 from enum import Enum
 import asyncio
 import json
@@ -18,6 +23,7 @@ from glob import glob
 from tempfile import TemporaryFile
 from shutil import copyfileobj
 from pprint import pprint
+
 
 from datasets import list_datasets
 from sample import sample
@@ -257,7 +263,28 @@ def stream_jsonl(iterable):
         media_type='application/json')
 
 
+class JSFiles(StaticFiles):
+    """Like StaticFiles, but if you try to access "thingy", and "thingy.js"
+    exists, it will redirect to that one. Just like unpkg.com!"""
+    
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        # Check if file exists
+        full_path_js, stat_result = await anyio.to_thread.run_sync(self.lookup_path, path)
+
+        # if not, and it isn't already suffixed with .js, try that
+        if not stat_result and not path.endswith('.js'):
+            full_path_js, stat_result = await anyio.to_thread.run_sync(self.lookup_path, path + ".js")
+            if stat_result:
+                url = URL(scope=scope)
+                url = url.replace(path=url.path + ".js")
+                return RedirectResponse(url=url)
+
+        return await super().get_response(path, scope)
+
+
 app = FastAPI()
+
+app.mount('/static/vendor', JSFiles(directory='static/vendor'), name='static/vendor')
 
 app.mount('/static', StaticFiles(directory='static'), name='static')
 

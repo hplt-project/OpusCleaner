@@ -228,12 +228,14 @@
 				</label>
 
 				<button v-on:click="saveFilterSteps" v-bind:disabled="!filterStepsChangedSinceLastSave">Save filtering steps</button>
+
+				<label v-if="isFetchingSamples">Loading sample…</label>
 			</div>
 
 			<div class="main">
 				<div class="filter-output">
 					<div v-bind:class="{'sample':true, 'display-as-rows': displayAsRows}">
-						<table>
+						<table v-if="sample?.stdout">
 							<thead>
 								<tr>
 									<th v-for="lang in languages">{{lang}}</th>
@@ -246,7 +248,7 @@
 							</tbody>
 						</table>
 					</div>
-					<div class="filter-error" v-if="sample.stderr">
+					<div class="filter-error" v-if="sample?.stderr">
 						<pre>{{ sample.stderr }}</pre>
 					</div>
 				</div>
@@ -261,7 +263,7 @@
 							<li class="filter">
 								<span v-bind:title="filter.description" class="filter-name">{{filter.name}}</span>
 								<span class="filter-type">{{filter.type}}</span>
-								<button v-on:click="addFilterStep(name, filter)" class="add-filter-btn">Add</button>
+								<button v-on:click="addFilterStep(filter)" class="add-filter-btn">Add</button>
 							</li>
 						</template>
 					</draggable>
@@ -271,7 +273,19 @@
 						v-bind:group="{name:'filters'}"
 						v-bind:multi-drag="true"
 						v-bind:multi-drag-key="multiDragKey"
+						v-on:select="selectFilterStep($event.element)"
+						v-on:deselect="deselectFilterStep($event.element)"
 						selected-class="selected">
+						<template v-slot:header>
+							<li class="property-list">
+								<header>
+									<span>Sample</span>
+								</header>
+								<footer>
+									<button v-on:click="selectedFilterStep={}">Show</button>
+								</footer>
+							</li>
+						</template>
 						<template v-slot:item="{element:filterStep, index:i}">
 							<li class="property-list">
 								<header>
@@ -301,6 +315,9 @@
 									
 									<small v-if="parameter.help" class="property-list-description">{{parameter.help}}</small>
 								</div>
+								<footer>
+									<button v-on:click="selectedFilterStep=filterStep">Show</button>
+								</footer>
 							</li>
 						</template>
 					</draggable>
@@ -314,7 +331,7 @@
 				"imports": {
 					"vue": "https://unpkg.com/vue@3/dist/vue.esm-browser.js",
 					"sortablejs": "https://unpkg.com/sortablejs@1.15.0/modular/sortable.complete.esm.js",
-					"vuedraggable": "https://unpkg.com/vuedraggable@4.1.0/src/vuedraggable.js"
+					"vuedraggable": "/static/vendor/vuedraggable@4.1.0/src/vuedraggable.js"
 				}
 			}
 		</script>
@@ -386,10 +403,13 @@
 						displayAsRows: false,
 						datasets: [],
 						selectedDataset: null,
-						sample: [],
+						samples: [],
+						isFetchingSamples: false,
+						_sampleAbortController: new AbortController(),
 						filters: [],
 						filterSteps: [],
-						filterStepsLastSave: null
+						filterStepsLastSave: null,
+						selectedFilterStep: null
 					};
 				},
 
@@ -405,6 +425,13 @@
 					},
 					multiDragKey() {
 						return navigator.platform.match(/^(iP|Mac)/) ? 'Meta' : 'Control';
+					},
+					sampleIndex() {
+						const index = this.selectedFilterStep ? this.filterSteps.indexOf(this.selectedFilterStep) + 1 : -1;
+						return index >= 0 ? index : this.samples.length - 1;
+					},
+					sample() {
+						return this.samples.length > this.sampleIndex ? this.samples[this.sampleIndex] : null;
 					}
 				},
 
@@ -446,8 +473,15 @@
 						this.filters = Array.from(Object.entries(await response.json()), ([name, value]) => Object.assign(value, {name}));
 					},
 					async fetchSample() {
+						this._sampleAbortController.abort();
+
+						this._sampleAbortController = new AbortController();
+						this.isFetchingSamples = true;
+						this.samples.splice(0, this.samples.length);
+
 						const response = stream(`/datasets/${encodeURIComponent(this.selectedDataset.name)}/sample`, {
 							method: 'POST',
+							signal: this._sampleAbortController.signal,
 							headers: {
 								'Content-Type': 'application/json',
 								'Accept': 'application/json',
@@ -455,9 +489,11 @@
 							body: JSON.stringify(this.filterSteps)
 						});
 
-						for await (let line of response) {
-							this.sample = line; /* temp solution */
+						for await (let sample of response) {
+							this.samples.push(sample); /* temp solution */
 						}
+
+						this.isFetchingSamples = false;
 					},
 					async fetchFilterSteps() {
 						const response = await fetch(`/datasets/${encodeURIComponent(this.selectedDataset.name)}/configuration`)
@@ -492,7 +528,14 @@
 						this.filterSteps.push(this.createFilterStep(filter));
 					},
 					removeFilterStep(i) {
-						this.filterSteps.splice(i);
+						this.filterSteps.splice(i, 1);
+					},
+					selectFilterStep(filterStep) {
+						this.selectedFilterStep = filterStep;
+					},
+					deselectFilterStep(filterStep) {
+						if (this.selectedFilterStep === filterStep)
+							this.selectedFilterStep = null;
 					},
 					filterDefinition(filterStep) {
 						return this.filters.find(filter => filter.name === filterStep.filter);

@@ -242,9 +242,11 @@
 								</tr>
 							</thead>
 							<tbody>
-								<tr v-for="(entry, i) in sample.stdout" v-bind:key="i">
-									<td v-for="(text, lang) in entry" v-bind:key="lang" v-bind:lang="lang">{{text}}</td>
-								</tr>
+								<template v-for="(mutation, i) in sample?.mutations">
+									<tr v-for="(entry, j) in mutation.value" v-bind:key="`${i}:${j}`" v-bind:class="{added:mutation.added, removed:mutation.removed}">
+										<td v-for="(text, lang) in entry" v-bind:key="lang" v-bind:lang="lang">{{text}}</td>
+									</tr>
+								</template>
 							</tbody>
 						</table>
 					</div>
@@ -340,6 +342,8 @@
 			import {createApp} from 'vue';
 			// Docs for draggable@4: https://github.com/SortableJS/vue.draggable.next
 			import draggable from 'vuedraggable';
+
+			import {diff} from './diff.js';
 
 			// Simple hash function for creating string hashes
 			function cyrb53(str, seed = 0) {
@@ -490,7 +494,7 @@
 						});
 
 						for await (let sample of response) {
-							this.samples.push(sample); /* temp solution */
+							this.samples.push(this.diffSample(this.samples[this.samples.length - 1], sample));
 						}
 
 						this.isFetchingSamples = false;
@@ -547,6 +551,20 @@
 						if (!this._stamps.has(obj))
 							this._stamps.set(obj, ++this._serial);
 						return this._stamps.get(obj);
+					},
+					diffSample(previous, sample) {
+						const mutations = diff(previous?.stdout || [], sample?.stdout || [], {
+							equals: (a, b) => this.languages.every(lang => a[lang] == b[lang])
+						});
+
+						// TODO: often an "added" + "removed" is just a change in one of the
+						// fields. We should treat those separately.
+
+
+						return {
+							...sample,
+							mutations
+						};
 					}
 				}
 			})

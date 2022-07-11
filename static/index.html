@@ -77,6 +77,18 @@
 				background: #eef;
 			}
 
+			.sample table tr.added td {
+				background: #efe;
+			}
+
+			.sample table tr.removed td {
+				background: #fee;
+			}
+
+			.sample table tr.changed td {
+				background: #ffe;
+			}
+
 			.sample.display-as-rows table thead {
 				display: none;
 			}
@@ -243,7 +255,7 @@
 							</thead>
 							<tbody>
 								<template v-for="(mutation, i) in sample?.mutations">
-									<tr v-for="(entry, j) in mutation.value" v-bind:key="`${i}:${j}`" v-bind:class="{added:mutation.added, removed:mutation.removed}">
+									<tr v-for="(entry, j) in mutation.value" v-bind:key="`${i}:${j}`" v-bind:class="{added:mutation.added, removed:mutation.removed, changed:mutation.changed}">
 										<td v-for="(text, lang) in entry" v-bind:key="lang" v-bind:lang="lang">{{text}}</td>
 									</tr>
 								</template>
@@ -553,13 +565,70 @@
 						return this._stamps.get(obj);
 					},
 					diffSample(previous, sample) {
-						const mutations = diff(previous?.stdout || [], sample?.stdout || [], {
-							equals: (a, b) => this.languages.every(lang => a[lang] == b[lang])
-						});
+						// Only mark different if neither of the columns is the same.
+						const equals = (a, b) => !this.languages.every(lang => a[lang] != b[lang]);
+						
+						// Mark pairs that have exactly the same text on both sides as identical.
+						const identical = (a, b) => this.languages.every(lang => a[lang] == b[lang]);
 
-						// TODO: often an "added" + "removed" is just a change in one of the
-						// fields. We should treat those separately.
+						const mutations = diff(previous?.stdout || [], sample?.stdout || [], {equals});
 
+						let offset = 0;
+
+						// Now also fish out all those rows that appear the same, but have
+						// a difference in only one of the languages
+						for (let i = 0; i < mutations.length; ++i) {
+							if (mutations[i].added) {
+								offset -= mutations[i].count;
+								continue;
+							}
+
+							if (mutations[i].removed) {
+								offset += mutations[i].count;
+								continue;
+							}
+
+							let first, last;
+
+							// Search for the first different sentence pair in this mutation block.
+							for (first = 0; first < mutations[i].value.length; ++first) {
+								if (!identical(previous.stdout[offset + first], mutations[i].value[first]))
+									break;
+							}
+
+							// Did we find the first different sentence pair?
+							if (first == mutations[i].value.length)
+								continue;
+
+							console.assert(Array.isArray(previous.stdout))
+
+							// Find the first line that is identical again, the end of our
+							// 'changed' block.
+							for (last = first+1; last < mutations[i].value.length; ++last) {
+								if (identical(previous.stdout[offset + last], mutations[i].value[last]))
+									break;
+							}
+
+							// If it's not the first line of the mutation, we need to split it
+							// in at least two (maybe three)
+							if (first > 0) {
+								mutations.splice(i, 0, {count: first, value: mutations[i].value.splice(0, first)})
+								++i;
+							}
+
+							mutations[i].count = last - first;
+							mutations[i].changed = true;
+
+							// If the mutation contains lines that are the same after the
+							// changed ones, add those back in as well. Make sure they are
+							// evaluated next.
+							if (last - first < mutations[i].value.length) {
+								const count = mutations[i].value.length - (last - first);
+								mutations.splice(i, 0, {count, value: mutations[i].value.splice(last - first, count)});
+								// Do not increase i so next iteration looks at this newly added
+								// one, there might be more changes here!
+							}
+						}
 
 						return {
 							...sample,

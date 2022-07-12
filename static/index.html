@@ -73,20 +73,28 @@
 				vertical-align: top;
 			}
 
-			.sample table tr:nth-child(2n) td {
+			.sample:not(.display-differences) table tr:nth-child(2n) td {
 				background: #eef;
 			}
 
-			.sample table tr.added td {
+			.sample.display-differences table tr.added td {
 				background: #efe;
 			}
 
-			.sample table tr.removed td {
+			.sample.display-differences table tr.removed td {
 				background: #fee;
 			}
 
-			.sample table tr.changed td {
+			.sample.display-differences table tr.changed td {
 				background: #ffe;
+			}
+
+			.inline-diff ins {
+				background: #cfc;
+			}
+
+			.inline-diff del {
+				background: #fcc;
 			}
 
 			.sample.display-as-rows table thead {
@@ -239,6 +247,11 @@
 					Display as rows
 				</label>
 
+				<label>
+					<input type="checkbox" v-model="displayDifferences">
+					Display differences
+				</label>
+
 				<button v-on:click="saveFilterSteps" v-bind:disabled="!filterStepsChangedSinceLastSave">Save filtering steps</button>
 
 				<label v-if="isFetchingSamples">Loading sample…</label>
@@ -246,7 +259,7 @@
 
 			<div class="main">
 				<div class="filter-output">
-					<div v-bind:class="{'sample':true, 'display-as-rows': displayAsRows}">
+					<div v-bind:class="{'sample':true, 'display-as-rows': displayAsRows, 'display-differences': displayDifferences}">
 						<table v-if="sample?.stdout">
 							<thead>
 								<tr>
@@ -256,7 +269,15 @@
 							<tbody>
 								<template v-for="(mutation, i) in sample?.mutations">
 									<tr v-for="(entry, j) in mutation.value" v-bind:key="`${i}:${j}`" v-bind:class="{added:mutation.added, removed:mutation.removed, changed:mutation.changed}">
-										<td v-for="(text, lang) in entry" v-bind:key="lang" v-bind:lang="lang">{{text}}</td>
+										<template v-if="mutation.changed">
+											<td v-for="(text, lang) in entry" v-bind:key="lang" v-bind:lang="lang">
+												<span class="inline-diff" v-html="diffString(mutation.differences[j] ? mutation.differences[j].previous[lang] : '', text)"></span>
+												<!-- {% <del>{{mutation.differences[j].previous[lang]}}</del><ins>{{text}}</ins> %} -->
+											</td>
+										</template>
+										<template v-else>
+											<td v-for="(text, lang) in entry" v-bind:key="lang" v-bind:lang="lang">{{text}}</td>
+										</template>
 									</tr>
 								</template>
 							</tbody>
@@ -416,6 +437,7 @@
 				data() {
 					return {
 						displayAsRows: false,
+						displayDifferences: true,
 						datasets: [],
 						selectedDataset: null,
 						samples: [],
@@ -518,7 +540,7 @@
 					async saveFilterSteps() {
 						const hash = this.filterStepsStateHash;
 
-						const response = fetch(`/datasets/${encodeURIComponent(this.selectedDataset.name)}/configuration`, {
+						const response = await fetch(`/datasets/${encodeURIComponent(this.selectedDataset.name)}/configuration`, {
 							method: 'POST',
 							headers: {
 								'Content-Type': 'application/json',
@@ -563,6 +585,39 @@
 							this._stamps.set(obj, ++this._serial);
 						return this._stamps.get(obj);
 					},
+					diffString(previous, current) {
+						const mutations = diff(previous.split(''), current.split(''), {
+							equals: (a,b) => a == b,
+							maxEditLength: Math.max(previous.length, current.length) * 0.5
+						});
+
+						const fragment = document.createElement('div');
+
+						if (!mutations) {
+							const del = document.createElement('del');
+							del.appendChild(document.createTextNode(previous));
+							fragment.appendChild(del);
+							const ins = document.createElement('ins');
+							ins.appendChild(document.createTextNode(current));
+							fragment.appendChild(ins);
+						} else {
+							mutations.map(mutation => {
+								const node = document.createTextNode(mutation.value.join(''));
+								if (!mutation.added && !mutation.removed)
+									return node;
+
+								const wrapper = document.createElement(mutation.added ? 'ins' : 'del');
+								wrapper.appendChild(node);
+								return wrapper;
+							}).forEach(node => fragment.appendChild(node));
+						}
+
+						// TODO: returning html as string because of how v-html works. Is
+						// there no better way? Why does Vue need to recreate this DOM tree
+						// after me? Maybe it is faster to just do string concatenation and
+						// escape HTML-ish. Less safe though.
+						return fragment.innerHTML;
+					},
 					diffSample(previous, sample) {
 						// Only mark different if neither of the columns is the same.
 						const equals = (a, b) => !this.languages.every(lang => a[lang] != b[lang]);
@@ -577,6 +632,8 @@
 						// Now also fish out all those rows that appear the same, but have
 						// a difference in only one of the languages
 						for (let i = 0; i < mutations.length; ++i) {
+							console.assert(mutations[i].count === mutations[i].value.length);
+
 							if (mutations[i].added) {
 								offset -= mutations[i].count;
 								continue;
@@ -587,7 +644,7 @@
 								continue;
 							}
 
-							let first, last;
+							let first, last; // first offset of difference, offset of the first identical that follows.
 
 							// Search for the first different sentence pair in this mutation block.
 							for (first = 0; first < mutations[i].value.length; ++first) {
@@ -595,11 +652,12 @@
 									break;
 							}
 
-							// Did we find the first different sentence pair?
-							if (first == mutations[i].value.length)
+							// Did we find the first different sentence pair? If not skip this
+							// chunk of mutations.
+							if (first == mutations[i].value.length) {
+								offset += mutations[i].count;
 								continue;
-
-							console.assert(Array.isArray(previous.stdout))
+							}
 
 							// Find the first line that is identical again, the end of our
 							// 'changed' block.
@@ -612,7 +670,8 @@
 							// in at least two (maybe three)
 							if (first > 0) {
 								mutations.splice(i, 0, {count: first, value: mutations[i].value.splice(0, first)})
-								++i;
+								++i; // We inserted it before the one we're handling right now,
+								     // so increase `i` accordingly
 							}
 
 							mutations[i].count = last - first;
@@ -623,10 +682,18 @@
 							// evaluated next.
 							if (last - first < mutations[i].value.length) {
 								const count = mutations[i].value.length - (last - first);
-								mutations.splice(i, 0, {count, value: mutations[i].value.splice(last - first, count)});
+								mutations.splice(i+1, 0, {count, value: mutations[i].value.splice(last - first, count)});
 								// Do not increase i so next iteration looks at this newly added
 								// one, there might be more changes here!
 							}
+
+							console.assert(mutations[i].value.every((curr, i) => !identical(previous.stdout[offset + first + i], curr)));
+
+							// TODO clean this up this is a test.
+							mutations[i].differences = mutations[i].value.map((current, i) => ({previous: previous.stdout[offset + first + i], current}));
+
+							offset += last; // Add the offset for this plus optionally the
+							                // spliced in identical chunk we added.
 						}
 
 						return {

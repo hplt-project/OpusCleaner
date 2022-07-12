@@ -271,8 +271,7 @@
 									<tr v-for="(entry, j) in mutation.value" v-bind:key="`${i}:${j}`" v-bind:class="{added:mutation.added, removed:mutation.removed, changed:mutation.changed}">
 										<template v-if="mutation.changed">
 											<td v-for="(text, lang) in entry" v-bind:key="lang" v-bind:lang="lang">
-												<span class="inline-diff" v-html="diffString(mutation.differences[j] ? mutation.differences[j].previous[lang] : '', text)"></span>
-												<!-- {% <del>{{mutation.differences[j].previous[lang]}}</del><ins>{{text}}</ins> %} -->
+												<InlineDiff class="inline-diff" v-bind:current="text" v-bind:previous="mutation.differences[j].previous[lang]"></InlineDiff>
 											</td>
 										</template>
 										<template v-else>
@@ -366,7 +365,9 @@
 				"imports": {
 					"vue": "/static/vendor/vue@3.2.37/dist/vue.esm-browser.js",
 					"sortablejs": "/static/vendor/sortablejs@1.15.0/modular/sortable.complete.esm.js",
-					"vuedraggable": "/static/vendor/vuedraggable@4.1.0/src/vuedraggable.js"
+					"vuedraggable": "/static/vendor/vuedraggable@4.1.0/src/vuedraggable.js",
+					"diff": "/static/diff.js",
+					"inlinediff": "/static/inlinediff.js"
 				}
 			}
 		</script>
@@ -375,7 +376,8 @@
 			import {createApp} from 'vue';
 			// Docs for draggable@4: https://github.com/SortableJS/vue.draggable.next
 			import draggable from 'vuedraggable';
-			import {diff} from './diff.js';
+			import {diff} from 'diff';
+			import inlinediff from 'inlinediff';
 
 			// Simple hash function for creating string hashes
 			function cyrb53(str, seed = 0) {
@@ -497,6 +499,7 @@
 
 				components: {
 					draggable,
+					inlinediff,
 				},
 
 				methods: {
@@ -584,39 +587,6 @@
 						if (!this._stamps.has(obj))
 							this._stamps.set(obj, ++this._serial);
 						return this._stamps.get(obj);
-					},
-					diffString(previous, current) {
-						const mutations = diff(previous.split(''), current.split(''), {
-							equals: (a,b) => a == b,
-							maxEditLength: Math.max(previous.length, current.length) * 0.5
-						});
-
-						const fragment = document.createElement('div');
-
-						if (!mutations) {
-							const del = document.createElement('del');
-							del.appendChild(document.createTextNode(previous));
-							fragment.appendChild(del);
-							const ins = document.createElement('ins');
-							ins.appendChild(document.createTextNode(current));
-							fragment.appendChild(ins);
-						} else {
-							mutations.map(mutation => {
-								const node = document.createTextNode(mutation.value.join(''));
-								if (!mutation.added && !mutation.removed)
-									return node;
-
-								const wrapper = document.createElement(mutation.added ? 'ins' : 'del');
-								wrapper.appendChild(node);
-								return wrapper;
-							}).forEach(node => fragment.appendChild(node));
-						}
-
-						// TODO: returning html as string because of how v-html works. Is
-						// there no better way? Why does Vue need to recreate this DOM tree
-						// after me? Maybe it is faster to just do string concatenation and
-						// escape HTML-ish. Less safe though.
-						return fragment.innerHTML;
 					},
 					diffSample(previous, sample) {
 						// Only mark different if neither of the columns is the same.

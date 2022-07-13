@@ -1,0 +1,6 @@
+{
+    "description": "Converts Chinese characters to traditional.",
+    "type": "monolingual",
+    "command": "hanzi-convert -",
+    "parameters": {}
+}

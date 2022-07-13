@@ -30,3 +30,5 @@ uvloop==0.16.0
 watchgod==0.8.2
 wcwidth==0.2.5
 websockets==10.3
+hanziconv==0.3.2
+jieba==0.42.1

@@ -81,9 +81,11 @@ def get_dataset(entry: Entry, path: str) -> None:
 
 def get_datasets(datasets: Iterable[Entry], path: str, num_threads: int=2) -> None:
     """Gets multiple datasets with up to num_theads parallel downloads"""
-    with ProcessPoolExecutor(num_threads) as executor:
-        futures = [executor.submit(get_dataset, entry, path) for entry in datasets]
-        _, _ = wait(futures)
+    #with ProcessPoolExecutor(num_threads) as executor:
+    #    futures = [executor.submit(get_dataset, entry, path) for entry in datasets]
+    #    _, _ = wait(futures)
+    for entry in datasets: # @TODO make the above work
+        get_dataset(entry, path)
 
 
 @app.get("/datasets/{did}")

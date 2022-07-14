@@ -82,7 +82,8 @@ def get_dataset(entry: Entry, path: str) -> None:
 def get_datasets(datasets: Iterable[Entry], path: str, num_threads: int=2) -> None:
     """Gets multiple datasets with up to num_theads parallel downloads"""
     executor = ProcessPoolExecutor(max_workers=num_threads)
-    executor.map(lambda mytupple: get_dataset(mytupple[0], mytupple[1]), zip_longest(datasets, [], path))
+    for entry in datasets:
+        executor.submit(get_dataset, entry, path)
 
 
 @app.get("/datasets/{did}")

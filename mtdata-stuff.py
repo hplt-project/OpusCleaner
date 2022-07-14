@@ -4,6 +4,7 @@ import os
 from typing import Optional, Iterable, Dict, List
 from concurrent.futures import ProcessPoolExecutor
 from subprocess import check_call, CalledProcessError
+from itertools import zip_longest
 from sys import stderr
 from collections import defaultdict
 from pydantic import BaseModel
@@ -81,8 +82,7 @@ def get_dataset(entry: Entry, path: str) -> None:
 def get_datasets(datasets: Iterable[Entry], path: str, num_threads: int=2) -> None:
     """Gets multiple datasets with up to num_theads parallel downloads"""
     executor = ProcessPoolExecutor(max_workers=num_threads)
-    for entry in datasets:
-        executor.submit(get_dataset(entry, path))
+    executor.map(lambda mytupple: get_dataset(mytupple[0], mytupple[1]), zip_longest(datasets, [], path))
 
 
 @app.get("/datasets/{did}")

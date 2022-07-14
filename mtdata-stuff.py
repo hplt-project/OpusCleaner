@@ -24,7 +24,7 @@ class Entry(BaseModel):
     group: str
     name: str
     version: str
-    langs: list[str]
+    langs: List[str]
 
 
 @app.get("/datasets/by-language")

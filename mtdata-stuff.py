@@ -2,7 +2,7 @@
 """Various mtdata dataset downloading utilities"""
 import os
 from typing import Optional, Iterable, Dict, List
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, wait
 from subprocess import check_call, CalledProcessError
 from itertools import zip_longest
 from sys import stderr
@@ -81,9 +81,9 @@ def get_dataset(entry: Entry, path: str) -> None:
 
 def get_datasets(datasets: Iterable[Entry], path: str, num_threads: int=2) -> None:
     """Gets multiple datasets with up to num_theads parallel downloads"""
-    executor = ProcessPoolExecutor(max_workers=num_threads)
-    for entry in datasets:
-        executor.submit(get_dataset, entry, path)
+    with ProcessPoolExecutor(num_threads) as executor:
+        futures = [executor.submit(get_dataset, entry, path) for entry in datasets]
+        _, _ = wait(futures)
 
 
 @app.get("/datasets/{did}")

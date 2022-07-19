@@ -15,7 +15,7 @@
 				<router-link v-bind:to="{name:'dataset-editor'}">Go to Home</router-link>
 				<router-link v-bind:to="{name:'filter-editor', params: {datasetName: 'OPUS-elitr_eca-v1-eng-fra'}}">Go to dataset</router-link>
 			</div>
-			<router-view class="main"></router-view>
+			<router-view></router-view>
 		</div>
 		<!-- because Safari, unfortunately, does not do importmap yet? -->
 		<script async src="/static/vendor/es-module-shims@1.5.8/dist/es-module-shims.js"></script>
@@ -35,7 +35,10 @@
 		<script type="module">
 			import {createApp} from 'vue';
 			import {createRouter,createWebHashHistory} from 'vue-router';
+			import DatasetEditor from '/static/dataset-editor.js';
 			import FilterEditor from '/static/filter-editor.js';
+
+			const datasets = fetch('/datasets/').then(response => response.json());
 
 			/**
 			 * Quick wrapper around FilterEditor that injects the dataset object
@@ -53,19 +56,28 @@
 				},
 				methods: {
 					async fetchDataset() {
-						const response = await fetch(`/datasets/${encodeURIComponent(this.$route.params.datasetName)}/`);
-						this.dataset = await response.json();
-						console.log('ding', this.dataset);
+						this.dataset = (await datasets).find(dataset => dataset.name == this.$route.params.datasetName);
 					}
 				},
 				components: {
 					FilterEditor
 				},
-				template: `<div><filter-editor v-if="dataset" v-bind:dataset="dataset"></filter-editor></div>`
+				template: `<filter-editor v-if="dataset" v-bind:dataset="dataset"/>`
 			};
 
 			const DatasetEditorRoute = {
-				template: `<h1>Table: todo</h1>`
+				data() {
+					return {
+						datasets: []
+					}
+				},
+				created() {
+					datasets.then(datasets => this.datasets = datasets);
+				},
+				components: {
+					DatasetEditor
+				},
+				template: `<dataset-editor v-bind:datasets="datasets"/>`
 			};
 
 			const router = createRouter({

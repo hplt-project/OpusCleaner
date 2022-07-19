@@ -134,6 +134,12 @@ export default {
 			handler() {
 				this.fetchSample()
 			}
+		},
+		// TODO: I'd expected this one to be picked up by default since fetchFilterSteps accesses this.dataset.name
+		dataset: {
+			handler() {
+				this.fetchFilterSteps();
+			}
 		}
 	},
 

@@ -111,6 +111,20 @@ export default {
 		},
 		diff() {
 			return this.diffSample(this.samples[this.comparingSampleIndex], this.samples[this.sampleIndex]);
+		},
+		diffStats() {
+			let additions = 0, deletions = 0, changes = 0;
+
+			this.diff.forEach(({added, removed, changed, count}) => {
+				if (added)
+					additions += count;
+				else if (removed)
+					deletions += count;
+				else if (changed)
+					changes += count;
+			});
+
+			return {additions, deletions, changes};
 		}
 	},
 
@@ -326,7 +340,7 @@ export default {
 		<div class="main">
 			<div class="filter-output">
 				<div v-if="displayDiff" class="controls">
-					<span>Comparing intermediate output after {{ formatNumberSuffix(comparingSampleIndex) }} and {{ formatNumberSuffix(sampleIndex) }} filter steps.</span>
+					<span>Comparing intermediate output after {{ formatNumberSuffix(comparingSampleIndex) }} and {{ formatNumberSuffix(sampleIndex) }} filter steps: {{ diffStats.additions }} lines added, {{ diffStats.deletions }} lines removed, and {{ diffStats.changes }} lines changed.</span>
 					<button v-if="comparingFilterStep" v-on:click="comparingFilterStep=null">Stop comparing</button>
 				</div>
 				<div v-else-if="sampleIndex != samples.length - 1" class="controls">

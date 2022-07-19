@@ -1,5 +1,4 @@
 // Docs for Vue@3: https://vuejs.org/guide/introduction.html
-import {createApp} from 'vue';
 // Docs for draggable@4: https://github.com/SortableJS/vue.draggable.next
 import draggable from 'vuedraggable';
 import {diff} from 'diff';
@@ -61,12 +60,16 @@ async function* stream(url, options) {
 	}
 }
 
-const app = createApp({
+export default {
+	name: 'FilterEditor',
+
+	props: {
+		dataset: Object
+	},
+
 	data() {
 		return {
 			displayAsRows: false,
-			datasets: [],
-			selectedDataset: null,
 			samples: [],
 			isFetchingSamples: false,
 			_sampleAbortController: new AbortController(),
@@ -81,7 +84,7 @@ const app = createApp({
 
 	computed: {
 		languages() {
-			return this.selectedDataset ? Array.from(Object.keys(this.selectedDataset.columns)).sort() : []
+			return Array.from(Object.keys(this.dataset.columns)).sort()
 		},
 		filterStepsStateHash() {
 			return cyrb53(JSON.stringify(this.filterSteps));
@@ -112,10 +115,6 @@ const app = createApp({
 	},
 
 	watch: {
-		selectedDataset() {
-			this.fetchSample();
-			this.fetchFilterSteps();
-		},
 		filterSteps: {
 			deep: true,
 			handler() {
@@ -126,12 +125,12 @@ const app = createApp({
 
 	created() {
 		this._serial = 0;
-		this._stamps = new WeakMap();
 	},
 
 	async mounted() {
-		this.fetchDatasets();
-		this.fetchFilters();
+		await this.fetchFilters();
+		await this.fetchFilterSteps();
+		// ... that will then trigger fetchSample with the filter configuration applied.
 	},
 
 	components: {
@@ -140,10 +139,6 @@ const app = createApp({
 	},
 
 	methods: {
-		async fetchDatasets() {
-			const response = await fetch('/datasets/');
-			this.datasets = await response.json();
-		},
 		async fetchFilters() {
 			const response = await fetch('/filters/');
 			// Turn the {name:Filter} map into a [Filter] list and fold the 'name' attribute into the Filter.name property.
@@ -156,7 +151,7 @@ const app = createApp({
 			this.isFetchingSamples = true;
 			this.samples.splice(0, this.samples.length);
 
-			const response = stream(`/datasets/${encodeURIComponent(this.selectedDataset.name)}/sample`, {
+			const response = stream(`/datasets/${encodeURIComponent(this.dataset.name)}/sample`, {
 				method: 'POST',
 				signal: this._sampleAbortController.signal,
 				headers: {
@@ -173,14 +168,14 @@ const app = createApp({
 			this.isFetchingSamples = false;
 		},
 		async fetchFilterSteps() {
-			const response = await fetch(`/datasets/${encodeURIComponent(this.selectedDataset.name)}/configuration.json`)
+			const response = await fetch(`/datasets/${encodeURIComponent(this.dataset.name)}/configuration.json`)
 			this.filterSteps = await response.json();
 			this.filterStepsLastSave = this.filterStepsStateHash;
 		},
 		async saveFilterSteps() {
 			const hash = this.filterStepsStateHash;
 
-			const response = await fetch(`/datasets/${encodeURIComponent(this.selectedDataset.name)}/configuration.json`, {
+			const response = await fetch(`/datasets/${encodeURIComponent(this.dataset.name)}/configuration.json`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -310,7 +305,135 @@ const app = createApp({
 
 			return chunks;
 		}
-	}
-})
+	},
 
-export {app};
+	template: `
+		<div class="controls">
+			<label>
+				Dataset: <em>{{ dataset.name }}</em>
+			</label>
+
+			<label>
+				<input type="checkbox" v-model="displayAsRows">
+				Display as rows
+			</label>
+
+			<button v-on:click="saveFilterSteps" v-bind:disabled="!filterStepsChangedSinceLastSave">Save filtering steps</button>
+
+			<label v-if="isFetchingSamples">Loading sample…</label>
+		</div>
+
+		<div class="main">
+			<div class="filter-output">
+				<div v-if="displayDiff" class="controls">
+					<span>Comparing intermediate output after {{ formatNumberSuffix(comparingSampleIndex) }} and {{ formatNumberSuffix(sampleIndex) }} filter steps.</span>
+					<button v-if="comparingFilterStep" v-on:click="comparingFilterStep=null">Stop comparing</button>
+				</div>
+				<div v-else-if="sampleIndex != samples.length - 1" class="controls">
+					<span>Showing intermediate output of {{ formatNumberSuffix(sampleIndex) }} filter step.</span>
+					<button v-if="comparingFilterStep" v-on:click="selectedFilterStep=null">Show final output</button>
+				</div>
+				<div v-bind:class="{'sample':true, 'display-as-rows': displayAsRows}">
+					<table v-if="sample?.stdout">
+						<thead>
+							<tr>
+								<th v-for="lang in languages">{{lang}}</th>
+							</tr>
+						</thead>
+						<tbody v-if="displayDiff" class="table-diff">
+							<template v-for="(chunk, i) in diff">
+								<tr v-for="(entry, j) in chunk.value" v-bind:key="\`\${i}:\${j}\`" v-bind:class="{added:chunk.added, removed:chunk.removed, changed:chunk.changed}">
+									<td v-for="(text, lang) in entry" v-bind:key="lang" v-bind:lang="lang">
+										<template v-if="chunk.changed">
+											<inline-diff class="inline-diff" v-bind:current="text" v-bind:previous="chunk.differences[j].previous[lang]"></inline-diff>
+										</template>
+										<template v-else>
+											{{text}}
+										</template>
+									</td>
+								</tr>
+							</template>
+						</tbody>
+						<tbody v-else>
+							<tr v-for="(entry, i) in sample.stdout">
+								<td v-for="(text, lang) in entry" v-bind:key="lang" v-bind:lang="lang">{{text}}</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+				<div class="filter-error" v-if="sample?.stderr">
+					<pre>{{ sample.stderr }}</pre>
+				</div>
+			</div>
+
+			<div class="filters">
+				<draggable tag="ul" class="available-filters"
+					v-model="filters" item-key="name"
+					v-bind:group="{name:'filters', pull:'clone', put:false}"
+					v-bind:sort="false"
+					v-bind:clone="createFilterStep">
+					<template v-slot:item="{element:filter}">
+						<li class="filter">
+							<span v-bind:title="filter.description" class="filter-name">{{filter.name}}</span>
+							<span class="filter-type">{{filter.type}}</span>
+							<button v-on:click="addFilterStep(filter)" class="add-filter-btn">Add</button>
+						</li>
+					</template>
+				</draggable>
+
+				<draggable tag="ol" class="filter-steps"
+					v-model="filterSteps" item-key="stamp" 
+					v-bind:group="{name:'filters'}"
+					v-bind:multi-drag="true"
+					v-bind:multi-drag-key="multiDragKey">
+					<template v-slot:header>
+						<li class="property-list">
+							<header>
+								<span>Sample</span>
+							</header>
+							<footer>
+								<button v-on:click="selectedFilterStep=SampleStep">Show output</button>
+								<button v-on:click="comparingFilterStep=SampleStep" v-bind:disabled="comparingFilterStep===SampleStep">Diff</button>
+							</footer>
+						</li>
+					</template>
+					<template v-slot:item="{element:filterStep, index:i}">
+						<li class="property-list">
+							<header>
+								<span>{{ filterStep.filter }}</span>
+								<button v-on:click="removeFilterStep(i)">Remove</button>
+							</header>
+							<div v-if="filterRequiresLanguage(filterStep)">
+								<label v-bind:for="\`step-\${i}-column\`">Column</label>
+								<select v-bind:id="\`step-\${i}-column\`" v-model="filterStep.language">
+									<option v-for="lang in languages">{{lang}}</option>
+								</select>
+							</div>
+							<div v-for="(parameter, name) in filterDefinition(filterStep).parameters">
+								<label v-bind:for="\`step-\${i}-\${name}\`">{{ name }}</label>
+								<select v-if="parameter.type == 'str' && parameter.allowed_values" v-model="filterStep.parameters[name]" v-bind:id="\`step-\${i}-\${name}\`">
+									<option v-for="value in parameter.allowed_values" v-bind:value="value">{{value}}</option>
+								</select>
+								<input v-else-if="parameter.type == 'bool'" type="checkbox" v-model="filterStep.parameters[name]" v-bind:id="\`step-\${i}-\${name}\`">
+								<input v-else-if="parameter.type == 'int' || parameter.type == 'float'"
+									type="number"
+									v-model="filterStep.parameters[name]"
+									v-bind:id="\`step-\${i}-\${name}\`"
+									v-bind:min="parameter.min"
+									v-bind:max="parameter.max"
+									v-bind:step="parameter.type == 'int' ? 1 : 0.1">
+								<input v-else type="text" v-model="filterStep.parameters[name]" v-bind:id="\`step-\${i}-\${name}\`">
+								
+								<small v-if="parameter.help" class="property-list-description">{{parameter.help}}</small>
+							</div>
+							<footer>
+								<button v-on:click="selectedFilterStep=filterStep">Show output</button>
+								<button v-on:click="comparingFilterStep=filterStep">Diff</button>
+							</footer>
+						</li>
+					</template>
+				</draggable>
+			</div>
+		</div>
+	`
+}

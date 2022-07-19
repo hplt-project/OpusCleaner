@@ -1,13 +1,14 @@
 import os
 import gzip
 import sys
+import re
 from typing import Optional, Iterable, TypeVar, Union, Literal, Any, AsyncIterator
 from contextlib import ExitStack
 from itertools import chain
 from pydantic import BaseModel, parse_obj_as, validator
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.responses import RedirectResponse, StreamingResponse, HTMLResponse
 from fastapi.encoders import jsonable_encoder
 import anyio
 from starlette.datastructures import URL
@@ -288,6 +289,7 @@ app.mount('/static/vendor', JSFiles(directory='static/vendor'), name='static/ven
 
 app.mount('/static', StaticFiles(directory='static'), name='static')
 
+
 @app.get('/datasets/')
 def api_list_datasets() -> list[Dataset]:
     return [
@@ -299,13 +301,26 @@ def api_list_datasets() -> list[Dataset]:
     ]
 
 
+@app.get('/datasets/{name}/')
+def api_get_dataset(name:str) -> Dataset:
+    columns = list_datasets(DATA_PATH).get(name)
+
+    if not columns:
+        raise HTTPException(status_code=404, detail='Dataset not found')
+
+    return Dataset(name=name, columns={
+        lang: File(path=file.name, size=file.stat().st_size)
+        for lang, file in columns.items()
+    })
+
+
 @app.get('/datasets/{name}/sample')
-async def api_get_dataset(name:str) -> AsyncIterator[FilterOutput]:
+async def api_get_sample(name:str) -> AsyncIterator[FilterOutput]:
     return stream_jsonl(get_sample(name, []))
 
 
 @app.post('/datasets/{name}/sample')
-async def api_get_filtered_dataset(name:str, filters:list[FilterStep]) -> AsyncIterator[FilterOutput]:
+async def api_get_filtered_sample(name:str, filters:list[FilterStep]) -> AsyncIterator[FilterOutput]:
     return stream_jsonl(get_sample(name, filters))
 
 
@@ -313,7 +328,7 @@ def filter_configuration_path(name:str) -> str:
     return os.path.join(DATA_PATH, f'{name}.filters.json')
 
 
-@app.get('/datasets/{name}/configuration')
+@app.get('/datasets/{name}/configuration.json')
 def api_get_dataset_filters(name:str) -> list[FilterStep]:
     if not os.path.exists(filter_configuration_path(name)):
         return []
@@ -322,7 +337,7 @@ def api_get_dataset_filters(name:str) -> list[FilterStep]:
         return parse_obj_as(list[FilterStep], json.load(fh))
 
 
-@app.post('/datasets/{name}/configuration')
+@app.post('/datasets/{name}/configuration.json')
 def api_update_dataset_filters(name:str, filters:list[FilterStep]):
     with open(filter_configuration_path(name), 'w') as fh:
         return json.dump([step.dict() for step in filters], fh)

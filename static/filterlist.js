@@ -91,5 +91,4 @@ export default {
 		</div>
 	</div>
 	`
-
 }

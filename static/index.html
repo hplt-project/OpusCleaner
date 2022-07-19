@@ -8,136 +8,14 @@
 	</head>
 	<body>
 		<div id="app">
-			<div class="controls">
-				<label>
-					Dataset:
-					<select v-model="selectedDataset">
-						<option v-for="dataset in datasets" v-bind:value="dataset">{{ dataset.name }}</option>
-					</select>
-				</label>
-
-				<label>
-					<input type="checkbox" v-model="displayAsRows">
-					Display as rows
-				</label>
-
-				<button v-on:click="saveFilterSteps" v-bind:disabled="!filterStepsChangedSinceLastSave">Save filtering steps</button>
-
-				<label v-if="isFetchingSamples">Loading sample…</label>
+			<div class="main-navigation">
+				<!-- use the router-link component for navigation. -->
+				<!-- specify the link by passing the `to` prop. -->
+				<!-- `<router-link>` will render an `<a>` tag with the correct `href` attribute -->
+				<router-link v-bind:to="{name:'dataset-editor'}">Go to Home</router-link>
+				<router-link v-bind:to="{name:'filter-editor', params: {datasetName: 'OPUS-elitr_eca-v1-eng-fra'}}">Go to dataset</router-link>
 			</div>
-
-			<div class="main">
-				<div class="filter-output">
-					<div v-if="displayDiff" class="controls">
-						<span>Comparing intermediate output after {{ formatNumberSuffix(comparingSampleIndex) }} and {{ formatNumberSuffix(sampleIndex) }} filter steps.</span>
-						<button v-if="comparingFilterStep" v-on:click="comparingFilterStep=null">Stop comparing</button>
-					</div>
-					<div v-else-if="sampleIndex != samples.length - 1" class="controls">
-						<span>Showing intermediate output of {{ formatNumberSuffix(sampleIndex) }} filter step.</span>
-						<button v-if="comparingFilterStep" v-on:click="selectedFilterStep=null">Show final output</button>
-					</div>
-					<div v-bind:class="{'sample':true, 'display-as-rows': displayAsRows}">
-						<table v-if="sample?.stdout">
-							<thead>
-								<tr>
-									<th v-for="lang in languages">{{lang}}</th>
-								</tr>
-							</thead>
-							<tbody v-if="displayDiff" class="table-diff">
-								<template v-for="(chunk, i) in diff">
-									<tr v-for="(entry, j) in chunk.value" v-bind:key="`${i}:${j}`" v-bind:class="{added:chunk.added, removed:chunk.removed, changed:chunk.changed}">
-										<td v-for="(text, lang) in entry" v-bind:key="lang" v-bind:lang="lang">
-											<template v-if="chunk.changed">
-												<inline-diff class="inline-diff" v-bind:current="text" v-bind:previous="chunk.differences[j].previous[lang]"></inline-diff>
-											</template>
-											<template v-else>
-												{{text}}
-											</template>
-										</td>
-									</tr>
-								</template>
-							</tbody>
-							<tbody v-else>
-								<tr v-for="(entry, i) in sample.stdout">
-									<td v-for="(text, lang) in entry" v-bind:key="lang" v-bind:lang="lang">{{text}}</td>
-								</tr>
-							</tbody>
-						</table>
-					</div>
-					<div class="filter-error" v-if="sample?.stderr">
-						<pre>{{ sample.stderr }}</pre>
-					</div>
-				</div>
-
-				<div class="filters">
-					<draggable tag="ul" class="available-filters"
-						v-model="filters" item-key="name"
-						v-bind:group="{name:'filters', pull:'clone', put:false}"
-						v-bind:sort="false"
-						v-bind:clone="createFilterStep">
-						<template v-slot:item="{element:filter}">
-							<li class="filter">
-								<span v-bind:title="filter.description" class="filter-name">{{filter.name}}</span>
-								<span class="filter-type">{{filter.type}}</span>
-								<button v-on:click="addFilterStep(filter)" class="add-filter-btn">Add</button>
-							</li>
-						</template>
-					</draggable>
-
-					<draggable tag="ol" class="filter-steps"
-						v-model="filterSteps" item-key="stamp" 
-						v-bind:group="{name:'filters'}"
-						v-bind:multi-drag="true"
-						v-bind:multi-drag-key="multiDragKey">
-						<template v-slot:header>
-							<li class="property-list">
-								<header>
-									<span>Sample</span>
-								</header>
-								<footer>
-									<button v-on:click="selectedFilterStep=SampleStep">Show output</button>
-									<button v-on:click="comparingFilterStep=SampleStep" v-bind:disabled="comparingFilterStep===SampleStep">Diff</button>
-								</footer>
-							</li>
-						</template>
-						<template v-slot:item="{element:filterStep, index:i}">
-							<li class="property-list">
-								<header>
-									<span>{{ filterStep.filter }}</span>
-									<button v-on:click="removeFilterStep(i)">Remove</button>
-								</header>
-								<div v-if="filterRequiresLanguage(filterStep)">
-									<label v-bind:for="`step-${i}-column`">Column</label>
-									<select v-bind:id="`step-${i}-column`" v-model="filterStep.language">
-										<option v-for="lang in languages">{{lang}}</option>
-									</select>
-								</div>
-								<div v-for="(parameter, name) in filterDefinition(filterStep).parameters">
-									<label v-bind:for="`step-${i}-${name}`">{{ name }}</label>
-									<select v-if="parameter.type == 'str' && parameter.allowed_values" v-model="filterStep.parameters[name]" v-bind:id="`step-${i}-${name}`">
-										<option v-for="value in parameter.allowed_values" v-bind:value="value">{{value}}</option>
-									</select>
-									<input v-else-if="parameter.type == 'bool'" type="checkbox" v-model="filterStep.parameters[name]" v-bind:id="`step-${i}-${name}`">
-									<input v-else-if="parameter.type == 'int' || parameter.type == 'float'"
-										type="number"
-										v-model="filterStep.parameters[name]"
-										v-bind:id="`step-${i}-${name}`"
-										v-bind:min="parameter.min"
-										v-bind:max="parameter.max"
-										v-bind:step="parameter.type == 'int' ? 1 : 0.1">
-									<input v-else type="text" v-model="filterStep.parameters[name]" v-bind:id="`step-${i}-${name}`">
-									
-									<small v-if="parameter.help" class="property-list-description">{{parameter.help}}</small>
-								</div>
-								<footer>
-									<button v-on:click="selectedFilterStep=filterStep">Show output</button>
-									<button v-on:click="comparingFilterStep=filterStep">Diff</button>
-								</footer>
-							</li>
-						</template>
-					</draggable>
-				</div>
-			</div>
+			<router-view class="main"></router-view>
 		</div>
 		<!-- because Safari, unfortunately, does not do importmap yet? -->
 		<script async src="/static/vendor/es-module-shims@1.5.8/dist/es-module-shims.js"></script>
@@ -145,6 +23,8 @@
 			{
 				"imports": {
 					"vue": "/static/vendor/vue@3.2.37/dist/vue.esm-browser.js",
+					"vue-router": "/static/vendor/vue-router@4.1.2/dist/vue-router.esm-browser.js",
+					"@vue/devtools-api": "https://unpkg.com/@vue/devtools-api@^6.1.4?module",
 					"sortablejs": "/static/vendor/sortablejs@1.15.0/modular/sortable.complete.esm.js",
 					"vuedraggable": "/static/vendor/vuedraggable@4.1.0/src/vuedraggable.js",
 					"diff": "/static/diff.js",
@@ -153,8 +33,63 @@
 			}
 		</script>
 		<script type="module">
-			import {app} from '/static/filter-editor.js';
+			import {createApp} from 'vue';
+			import {createRouter,createWebHashHistory} from 'vue-router';
+			import FilterEditor from '/static/filter-editor.js';
+
+			/**
+			 * Quick wrapper around FilterEditor that injects the dataset object
+			 * based on the url parameter
+			 */
+			const FilterEditorRoute = {
+				data() {
+					return {
+						dataset: null
+					}
+				},
+				created() {
+					this.fetchDataset();
+					this.$watch(() => this.$route.params, () => this.fetchDataset());
+				},
+				methods: {
+					async fetchDataset() {
+						const response = await fetch(`/datasets/${encodeURIComponent(this.$route.params.datasetName)}/`);
+						this.dataset = await response.json();
+						console.log('ding', this.dataset);
+					}
+				},
+				components: {
+					FilterEditor
+				},
+				template: `<div><filter-editor v-if="dataset" v-bind:dataset="dataset"></filter-editor></div>`
+			};
+
+			const DatasetEditorRoute = {
+				template: `<h1>Table: todo</h1>`
+			};
+
+			const router = createRouter({
+				history: createWebHashHistory(),
+				routes: [
+					{
+						path: '/',
+						name: 'dataset-editor',
+						component: DatasetEditorRoute
+					},
+					{
+						path: '/datasets/:datasetName/configuration',
+						name: 'filter-editor',
+						component: FilterEditorRoute
+					}
+				]
+			});
+
+			const app = createApp({});
+
+			app.use(router);
+
 			app.mount('#app');
+			
 			window.$app = app; // for debugging
 		</script>
 	</body>

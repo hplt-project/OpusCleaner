@@ -21,6 +21,10 @@ body {
 	opacity: 1.0;
 }
 
+#app > .main {
+	flex-direction: column;
+}
+
 .controls {
 	flex: 0;
 	border-bottom: 1px solid #ccc;

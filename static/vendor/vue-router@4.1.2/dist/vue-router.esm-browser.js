@@ -4,7 +4,7 @@
   * @license MIT
   */
 import { getCurrentInstance, inject, onUnmounted, onDeactivated, onActivated, computed, unref, watchEffect, defineComponent, reactive, h, provide, ref, watch, shallowRef, nextTick } from 'vue';
-import { setupDevtoolsPlugin } from '@vue/devtools-api';
+// import { setupDevtoolsPlugin } from '@vue/devtools-api';
 
 const isBrowser = typeof window !== 'undefined';
 
@@ -3508,7 +3508,7 @@ function createRouter(options) {
                 unmountApp();
             };
             if (isBrowser) {
-                addDevtools(app, router, matcher);
+                // addDevtools(app, router, matcher);
             }
         },
     };

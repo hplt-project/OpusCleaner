@@ -1,0 +1,6 @@
+{
+    "description": "Deescapes special characters, typically when cleaning text that used to be part of html or xml.",
+    "type": "monolingual",
+    "command": "./deescape-special-chars.perl",
+    "parameters": {}
+}

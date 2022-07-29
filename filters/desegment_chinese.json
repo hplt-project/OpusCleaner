@@ -1,0 +1,6 @@
+{
+    "description": "Desegments Chinese, useful for some corpora, as they arrive presegmented, and for using after a segmentation filter. It also converts English fullstops into Chinese ones, as well as converting final comma into Chinese fullstop.",
+    "type": "monolingual",
+    "command": "./desegment_chinese.py",
+    "parameters": {}
+}

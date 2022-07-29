@@ -1,0 +1,230 @@
+html, body {
+	margin: 0;
+	padding: 0;
+	height: 100%;
+	overflow: hidden;
+}
+
+body {
+	font: 16px/24px sans-serif;
+}
+
+#app {
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	opacity: 0;
+	transition: opacity ease-in-out 150ms;
+}
+
+#app[data-v-app] {
+	opacity: 1.0;
+}
+
+.controls {
+	flex: 0;
+	border-bottom: 1px solid #ccc;
+}
+
+.main {
+	flex: 1;
+	display: flex;
+	overflow: hidden;
+}
+
+.filter-output {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+/*				overflow: hidden;*/
+}
+
+.filter-output .controls {
+/*	display: flex;*/
+}
+
+.filter-error {
+	border-top: 1px solid #ccc;
+	flex: 0 0 auto;
+	overflow: hidden;
+	overflow-y: auto;
+}
+
+.filter-error pre {
+	white-space: pre-wrap;
+}
+
+.sample {
+	flex: 1 1 auto;
+	overflow-y: auto;
+}
+
+.sample table {
+	table-layout: fixed;
+	border-collapse: collapse;
+}
+
+.sample table td {
+	width: 50%;
+	padding: 0.25em 0.5em;
+	vertical-align: top;
+}
+
+.sample tr:nth-child(2n) td {
+	background: #eef;
+}
+
+.table-diff tr.added td {
+	background: #efe;
+	font-style: italic;
+}
+
+.table-diff tr.removed td {
+	background: #fee;
+	text-decoration: line-through;
+}
+
+.table-diff tr.changed td {
+	background: #ffe;
+}
+
+.inline-diff ins {
+	background: #cfc;
+}
+
+.inline-diff del {
+	background: #fcc;
+}
+
+.sample.display-as-rows table thead {
+	display: none;
+}
+
+.sample.display-as-rows table tr {
+	display: block;
+	margin-bottom: 1em;
+}
+
+.sample.display-as-rows table td {
+	display: block;
+	width: auto;
+}
+
+.sample.display-as-rows td[lang]::before {
+	content: attr(lang) ': ';
+	display: inline-block;
+	margin: 0 0.5em 0 0;
+	opacity: 0.5;
+}
+
+.filters {
+	display: flex;
+	flex-direction: column;
+	flex: 0 0 300px;
+	border-left: 1px solid #ccc;
+}
+
+.available-filters {
+	flex: 0;
+}
+
+.filter-steps {
+	flex: 1;
+	border-top: 1px solid #ccc;
+	overflow-y: auto;
+}
+
+.filter {
+	display: flex;
+}
+
+.filter .filter-name {
+	flex: 2;
+}
+
+.filter .filter-type {
+	flex: 1;
+	font-size: 0.8em;
+	padding-left: 0.5em;
+}
+
+.filter .add-filter-btn {
+	flex: 0;
+	align-self: center;
+}
+
+.filter-steps li {
+	margin: 1em 0;
+	position: relative; /* for ::after arrow */
+	background: white; /* for draggable */
+}
+
+.filter-steps li.selected {
+	box-shadow: 0 0 0 4px rgba(0, 0, 255, 0.5);
+}
+
+.filter-steps li:not(:last-child):not(.selected)::after {
+	content: '';
+	width: 0;
+	height: 0;
+	border-top: 1em solid #ccc;
+	border-left: 1em solid transparent;
+	border-right: 1em solid transparent;
+	position: absolute;
+	left: calc(50% - 1em);
+}
+
+.controls, .available-filters, .filter-steps {
+	margin: 0;
+	padding: 0.5em 1em;
+	list-style: none;
+}
+
+input[type=number] {
+	width: 5em;
+}
+
+input[type=checkbox] {
+	width: 1em;
+}
+
+.property-list {
+	border: 1px solid #ccc;
+	border-radius: 4px;
+}
+
+.property-list > *:not(:last-child) {
+	border-bottom: 1px solid #ccc;
+}
+
+.property-list > header {
+	background: #ccc;
+}
+
+.property-list > header > button {
+	align-self: flex-end;
+}
+
+.property-list > * {
+	padding: 0.5em;
+	display: flex;
+	flex-wrap: wrap;
+}
+
+.property-list > * > * {
+	flex: 0;
+	align-self: center;
+}
+
+.property-list > * > *:first-child {
+	flex: 1;
+	align-self: flex-start;
+}
+
+.property-list > * > small {
+	flex: 1 0 100%;
+}
+
+.property-list > * > input[type=checkbox] {
+	flex-basis: 1em;
+}

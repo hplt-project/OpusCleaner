@@ -40,7 +40,9 @@ COL_PY = os.path.abspath('./col.py')
 
 SAMPLE_PY = os.path.abspath('./sample.py')
 
-SAMPLE_SIZE = 50
+# Size of each of the three sections (head, random sample of middle, tail) of
+# the dataset sample that we operate on.
+SAMPLE_SIZE = 100
 
 
 class File(BaseModel):

@@ -65,19 +65,19 @@ class Tailer(Iterable[T]):
 		return self.sample[(self.i % len(self.sample)):] + self.sample[0:(self.i % len(self.sample))]
 
 
-def sample(k:int, iterable:Iterable[T], sort=False) -> tuple[list[T],list[T],list[T]]:
+def sample(k:int, iterable:Iterable[T], sort=False) -> Iterable[Iterable[T]]:
 	"""Take `k` items from the start, the end and the middle from `iterable`. If
 	`sort` is True, the items in the middle will be in the order they appeared
 	in."""
 	it = iter(iterable)
 
-	head = [next(it) for _ in range(k)]
+	yield (next(it) for _ in range(k))
 
 	tailer = Tailer(k, it)
 
-	middle = reservoir_sample(k, tailer, sort=sort)
+	yield reservoir_sample(k, tailer, sort=sort)
 
-	return head, middle, tailer.tail
+	yield tailer.tail
 
 
 if __name__ == '__main__':
@@ -118,13 +118,13 @@ if __name__ == '__main__':
 		
 		pairs = zip(*files)
 
-		head, middle, tail = sample(args.lines, pairs, sort=True)
-
 		delimiter = args.delimiter.replace("\\t", "\t").replace("\\n", "\n").encode()
 
-		for pair in chain(head, middle, tail):
-			for col, entry in enumerate(pair):
-				if col > 0:
-					sys.stdout.buffer.write(delimiter)
-				sys.stdout.buffer.write(entry.rstrip(b"\n"))
-			sys.stdout.buffer.write(b"\n")
+		for section in sample(args.lines, pairs, sort=True):
+			for pair in section:
+				for col, entry in enumerate(pair):
+					if col > 0:
+						sys.stdout.buffer.write(delimiter)
+					sys.stdout.buffer.write(entry.rstrip(b"\n"))
+				sys.stdout.buffer.write(b"\n")
+			sys.stdout.buffer.flush()

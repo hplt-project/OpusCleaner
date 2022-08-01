@@ -194,7 +194,7 @@ def sample_path(name:str, langs: Iterable[str]):
     else:
         filename = parts[0]
 
-    return os.path.join(root, f'.sample.{filename}.{languages}.gz')
+    return os.path.join(root, f'.sample.{filename}.{languages}')
 
 
 async def compute_sample(name:str, columns:list[tuple[str,File]]):
@@ -237,7 +237,7 @@ async def get_sample(name:str, filters:list[FilterStep]) -> AsyncIterator[Filter
     if not os.path.exists(sample_path(name, langs)):
         await compute_sample(name, columns)
 
-    with gzip.open(sample_path(name, langs), 'rb') as fh:
+    with open(sample_path(name, langs), 'rb') as fh:
         sample = fh.read()
 
     yield FilterOutput(langs, sample)

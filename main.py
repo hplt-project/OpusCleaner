@@ -284,10 +284,13 @@ async def get_sample(name:str, filters:list[FilterStep]) -> AsyncIterator[Filter
         
         # Check exit codes, testing most obvious problems first.
         filter_output, filter_stderr = await p_filter.communicate(input=sample)
-        if p_filter.returncode != 0:
-            raise Exception(f"Step {i}: {filter_step.filter} failed:\n{filter_stderr!s}")
+        # if p_filter.returncode != 0:
+            # raise Exception(f"Step {i}: {filter_step.filter} failed:\n{filter_stderr!s}")
 
         yield FilterOutput(langs, filter_output, filter_stderr)
+
+        if p_filter.returncode != 0:
+            break
 
         sample = filter_output
 

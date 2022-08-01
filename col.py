@@ -52,19 +52,26 @@ def merge(column, queue, fin, fout):
 	fout.close()
 
 
-column = int(sys.argv[1])
+try:
+	column = int(sys.argv[1])
 
-child = Popen(sys.argv[2:], stdin=PIPE, stdout=PIPE)
+	child = Popen(sys.argv[2:], stdin=PIPE, stdout=PIPE)
 
-feeder = Thread(target=exit_on_throw(split), args=[column, queue, sys.stdin.buffer, none_throws(child).stdin])
-feeder.start()
+	feeder = Thread(target=exit_on_throw(split), args=[column, queue, sys.stdin.buffer, none_throws(child).stdin])
+	feeder.start()
 
-consumer = Thread(target=exit_on_throw(merge), args=[column, queue, none_throws(child).stdout, sys.stdout.buffer])
-consumer.start()
+	consumer = Thread(target=exit_on_throw(merge), args=[column, queue, none_throws(child).stdout, sys.stdout.buffer])
+	consumer.start()
 
-retval = child.wait()
+	retval = child.wait()
 
-feeder.join()
-consumer.join()
+	feeder.join()
+	consumer.join()
 
-sys.exit(retval)
+	sys.exit(retval)
+except FileNotFoundError as e:
+	print(e, file=sys.stderr)
+	sys.exit(2)
+except:
+	print_exc(file=sys.stderr)
+	sys.exit(127)

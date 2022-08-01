@@ -85,19 +85,23 @@ if __name__ == '__main__':
 	import gzip
 	import argparse
 	from itertools import count, chain
-	from contextlib import ExitStack
+	from contextlib import ExitStack, contextmanager
 	from typing import IO, cast, BinaryIO, Iterator
 	from io import BufferedReader
+
+	@contextmanager
+	def gunzip(path):
+		with subprocess.Popen(['gzip', '-cd', path], stdout=subprocess.PIPE) as proc:
+			yield proc.stdout
+			if proc.wait() != 0:
+				raise RuntimeError(f'gzip returned error code {proc.returncode}')
 
 	def magic_open_or_stdin(ctx:ExitStack, path:str) -> IO[bytes]:
 		# TODO ideally we would look at the magic bytes, but that would entail
 		# consuming the input file partially and then I can't pass the complete
 		# file onto gzip afterwards
 		if path.endswith('.gz'):
-			child = ctx.enter_context(subprocess.Popen(['gzip', '-dc', path], stdout=subprocess.PIPE))
-			if child.stdout is None:
-				raise RuntimeError('Could not open gzip')
-			return child.stdout
+			return ctx.enter_context(gunzip(path))
 		elif path == '-':
 			return sys.stdin.buffer
 		else:

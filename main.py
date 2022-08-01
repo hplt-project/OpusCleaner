@@ -178,9 +178,7 @@ def none_throws(optional: Optional[T], message: str = "Unexpected `None`") -> T:
     return optional
 
 
-def sample_path(name:str, langs: Iterable[str]):
-    languages = '.'.join(sorted(langs))
-    
+def dataset_path(name:str, template:str):
     # TODO: fix this hack to get the file path from the name this is silly we
     # should just use get_dataset(name).path or something
     root = DATA_PATH.split('*')[0]
@@ -194,7 +192,16 @@ def sample_path(name:str, langs: Iterable[str]):
     else:
         filename = parts[0]
 
-    return os.path.join(root, f'.sample.{filename}.{languages}')
+    return os.path.join(root, template.format(filename))
+
+
+def sample_path(name:str, langs: Iterable[str]):
+    languages = '.'.join(sorted(langs))
+    return dataset_path(name, f'.sample.{{}}.{languages}')
+
+
+def filter_configuration_path(name:str) -> str:
+    return dataset_path(name, '{}.filters.json')
 
 
 async def compute_sample(name:str, columns:list[tuple[str,File]]):
@@ -352,10 +359,6 @@ async def api_get_sample(name:str) -> AsyncIterator[FilterOutput]:
 @app.post('/datasets/{name:path}/sample')
 async def api_get_filtered_sample(name:str, filters:list[FilterStep]) -> AsyncIterator[FilterOutput]:
     return stream_jsonl(get_sample(name, filters))
-
-
-def filter_configuration_path(name:str) -> str:
-    return os.path.join(DATA_PATH, f'{name}.filters.json')
 
 
 @app.get('/datasets/{name:path}/configuration.json')

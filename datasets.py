@@ -31,7 +31,7 @@ def list_datasets(path) -> dict[str,dict[str,Path]]:
             for entry in files
         }
         for name, files in groupby(
-            sorted(files, key=lambda entry: entry.name),
+            sorted(files, key=lambda entry: str(entry)),
             key=lambda entry: str(entry.relative_to(root)).rsplit('.', 2)[0])
     }
 

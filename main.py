@@ -2,7 +2,7 @@ import os
 import gzip
 import sys
 import re
-from typing import Optional, Iterable, TypeVar, Union, Literal, Any, AsyncIterator
+from typing import Optional, Iterable, TypeVar, Union, Literal, Any, AsyncIterator, cast, IO
 from contextlib import ExitStack
 from itertools import chain
 from pydantic import BaseModel, parse_obj_as, validator
@@ -26,7 +26,7 @@ from shutil import copyfileobj
 from pprint import pprint
 
 
-from datasets import list_datasets
+from datasets import list_datasets, Path
 from sample import sample
 
 
@@ -178,10 +178,24 @@ def none_throws(optional: Optional[T], message: str = "Unexpected `None`") -> T:
 
 def sample_path(name:str, langs: Iterable[str]):
     languages = '.'.join(sorted(langs))
-    return os.path.join(DATA_PATH, f'.sample.{name}.{languages}.gz')
+    
+    # TODO: fix this hack to get the file path from the name this is silly we
+    # should just use get_dataset(name).path or something
+    root = DATA_PATH.split('*')[0]
+    
+    # If the dataset name is a subdirectory, do some hacky shit to get to a
+    # .sample.gz file in said subdirectory.
+    parts = name.rsplit('/', maxsplit=2)
+    if len(parts) == 2:
+        root = os.path.join(root, parts[0])
+        filename = parts[1]
+    else:
+        filename = parts[0]
+
+    return os.path.join(root, f'.sample.{filename}.{languages}.gz')
 
 
-async def compute_sample(name:str, columns:list[tuple[str,os.DirEntry]]):
+async def compute_sample(name:str, columns:list[tuple[str,File]]):
     langs = [lang for lang, _ in columns]
     with TemporaryFile() as tempfile, gzip.open(tempfile, 'wb') as fout:  # type: ignore[name-defined]
         proc = await asyncio.subprocess.create_subprocess_exec(
@@ -213,7 +227,7 @@ class FilterOutput(BaseModel):
 
 
 async def get_sample(name:str, filters:list[FilterStep]) -> AsyncIterator[FilterOutput]:
-    columns: list[tuple[str,os.DirEntry]] = sorted(list_datasets(DATA_PATH)[name].items(), key=lambda pair: pair[0])
+    columns: list[tuple[str,Path]] = sorted(list_datasets(DATA_PATH)[name].items(), key=lambda pair: pair[0])
     langs = [lang for lang, _ in columns]
 
     # If we don't have a sample stored, generate one. Doing it in bytes because
@@ -304,7 +318,7 @@ def api_list_datasets() -> list[Dataset]:
     ]
 
 
-@app.get('/datasets/{name}/')
+@app.get('/datasets/{name:path}/')
 def api_get_dataset(name:str) -> Dataset:
     columns = list_datasets(DATA_PATH).get(name)
 
@@ -317,12 +331,12 @@ def api_get_dataset(name:str) -> Dataset:
     })
 
 
-@app.get('/datasets/{name}/sample')
+@app.get('/datasets/{name:path}/sample')
 async def api_get_sample(name:str) -> AsyncIterator[FilterOutput]:
     return stream_jsonl(get_sample(name, []))
 
 
-@app.post('/datasets/{name}/sample')
+@app.post('/datasets/{name:path}/sample')
 async def api_get_filtered_sample(name:str, filters:list[FilterStep]) -> AsyncIterator[FilterOutput]:
     return stream_jsonl(get_sample(name, filters))
 
@@ -331,7 +345,7 @@ def filter_configuration_path(name:str) -> str:
     return os.path.join(DATA_PATH, f'{name}.filters.json')
 
 
-@app.get('/datasets/{name}/configuration.json')
+@app.get('/datasets/{name:path}/configuration.json')
 def api_get_dataset_filters(name:str) -> list[FilterStep]:
     if not os.path.exists(filter_configuration_path(name)):
         return []
@@ -340,7 +354,7 @@ def api_get_dataset_filters(name:str) -> list[FilterStep]:
         return parse_obj_as(list[FilterStep], json.load(fh))
 
 
-@app.post('/datasets/{name}/configuration.json')
+@app.post('/datasets/{name:path}/configuration.json')
 def api_update_dataset_filters(name:str, filters:list[FilterStep]):
     with open(filter_configuration_path(name), 'w') as fh:
         return json.dump([step.dict() for step in filters], fh)

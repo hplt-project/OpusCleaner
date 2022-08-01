@@ -223,8 +223,19 @@ class FilterOutput(BaseModel):
     stderr: Optional[str]
 
     def __init__(self, langs:list[str], stdout:bytes, stderr:Optional[bytes] = None):
+        lines = []
+
+        for lineno, line in enumerate(stdout.split(b'\n'), start=1):
+            values = []
+            for colno, field in enumerate(line.split(b'\t'), start=1):
+                try:
+                    values.append(field.decode())
+                except UnicodeDecodeError as e:
+                    values.append(f'[Error: Cannot decode line {lineno} column {colno}: {e!s}]')
+            lines.append(dict(zip(langs, values)))
+
         super().__init__(
-            stdout=[dict(zip(langs, line.split('\t'))) for line in stdout.decode().split('\n')],
+            stdout=lines,
             stderr=stderr.decode() if stderr is not None else None)
 
 

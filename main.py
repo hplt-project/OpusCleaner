@@ -184,8 +184,11 @@ def sample_path(name:str, langs: Iterable[str]):
 async def compute_sample(name:str, columns:list[tuple[str,os.DirEntry]]):
     langs = [lang for lang, _ in columns]
     with TemporaryFile() as tempfile, gzip.open(tempfile, 'wb') as fout:  # type: ignore[name-defined]
-        proc = await asyncio.subprocess.create_subprocess_exec([SAMPLE_PY, '-n', SAMPLE_SIZE] + [file.path for _, file in columns],
-            stdout=fout,
+        proc = await asyncio.subprocess.create_subprocess_exec(
+            SAMPLE_PY,
+            '-n', str(SAMPLE_SIZE),
+            *[str(file.resolve()) for _, file in columns],
+            stdout=cast(IO[bytes], fout),
             stderr=asyncio.subprocess.PIPE)
 
         _, stderr = await proc.communicate()

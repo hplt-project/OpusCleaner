@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import random
+import subprocess
 from math import exp, log, floor
 from typing import TypeVar, Iterable, Iterator, Generic
 
@@ -89,15 +90,18 @@ if __name__ == '__main__':
 	from io import BufferedReader
 
 	def magic_open_or_stdin(ctx:ExitStack, path:str) -> IO[bytes]:
-		fh: BinaryIO = sys.stdin.buffer if path == '-' else ctx.enter_context(open(path, 'rb'))
-
-		# TODO: make this work instead of throwing "ValueError: I/O operation on closed file."
-		# Check for gzip header
-		# reader = BufferedReader(fh)
-		# if reader.peek(2).startswith(b'\x1f\x8b'):
-		# 	fh = ctx.enter_context(gzip.open(reader, 'rb'))
-
-		return fh
+		# TODO ideally we would look at the magic bytes, but that would entail
+		# consuming the input file partially and then I can't pass the complete
+		# file onto gzip afterwards
+		if path.endswith('.gz'):
+			child = ctx.enter_context(subprocess.Popen(['gzip', '-dc', path], stdout=subprocess.PIPE))
+			if child.stdout is None:
+				raise RuntimeError('Could not open gzip')
+			return child.stdout
+		elif path == '-':
+			return sys.stdin.buffer
+		else:
+			return ctx.enter_context(open(path, 'rb'))
 
 	parser = argparse.ArgumentParser(description="Take a file's head, tail and a random sample from the rest.")
 	parser.add_argument('-n', dest='lines', type=int, default=10, help="number of lines for each section of the sample")

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import os
 import gzip
 import sys
@@ -389,3 +390,44 @@ def api_get_filters():
 def redirect_to_interface():
     return RedirectResponse('/static/index.html')
 
+
+def main_serve(args):
+    import uvicorn
+    uvicorn.run('main:app', port=args.port, reload=args.reload, log_level='info')
+
+
+async def sample_all_datasets(args):
+    tasks = []
+
+    for name, columns in list_datasets(DATA_PATH).items():
+        sorted_cols = sorted(columns.items(), key=lambda pair: pair[0])
+        langs = [lang for lang, _ in columns]
+        if not os.path.exists(sample_path(name, langs)):
+            print(f"Sampling {name}...", file=sys.stderr)
+            tasks.append([name, sorted_cols])
+
+    for task, result in zip(tasks, await asyncio.gather(*[compute_sample(*task) for task in tasks], return_exceptions=True)):
+        if isinstance(result, Exception):
+            print(f"Could not compute sample for {task[0]}: {result!s}", file=sys.stderr)
+
+
+def main_sample(args):
+    asyncio.run(sample_all_datasets(args))
+
+
+if __name__ == '__main__':
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Fill up those seats on your empty train.')
+    subparsers = parser.add_subparsers()
+
+    parser_serve = subparsers.add_parser('serve')
+    parser_serve.add_argument('-p', '--port', type=int, default=8000, help='Bind socket to this port. (default: 8000)')
+    parser_serve.add_argument('--reload', action='store_true', help='Enable auto-reload.')
+    parser_serve.set_defaults(func=main_serve)
+
+    parser_sample = subparsers.add_parser('sample')
+    parser_sample.set_defaults(func=main_sample)
+
+    args = parser.parse_args()
+    args.func(args)

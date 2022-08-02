@@ -23,7 +23,7 @@ Then for development:
 python3 -m venv .env
 bash --init-file .env/bin/activate
 pip install -r requirements.txt
-uvicorn main:app --reload
+./main.py serve --reload
 ```
 
 Then go to http://127.0.0.1:8000/ for the "interface" or http://127.0.0.1:8000/docs for the API.

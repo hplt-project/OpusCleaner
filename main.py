@@ -30,7 +30,7 @@ from datasets import list_datasets, Path
 from sample import sample
 
 
-DATA_PATH = 'data/train-parts'
+DATA_PATH = os.getenv('DATA_PATH', 'data/train-parts')
 
 FILTER_PATH = 'filters/*.json'
 

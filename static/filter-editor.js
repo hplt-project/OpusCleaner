@@ -84,7 +84,12 @@ export default {
 
 	computed: {
 		languages() {
-			return Array.from(Object.keys(this.dataset.columns)).sort()
+			const languages = Array.from(Object.keys(this.dataset.columns)).sort();
+			// First try non-alphabetical order. If no success, return alphabetical order
+			if (this.dataset.name.includes(languages.reverse().join('-')))
+				return languages;
+			else
+				return languages.reverse();
 		},
 		filterStepsStateHash() {
 			return cyrb53(JSON.stringify(this.filterSteps));

@@ -333,7 +333,7 @@ export default {
 	},
 
 	template: `
-		<div class="controls">
+		<div class="controls" translate="no">
 			<label>
 				Dataset: <em>{{ dataset.name }}</em>
 			</label>
@@ -386,12 +386,12 @@ export default {
 						</tbody>
 					</table>
 				</div>
-				<div class="filter-error" v-if="sample?.stderr">
+				<div class="filter-error" v-if="sample?.stderr" translate="no">
 					<pre>{{ sample.stderr }}</pre>
 				</div>
 			</div>
 
-			<div class="filters">
+			<div class="filters" translate="no">
 				<draggable tag="ul" class="available-filters"
 					v-model="filters" item-key="name"
 					v-bind:group="{name:'filters', pull:'clone', put:false}"

@@ -214,11 +214,13 @@ input[type=checkbox] {
 .property-list > * > * {
 	flex: 0;
 	align-self: center;
+	margin-left: 0.5em;
 }
 
 .property-list > * > *:first-child {
 	flex: 1;
 	align-self: flex-start;
+	margin-left: 0;
 }
 
 .property-list > * > small {

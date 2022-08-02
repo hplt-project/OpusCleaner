@@ -452,7 +452,10 @@ export default {
 								<small v-if="parameter.help" class="property-list-description">{{parameter.help}}</small>
 							</div>
 							<footer>
-								<button v-on:click="selectedFilterStep=filterStep">Show output</button>
+								<button v-on:click="selectedFilterStep=filterStep">
+									Show output
+									<span v-if="samples[i+1]?.stderr" title="This step produced output on stderr.">⚠</span>
+								</button>
 								<button v-on:click="comparingFilterStep=filterStep">Diff</button>
 							</footer>
 						</li>

@@ -69,6 +69,8 @@ try:
 	consumer.join()
 
 	sys.exit(retval)
+except SystemExit:
+	pass
 except FileNotFoundError as e:
 	print(e, file=sys.stderr)
 	sys.exit(2)

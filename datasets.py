@@ -25,14 +25,20 @@ def list_datasets(path) -> dict[str,dict[str,Path]]:
         and not entry.name.startswith('.')
     ]
 
+    datasets = [
+        (name, list(files))
+        for name, files in groupby(
+            sorted(files, key=lambda entry: str(entry)),
+            key=lambda entry: str(entry.relative_to(root)).rsplit('.', 2)[0])
+    ]
+
     return {
         name: {
             entry.name.rsplit('.', 2)[1]: entry
             for entry in files
         }
-        for name, files in groupby(
-            sorted(files, key=lambda entry: str(entry)),
-            key=lambda entry: str(entry.relative_to(root)).rsplit('.', 2)[0])
+        for name, files in datasets
+        if len(files) > 1
     }
 
 if __name__ == '__main__':

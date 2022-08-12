@@ -415,10 +415,20 @@ def main_sample(args):
     asyncio.run(sample_all_datasets(args))
 
 
+def main_list_commands(args):
+    print("Error: No command specified.\n\n"
+          "Available commands:\n"
+          "  serve      run webserver\n"
+          "  sample     sample all datasets\n"
+          "", file=sys.stderr)
+    sys.exit(1)
+
+
 if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser(description='Fill up those seats on your empty train.')
+    parser.set_defaults(func=main_list_commands)
     subparsers = parser.add_subparsers()
 
     parser_serve = subparsers.add_parser('serve')

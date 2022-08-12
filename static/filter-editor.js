@@ -368,12 +368,12 @@ export default {
 						<tbody v-if="displayDiff" class="table-diff">
 							<template v-for="(chunk, i) in diff">
 								<tr v-for="(entry, j) in chunk.value" v-bind:key="\`\${i}:\${j}\`" v-bind:class="{added:chunk.added, removed:chunk.removed, changed:chunk.changed}">
-									<td v-for="(text, lang) in entry" v-bind:key="lang" v-bind:lang="lang">
+									<td v-for="lang in languages" v-bind:key="lang" v-bind:lang="lang">
 										<template v-if="chunk.changed">
-											<inline-diff class="inline-diff" v-bind:current="text" v-bind:previous="chunk.differences[j].previous[lang]"></inline-diff>
+											<inline-diff class="inline-diff" v-bind:current="entry[lang]" v-bind:previous="chunk.differences[j].previous[lang]"></inline-diff>
 										</template>
 										<template v-else>
-											{{text}}
+											{{entry[lang]}}
 										</template>
 									</td>
 								</tr>
@@ -381,7 +381,7 @@ export default {
 						</tbody>
 						<tbody v-else>
 							<tr v-for="(entry, i) in sample.stdout">
-								<td v-for="(text, lang) in entry" v-bind:key="lang" v-bind:lang="lang">{{text}}</td>
+								<td v-for="lang in languages" v-bind:key="lang" v-bind:lang="lang">{{entry[lang]}}</td>
 							</tr>
 						</tbody>
 					</table>

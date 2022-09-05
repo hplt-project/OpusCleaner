@@ -31,7 +31,7 @@ from datasets import list_datasets, Path
 from sample import sample
 
 
-DATA_PATH = os.getenv('DATA_PATH', 'data/train-parts')
+DATA_PATH = os.getenv('DATA_PATH', 'data/train-parts/*.*.gz')
 
 FILTER_PATH = 'filters/*.json'
 

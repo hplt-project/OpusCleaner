@@ -10,7 +10,7 @@ from typing import Optional, TypeVar
 from functools import wraps
 
 
-queue: SimpleQueue[list[bytes]] = SimpleQueue()
+queue = SimpleQueue()
 
 
 T = TypeVar("T")

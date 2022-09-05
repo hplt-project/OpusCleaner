@@ -4,7 +4,7 @@ import os
 import glob
 from itertools import groupby
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Dict
 
 
 def _glob(*args, **kwargs) -> Iterable[Path]:
@@ -12,7 +12,7 @@ def _glob(*args, **kwargs) -> Iterable[Path]:
         yield Path(entry)
 
 
-def list_datasets(path) -> dict[str,dict[str,Path]]:
+def list_datasets(path) -> Dict[str,Dict[str,Path]]:
     """Lists datasets given a directory. Scans the directories and returns a dictionary of the
     datasets encoutered. Dictionary looks like {dataset_name : { lang: path}}"""
     root = Path(path.split('*')[0])

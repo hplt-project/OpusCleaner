@@ -3,7 +3,7 @@ import os
 import gzip
 import sys
 import re
-from typing import Optional, Iterable, TypeVar, Union, Literal, Any, AsyncIterator, cast, IO
+from typing import Optional, Iterable, TypeVar, Union, Literal, Any, AsyncIterator, cast, IO, Dict, List, Tuple
 from contextlib import ExitStack
 from itertools import chain
 from pydantic import BaseModel, parse_obj_as, validator
@@ -53,7 +53,7 @@ class File(BaseModel):
 
 class Dataset(BaseModel):
     name: str
-    columns: dict[str,File]
+    columns: Dict[str,File]
 
 
 class FilterType(Enum):
@@ -94,7 +94,7 @@ class FilterParameterBool(FilterParameterBase):
 class FilterParameterStr(FilterParameterBase):
     type: Literal["str"]
     default: Optional[str]
-    allowed_values: Optional[list[str]]
+    allowed_values: Optional[List[str]]
 
 
 FilterParameter = Union[
@@ -111,12 +111,12 @@ class Filter(BaseModel):
     description: Optional[str]
     command: str
     basedir: Optional[str] # same as .json file by default
-    parameters: dict[str,FilterParameter]
+    parameters: Dict[str,FilterParameter]
 
 
 class FilterStep(BaseModel):
     filter: str
-    parameters: dict[str,Any]
+    parameters: Dict[str,Any]
     language: Optional[str]
 
     @validator('filter')
@@ -160,7 +160,7 @@ def list_filters(path) -> Iterable[Filter]:
 
 
 
-FILTERS: dict[str,Filter] = {}
+FILTERS: Dict[str,Filter] = {}
 
 def reload_filters():
     global FILTERS
@@ -205,7 +205,7 @@ def filter_configuration_path(name:str) -> str:
     return dataset_path(name, '{}.filters.json')
 
 
-async def compute_sample(name:str, columns:list[tuple[str,File]]):
+async def compute_sample(name:str, columns:List[Tuple[str,File]]):
     langs = [lang for lang, _ in columns]
     with TemporaryFile() as tempfile:  # type: ignore[name-defined]
         proc = await asyncio.subprocess.create_subprocess_exec(
@@ -227,10 +227,10 @@ async def compute_sample(name:str, columns:list[tuple[str,File]]):
 
 
 class FilterOutput(BaseModel):
-    stdout: list[dict[str,str]]
+    stdout: List[Dict[str,str]]
     stderr: Optional[str]
 
-    def __init__(self, langs:list[str], stdout:bytes, stderr:Optional[bytes] = None):
+    def __init__(self, langs:List[str], stdout:bytes, stderr:Optional[bytes] = None):
         lines = []
 
         for lineno, line in enumerate(stdout.split(b'\n'), start=1):
@@ -247,7 +247,7 @@ class FilterOutput(BaseModel):
             stderr=stderr.decode() if stderr is not None else None)
 
 
-async def get_sample(name:str, filters:list[FilterStep]) -> AsyncIterator[FilterOutput]:
+async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[FilterOutput]:
     columns: list[tuple[str,Path]] = sorted(list_datasets(DATA_PATH)[name].items(), key=lambda pair: pair[0])
     langs = [lang for lang, _ in columns]
 
@@ -332,7 +332,7 @@ app.mount('/static', StaticFiles(directory='static'), name='static')
 
 
 @app.get('/datasets/')
-def api_list_datasets() -> list[Dataset]:
+def api_list_datasets() -> List[Dataset]:
     return [
         Dataset(name=name, columns={
             lang: File(path=file.name, size=file.stat().st_size)
@@ -361,21 +361,21 @@ async def api_get_sample(name:str) -> AsyncIterator[FilterOutput]:
 
 
 @app.post('/datasets/{name:path}/sample')
-async def api_get_filtered_sample(name:str, filters:list[FilterStep]) -> AsyncIterator[FilterOutput]:
+async def api_get_filtered_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[FilterOutput]:
     return stream_jsonl(get_sample(name, filters))
 
 
 @app.get('/datasets/{name:path}/configuration.json')
-def api_get_dataset_filters(name:str) -> list[FilterStep]:
+def api_get_dataset_filters(name:str) -> List[FilterStep]:
     if not os.path.exists(filter_configuration_path(name)):
         return []
 
     with open(filter_configuration_path(name), 'r') as fh:
-        return parse_obj_as(list[FilterStep], json.load(fh))
+        return parse_obj_as(List[FilterStep], json.load(fh))
 
 
 @app.post('/datasets/{name:path}/configuration.json')
-def api_update_dataset_filters(name:str, filters:list[FilterStep]):
+def api_update_dataset_filters(name:str, filters:List[FilterStep]):
     with open(filter_configuration_path(name), 'w') as fh:
         return json.dump([step.dict() for step in filters], fh)
 

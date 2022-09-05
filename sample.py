@@ -2,13 +2,13 @@
 import random
 import subprocess
 from math import exp, log, floor
-from typing import TypeVar, Iterable, Iterator, Generic
+from typing import TypeVar, Iterable, Iterator, Generic, List
 
 
 T = TypeVar('T')
 
 
-def reservoir_sample(k:int, it:Iterable[T], *, rand: random.Random = random._inst, sort=False) -> list[T]:
+def reservoir_sample(k:int, it:Iterable[T], *, rand: random.Random = random._inst, sort=False) -> List[T]:
 	"""Take k samples from iterable by reading from start to end. If sort is
 	True, it will return the selected samples in the order they appeared in.
 	"""
@@ -61,7 +61,7 @@ class Tailer(Iterable[T]):
 			self.i += 1
 
 	@property
-	def tail(self) -> list[T]:
+	def tail(self) -> List[T]:
 		return self.sample[(self.i % len(self.sample)):] + self.sample[0:(self.i % len(self.sample))]
 
 

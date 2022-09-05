@@ -6,11 +6,11 @@ from traceback import print_exc
 from subprocess import Popen, PIPE
 from threading import Thread
 from queue import SimpleQueue
-from typing import Optional, TypeVar
+from typing import Optional, TypeVar, List
 from functools import wraps
 
 
-queue: SimpleQueue[list[bytes]] = SimpleQueue()
+queue: SimpleQueue[List[bytes]] = SimpleQueue()
 
 
 T = TypeVar("T")

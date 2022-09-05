@@ -2,7 +2,7 @@
 import random
 import subprocess
 from math import exp, log, floor
-from typing import TypeVar, Iterable, Iterator, Generic, List
+from typing import TypeVar, Iterable, Iterator, Generic, List, Tuple
 
 
 T = TypeVar('T')
@@ -12,7 +12,7 @@ def reservoir_sample(k:int, it:Iterable[T], *, rand: random.Random = random._ins
 	"""Take k samples from iterable by reading from start to end. If sort is
 	True, it will return the selected samples in the order they appeared in.
 	"""
-	sample: list[tuple[int,T]] = []
+	sample: List[Tuple[int,T]] = []
 
 	numbered_it = enumerate(it)
 
@@ -45,7 +45,7 @@ class Tailer(Iterable[T]):
 	you can read from `tail`."""
 
 	def __init__(self, k:int, it:Iterable[T]):
-		self.sample: list[T] = []
+		self.sample: List[T] = []
 		self.k = k
 		self.i = 0
 		self.it = iter(it)
@@ -61,7 +61,7 @@ class Tailer(Iterable[T]):
 			self.i += 1
 
 	@property
-	def tail(self) -> List[T]:
+	def tail(self) -> list[T]:
 		return self.sample[(self.i % len(self.sample)):] + self.sample[0:(self.i % len(self.sample))]
 
 
@@ -115,7 +115,7 @@ if __name__ == '__main__':
 	args = parser.parse_args()
 
 	with ExitStack() as ctx:
-		files:list[Iterator[bytes]] = [magic_open_or_stdin(ctx, file) for file in args.files]
+		files:List[Iterator[bytes]] = [magic_open_or_stdin(ctx, file) for file in args.files]
 
 		if args.line_numbers:
 			files = [(str(i).encode() for i in count()), *files]

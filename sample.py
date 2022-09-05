@@ -61,7 +61,7 @@ class Tailer(Iterable[T]):
 			self.i += 1
 
 	@property
-	def tail(self) -> list[T]:
+	def tail(self) -> List[T]:
 		return self.sample[(self.i % len(self.sample)):] + self.sample[0:(self.i % len(self.sample))]
 
 

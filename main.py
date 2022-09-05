@@ -3,7 +3,7 @@ import os
 import gzip
 import sys
 import re
-from typing import Optional, Iterable, TypeVar, Union, Literal, Any, AsyncIterator, cast, IO, Dict, List, Tuple
+from typing import Optional, Iterable, TypeVar, Union, Literal, Any, AsyncIterator, cast, IO, List, Dict, Tuple
 from contextlib import ExitStack
 from itertools import chain
 from pydantic import BaseModel, parse_obj_as, validator
@@ -183,7 +183,7 @@ def dataset_path(name:str, template:str):
     # TODO: fix this hack to get the file path from the name this is silly we
     # should just use get_dataset(name).path or something
     root = DATA_PATH.split('*')[0]
-    
+
     # If the dataset name is a subdirectory, do some hacky shit to get to a
     # .sample.gz file in said subdirectory.
     parts = name.rsplit('/', maxsplit=2)
@@ -248,7 +248,7 @@ class FilterOutput(BaseModel):
 
 
 async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[FilterOutput]:
-    columns: list[tuple[str,Path]] = sorted(list_datasets(DATA_PATH)[name].items(), key=lambda pair: pair[0])
+    columns: List[Tuple[str,Path]] = sorted(list_datasets(DATA_PATH)[name].items(), key=lambda pair: pair[0])
     langs = [lang for lang, _ in columns]
 
     # If we don't have a sample stored, generate one. Doing it in bytes because
@@ -263,7 +263,7 @@ async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[Filter
 
     for i, filter_step in enumerate(filters):
         filter_definition = FILTERS[filter_step.filter]
-        
+
         filter_env = os.environ.copy()
         for name, props in filter_definition.parameters.items():
             filter_env[name] = props.export(filter_step.parameters[name])
@@ -275,14 +275,14 @@ async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[Filter
             command = f'{COL_PY} {column} {filter_definition.command}'
         else:
             raise NotImplementedError()
-        
+
         p_filter = await asyncio.create_subprocess_shell(command,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=filter_env,
             cwd=filter_definition.basedir)
-        
+
         # Check exit codes, testing most obvious problems first.
         filter_output, filter_stderr = await p_filter.communicate(input=sample)
         # if p_filter.returncode != 0:
@@ -308,7 +308,7 @@ def stream_jsonl(iterable):
 class JSFiles(StaticFiles):
     """Like StaticFiles, but if you try to access "thingy", and "thingy.js"
     exists, it will redirect to that one. Just like unpkg.com!"""
-    
+
     async def get_response(self, path: str, scope: Scope) -> Response:
         # Check if file exists
         full_path_js, stat_result = await anyio.to_thread.run_sync(self.lookup_path, path)

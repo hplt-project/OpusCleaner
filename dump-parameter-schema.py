@@ -2,7 +2,7 @@
 import sys
 import argparse
 import json
-from typing import Union, Literal, Any, cast
+from typing import Union, Literal, Any, cast, Dict
 
 script_path = sys.argv[1]
 
@@ -12,16 +12,16 @@ sys.argv[1:] = sys.argv[2:]
 
 def _argparse_parse_args(self: argparse.ArgumentParser, args=None, namespace=None):
 	"""Creates a json string from the argparser instance"""
-	json_out: dict[str,Any] = {}
+	json_out: Dict[str,Any] = {}
 	json_out["type"] = "bilingual/monolingual" #TODO "monolingual" or "bilingual" but no idea how to determine this automatically
 	json_out["description"] = self.description
-	
+
 	# non-simple type so it doesn't end up in json
-	SWITCH = object() 
+	SWITCH = object()
 	SUBSTITUTE = object()
 
 	# We need to skip [0], as this is the prepended `--help`
-	param_dict: dict[str,dict] = {}
+	param_dict: Dict[str,Dict] = {}
 	for argument in self._actions[1:]:
 		current_str = {
 			SWITCH: argument.option_strings[0], #TODO prefer long names?
@@ -34,7 +34,7 @@ def _argparse_parse_args(self: argparse.ArgumentParser, args=None, namespace=Non
 
 		if argument.choices is not None:
 				current_str["allowed_values"] = argument.choices
-		
+
 		# Add to the parameter dict
 		param_dict[current_str[SUBSTITUTE]] = current_str
 

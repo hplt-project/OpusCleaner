@@ -24,11 +24,11 @@ def reservoir_sample(k:int, it:Iterable[T], *, rand: random.Random = random._ins
 	try:
 		while True:
 				next_i = i + floor(log(rand.random()) / log(1 - w)) + 1
-				
+
 				# Skip forward
 				while i < next_i:
 					i, line = next(numbered_it)
-					
+
 				sample[rand.randrange(k)] = (i, line)
 				w = w * exp(log(rand.random()) / k)
 	except StopIteration:
@@ -119,7 +119,7 @@ if __name__ == '__main__':
 
 		if args.line_numbers:
 			files = [(str(i).encode() for i in count()), *files]
-		
+
 		pairs = zip(*files)
 
 		delimiter = args.delimiter.replace("\\t", "\t").replace("\\n", "\n").encode()

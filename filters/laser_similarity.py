@@ -3,11 +3,9 @@
 import sys
 from typing import List, Tuple
 import argparse
-
 import numpy as np
 from laserembeddings import Laser
 from numpy.linalg import norm
-
 from more_itertools import chunked
 
 

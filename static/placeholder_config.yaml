@@ -1,0 +1,4 @@
+regexes:
+- (https?:\/\/www\.\w{1,63}\.\w{1,63}(?:\/\w{0,63}){0,})  # hyperlink
+- (www\.\w{1,63}\.\w{1,63}(?:\/\w{0,63}){0,})  # hyperlink w/o http(s)
+- ([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)  # email address

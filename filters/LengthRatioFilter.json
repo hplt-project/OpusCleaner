@@ -1,0 +1,16 @@
+{
+  "type": "bilingual",
+  "name": "LengthRatioFilter",
+  "description": "Character length ratio",
+  "command": "opusfilter:LengthRatioFilter",
+  "parameters": {
+    "threshold": {
+      "type": "int",
+      "default": 3
+    },
+    "unit": {
+      "type": "str",
+      "default": "word"
+    }
+  }
+}

@@ -1,6 +1,0 @@
-{
-    "description": "Segments Chinese in words using jieba. This is useful so we can apply ratio filters to identify non parallel sentences.",
-    "type": "monolingual",
-    "command": "python -m jieba -d ' '",
-    "parameters": {}
-}

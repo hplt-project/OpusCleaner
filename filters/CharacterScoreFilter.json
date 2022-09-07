@@ -1,0 +1,24 @@
+{
+  "type": "bilingual",
+  "name": "CharacterScoreFilter",
+  "description": "Proportion of alphabetic characters that are in the given script\n\n    For a list of valid scripts, see e.g.\n    https://www.regular-expressions.info/unicode.html\n\n    ",
+  "command": "opusfilter:CharacterScoreFilter",
+  "parameters": {
+    "src_script": {
+      "type": "str",
+      "default": "Latin"
+    },
+    "tgt_script": {
+      "type": "str",
+      "default": "Latin"
+    },
+    "src_threshold": {
+      "type": "int",
+      "default": 1
+    },
+    "tgt_threshold": {
+      "type": "int",
+      "default": 1
+    }
+  }
+}

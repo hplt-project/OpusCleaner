@@ -1,0 +1,12 @@
+{
+  "type": "bilingual",
+  "name": "NonZeroNumeralsFilter",
+  "description": "Similarity measure between numerals of the two sentences with\n        zeros removed",
+  "command": "opusfilter:NonZeroNumeralsFilter",
+  "parameters": {
+    "threshold": {
+      "type": "float",
+      "default": 0.5
+    }
+  }
+}

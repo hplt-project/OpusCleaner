@@ -1,0 +1,7 @@
+{
+  "type": "bilingual",
+  "name": "HtmlTagFilter",
+  "description": "Html tag filter",
+  "command": "opusfilter:HtmlTagFilter",
+  "parameters": {}
+}

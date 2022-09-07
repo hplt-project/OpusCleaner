@@ -1,0 +1,20 @@
+{
+  "type": "bilingual",
+  "name": "LengthFilter",
+  "description": "Sentence length filter",
+  "command": "opusfilter:LengthFilter",
+  "parameters": {
+    "min_length": {
+      "type": "int",
+      "default": 1
+    },
+    "max_length": {
+      "type": "int",
+      "default": 100
+    },
+    "unit": {
+      "type": "str",
+      "default": "word"
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "type": "bilingual",
+  "name": "LanguageIDFilter",
+  "description": "Language identification confidence filter",
+  "command": "opusfilter:LanguageIDFilter",
+  "parameters": {
+    "src_lang": {
+      "type": "NoneType",
+      "default": null
+    },
+    "tgt_lang": {
+      "type": "NoneType",
+      "default": null
+    },
+    "id_method": {
+      "type": "str",
+      "default": "langid"
+    },
+    "src_threshold": {
+      "type": "int",
+      "default": 0
+    },
+    "tgt_threshold": {
+      "type": "int",
+      "default": 0
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "type": "bilingual",
+  "name": "TerminalPunctuationFilter",
+  "description": "Penalty score with respect to the co-occurrence of terminal\n        punctuation marks",
+  "command": "opusfilter:TerminalPunctuationFilter",
+  "parameters": {
+    "threshold": {
+      "type": "int",
+      "default": -2
+    }
+  }
+}

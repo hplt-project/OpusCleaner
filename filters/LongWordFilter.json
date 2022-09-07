@@ -1,0 +1,12 @@
+{
+  "type": "bilingual",
+  "name": "LongWordFilter",
+  "description": "Word length filter",
+  "command": "opusfilter:LongWordFilter",
+  "parameters": {
+    "threshold": {
+      "type": "int",
+      "default": 40
+    }
+  }
+}

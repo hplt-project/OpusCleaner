@@ -23,10 +23,14 @@ class Text(str):
         global placeholder_cnt, placeholders
         for rule in rules:
             for grp in [match.group() for match in re.finditer(rule.pattern, self)]:
-                self = re.sub(grp, f'@{placeholder_cnt}', self)
                 if grp not in placeholders:
                     placeholders.append(grp)
+                    number_to_insert = placeholder_cnt
                     placeholder_cnt += 1
+                else:
+                    number_to_insert = placeholders.index(grp)
+                self = re.sub(grp, f'@{number_to_insert}', self)
+                
         return self
 
     def replace_placeholders(self, placeholders: list[str]):
@@ -36,9 +40,9 @@ class Text(str):
 
 def get_src() -> str:
     if not args.source_file:
-        return input()
+        return [input()]
     with open(args.source_file, 'r') as f:
-        text = f.read()
+        text = f.readlines()
     return text
 
 def encode() -> None:
@@ -46,7 +50,8 @@ def encode() -> None:
          open(args.config, 'r') as config_file:
         config, text = yaml.safe_load(config_file), get_src()
         rules = [Rule(regex) for regex in config['regexes']]
-        target_file.write(Text(text).make_placeholders(*rules))
+        [target_file.write(Text(line).make_placeholders(*rules)) for line in text]
+        # target_file.write(Text(text).make_placeholders(*rules))
         config["placeholders"] = placeholders
     with open(args.config, 'w') as config_file:  
         yaml.dump(config, config_file, allow_unicode=True)
@@ -56,7 +61,8 @@ def decode() -> None:
          open(args.target_file, 'w') as target_file:
         text = get_src()
         placeholders = yaml.safe_load(config_file)['placeholders']
-        target_file.write(Text(text).replace_placeholders(placeholders))
+        [target_file.write(Text(line).replace_placeholders(placeholders)) for line in text]
+        # target_file.write(Text(text).replace_placeholders(placeholders))
         
 if __name__ == "__main__":
     args = parser.parse_args()

@@ -26,4 +26,10 @@ pip install -r requirements.txt
 ./main.py serve --reload
 ```
 
+If you want to use LASER, you will also need to download its assets:
+
+```sh
+python -m laserembeddings download-models
+```
+
 Then go to http://127.0.0.1:8000/ for the "interface" or http://127.0.0.1:8000/docs for the API.

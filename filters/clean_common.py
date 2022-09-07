@@ -23,6 +23,7 @@ CHARS = {
     'hu': r'[a-zÁáÉéÍíÓóÖöŐőŰű]',
     'is': r'[abdefghijklmnoprstuvxyÁáðÐÉéÍíÓóÚúÝýÞþÆæÖö]',
     'it': r'[a-zàÀèÈéÉìÌíÍîÎòÒóÓùÙúÚ]',
+    'ko': r'[\uac00-\ud7af]|[\u1100-\u11ff]|[\u3130-\u318f]|[\ua960-\ua97f]|[\ud7b0-\ud7ff]',
     'lt': r'[aąbcČčdeĘęĖėfghiĮįyjklmnoprsŠštuŲųŪūvzŽž]',
     'lv': r'[aĀābcČčdeĒēfgĢģhiĪījkĶķlĻļmnŅņoprsŠštuŪūvzŽž]',
     'mt': r'[abĊċdefĠġghĦħiiejklmnopqrstuvwxŻżz]',
@@ -37,4 +38,6 @@ CHARS = {
     'sk': r'[a-záäÁÄčČďĎžéÉíÍĺĹľĽňŇóÓôÔŕŔšŠťŤúÚýÝžŽ]',
     'sl': r'[abcčČdđĐefghijklmnoprsšŠtuvzžŽ]',
     'sv': r'[a-zÅåÄäÖö]',
+    'uk': r'[А-ЩЬЮЯҐЄІЇа-щьюяґєії\'`’ʼ]',
+    'zh': r'[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]',
 }

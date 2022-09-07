@@ -21,7 +21,8 @@ def _cosine_sim(emb1: np.ndarray, emb2: np.ndarray) -> np.ndarray:
 
 
 def main():
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                     description="Filter a parallel dataset using LASER.")
     parser.add_argument("--threshold", type=float, default=0.5, help="Minimum accepted LASER score.")
     parser.add_argument("--batch-size", type=int, default=32, help="LASER batch size")
     parser.add_argument("--src-lang", required=True, help="Two-letter source language code (ISO 639-1)")

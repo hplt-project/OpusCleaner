@@ -25,10 +25,9 @@ def download_model(model_type: str):
     # Do not download twice
     if os.path.exists(file_name):
         return
-    response = requests.get(url, stream=True)
+    response = requests.get(url)
     with open(file_name, "wb") as handle:
-        for data in response.iter_content():
-            handle.write(data)
+        handle.write(response.content)
 
 
 def verify_lang(model: fasttext.FastText._FastText, texts: List[str], desired_lang: str, debug: bool) -> List[bool]:

@@ -15,17 +15,17 @@
             "help": "LASER batch size"
         },
         "SRCLANG": {
-            "type": "bool",
+            "type": "str",
             "required": true,
             "default": null,
             "help": "Two-letter source language code (ISO 639-1)"
         },
         "TGTLANG": {
-            "type": "bool",
+            "type": "str",
             "required": true,
             "default": null,
             "help": "Two-letter target language code (ISO 639-1)"
         }
     },
-    "command": "filters/laser_similarity.py --threshold $THRESHOLD --batch-size $BATCHSIZE ${SRCLANG:+--src-lang} ${TGTLANG:+--tgt-lang}"
+    "command": "./laser_similarity.py --threshold $THRESHOLD --batch-size $BATCHSIZE --src-lang $SRCLANG --tgt-lang $TGTLANG"
 }

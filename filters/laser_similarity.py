@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import sys
 from typing import List, Tuple
 import argparse
@@ -25,8 +27,8 @@ def main():
                                      description="Filter a parallel dataset using LASER.")
     parser.add_argument("--threshold", type=float, default=0.5, help="Minimum accepted LASER score.")
     parser.add_argument("--batch-size", type=int, default=32, help="LASER batch size")
-    parser.add_argument("--src-lang", required=True, help="Two-letter source language code (ISO 639-1)")
-    parser.add_argument("--tgt-lang", required=True, help="Two-letter target language code (ISO 639-1)")
+    parser.add_argument("--src-lang", type=str, required=True, help="Two-letter source language code (ISO 639-1)")
+    parser.add_argument("--tgt-lang", type=str, required=True, help="Two-letter target language code (ISO 639-1)")
 
     args = parser.parse_args()
     

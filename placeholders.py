@@ -1,3 +1,4 @@
+import sys
 import yaml
 from dataclasses import dataclass
 import re
@@ -40,7 +41,7 @@ class Text(str):
 
 def get_src() -> str:
     if not args.source_file:
-        return [input()]
+        return [line for line in sys.stdin]
     with open(args.source_file, 'r') as f:
         text = f.readlines()
     return text
@@ -51,9 +52,8 @@ def encode() -> None:
         config, text = yaml.safe_load(config_file), get_src()
         rules = [Rule(regex) for regex in config['regexes']]
         [target_file.write(Text(line).make_placeholders(*rules)) for line in text]
-        # target_file.write(Text(text).make_placeholders(*rules))
         config["placeholders"] = placeholders
-    with open(args.config, 'w') as config_file:  
+    with open(args.config, 'w') as config_file:
         yaml.dump(config, config_file, allow_unicode=True)
 
 def decode() -> None:
@@ -62,7 +62,6 @@ def decode() -> None:
         text = get_src()
         placeholders = yaml.safe_load(config_file)['placeholders']
         [target_file.write(Text(line).replace_placeholders(placeholders)) for line in text]
-        # target_file.write(Text(text).replace_placeholders(placeholders))
         
 if __name__ == "__main__":
     args = parser.parse_args()

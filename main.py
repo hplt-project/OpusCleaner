@@ -26,6 +26,8 @@ from tempfile import TemporaryFile
 from shutil import copyfileobj
 from pprint import pprint
 
+import opusfilter.filters as opusfilters
+
 
 from datasets import list_datasets, Path
 from sample import sample
@@ -75,6 +77,9 @@ class FilterParameterFloat(FilterParameterBase):
     max: Optional[float]
     default: Optional[float]
 
+    def export(self, value: Any) -> float:
+        return float(value)
+
 
 class FilterParameterInt(FilterParameterBase):
     type: Literal["int"]
@@ -82,13 +87,16 @@ class FilterParameterInt(FilterParameterBase):
     max: Optional[int]
     default: Optional[int]
 
+    def export(self, value: Any) -> int:
+        return int(value)
+
 
 class FilterParameterBool(FilterParameterBase):
     type: Literal["bool"]
     default: Optional[bool]
 
-    def export(self, value: Any) -> str:
-        return "1" if value else ""
+    def export(self, value: Any) -> bool:
+        return bool(value)
 
 
 class FilterParameterStr(FilterParameterBase):
@@ -157,7 +165,6 @@ def list_filters(path) -> Iterable[Filter]:
                 yield parse_obj_as(Filter, {**defaults, **json.load(fh)})
         except Exception as e:
             print(f"Could not parse {filename}: {e}", file=sys.stderr)
-
 
 
 FILTERS: Dict[str,Filter] = {}
@@ -230,21 +237,10 @@ class FilterOutput(BaseModel):
     stdout: List[Dict[str,str]]
     stderr: Optional[str]
 
-    def __init__(self, langs:List[str], stdout:bytes, stderr:Optional[bytes] = None):
-        lines = []
-
-        for lineno, line in enumerate(stdout.split(b'\n'), start=1):
-            values = []
-            for colno, field in enumerate(line.split(b'\t'), start=1):
-                try:
-                    values.append(field.decode())
-                except UnicodeDecodeError as e:
-                    values.append(f'[Error: Cannot decode line {lineno} column {colno}: {e!s}]')
-            lines.append(dict(zip(langs, values)))
-
+    def __init__(self, langs:List[str], pairs:List[List[str]], stderr:Optional[str] = None):
         super().__init__(
-            stdout=lines,
-            stderr=stderr.decode() if stderr is not None else None)
+            stdout=[dict(zip(langs, pair)) for pair in pairs],
+            stderr=stderr)
 
 
 async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[FilterOutput]:
@@ -259,41 +255,29 @@ async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[Filter
     with open(sample_path(name, langs), 'rb') as fh:
         sample = fh.read()
 
-    yield FilterOutput(langs, sample)
+    pairs = [
+        line.split('\t', maxsplit=1)
+        for line in sample.decode().split('\n')
+        if line.strip() != ""
+    ]
+
+    yield FilterOutput(langs, pairs)
 
     for i, filter_step in enumerate(filters):
         filter_definition = FILTERS[filter_step.filter]
 
-        filter_env = os.environ.copy()
+        filter_env = {}
         for name, props in filter_definition.parameters.items():
             filter_env[name] = props.export(filter_step.parameters[name])
 
-        if filter_definition.type == FilterType.BILINGUAL:
-            command = filter_definition.command
-        elif filter_definition.type == FilterType.MONOLINGUAL:
-            column = langs.index(none_throws(filter_step.language))
-            command = f'{COL_PY} {column} {filter_definition.command}'
-        else:
-            raise NotImplementedError()
+        # instantiate actual filter
+        filter_inst = getattr(opusfilters, filter_definition.name)(**filter_env)
 
-        p_filter = await asyncio.create_subprocess_shell(command,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=filter_env,
-            cwd=filter_definition.basedir)
+        scores = filter_inst.score(pairs)
 
-        # Check exit codes, testing most obvious problems first.
-        filter_output, filter_stderr = await p_filter.communicate(input=sample)
-        # if p_filter.returncode != 0:
-            # raise Exception(f"Step {i}: {filter_step.filter} failed:\n{filter_stderr!s}")
+        pairs = [pair for pair, score in zip(pairs, scores) if filter_inst.accept(score)]
 
-        yield FilterOutput(langs, filter_output, filter_stderr)
-
-        if p_filter.returncode != 0:
-            break
-
-        sample = filter_output
+        yield FilterOutput(langs, pairs)
 
 
 def stream_jsonl(iterable):

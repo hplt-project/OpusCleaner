@@ -14,6 +14,7 @@ mtdata==0.3.5
 portalocker==2.3.0
 prefixed==0.3.2
 pybtex==0.24.0
+pycld2==0.41
 pydantic==1.9.1
 python-dotenv==0.20.0
 PyYAML==6.0

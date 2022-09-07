@@ -1,10 +1,11 @@
 <script setup>
-import {ref} from 'vue';
+import {ref, onMounted} from 'vue';
 
 const datasets = ref([]);
 
-onCreated(async () => {
-	datasets = await fetch('/api/datasets/');
+onMounted(async () => {
+	const response = await fetch('/api/datasets/');
+	datasets.value = await response.json();
 })
 
 function languages(dataset) {

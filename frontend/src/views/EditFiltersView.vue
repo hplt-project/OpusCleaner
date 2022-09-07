@@ -7,12 +7,13 @@ const dataset = ref(null);
 
 const route = useRoute();
 
-watch(route.params.datasetName, fetchDataset);
+watch(route, fetchDataset, {immediate: true});
 
 async function fetchDataset() {
 	const response = await fetch('/api/datasets/');
 	const datasets = await response.json();
-	dataset = datasets.find(d => d.name === route.params.datasetName)
+	dataset.value = datasets.find(d => d.name === route.params.datasetName)
+	console.log('Fetched dataset', dataset.value);
 }
 
 </script>

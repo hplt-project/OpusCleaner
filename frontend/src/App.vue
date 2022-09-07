@@ -4,7 +4,7 @@ import { RouterLink, RouterView } from 'vue-router'
 
 <template>
   <div class="main-navigation">
-    <RouterLink v-bind:to="{name:'dataset-editor'}">Go to Home</RouterLink>
+    <RouterLink v-bind:to="{name:'list-datasets'}">Datasets</RouterLink>
   </div>
   <RouterView></RouterView>
 </template>

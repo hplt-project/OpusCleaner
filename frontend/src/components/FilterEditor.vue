@@ -1,7 +1,7 @@
 <script setup>
 // Docs for Vue@3: https://vuejs.org/guide/introduction.html
 // Docs for draggable@4: https://github.com/SortableJS/vue.draggable.next
-import {ref, computed, defineProps} from 'vue';
+import {ref, computed, defineProps, watch, onMounted} from 'vue';
 import draggable from 'vuedraggable';
 import {diff} from '../diff.js';
 import InlineDiff from './InlineDiff.vue';
@@ -20,8 +20,9 @@ function cyrb53(str, seed = 0) {
 	return 4294967296 * (2097151 & h2) + (h1>>>0);
 }
 
+const multiDragKey = navigator.platform.match(/^(iP|Mac)/) ? 'Meta' : 'Control';
 
-const props = defineProps({
+const {dataset} = defineProps({
 	dataset: Object
 });
 
@@ -31,7 +32,7 @@ const samples = ref([]);
 
 const isFetchingSamples = ref(false);
 
-const sampleAbortController = new AbortController();
+let sampleAbortController = new AbortController();
 
 const filters = ref([]);
 
@@ -43,44 +44,42 @@ const selectedFilterStep = ref(null);
 
 const comparingFilterStep = ref(null);
 
-const SampleStep = new Symbol('SampleStep');
+const SampleStep = Symbol('SampleStep');
 
 const languages = computed(() => {
-	const languages = Array.from(Object.keys(props.dataset.columns)).sort();
+	const languages = Array.from(Object.keys(dataset.value.columns)).sort();
 	// First try non-alphabetical order. If no success, return alphabetical order
-	if (!props.dataset.name.includes(languages.reverse().join('-')))
+	if (!dataset.value.name.includes(languages.reverse().join('-')))
 		languages.reverse();
 
 	return languages;
 });
 
 const filterStepsStateHash = computed(() => {
-	return cyrb53(JSON.stringify(filterSteps));
+	return cyrb53(JSON.stringify(filterSteps.value));
 });
 
 
 const filterStepsChangedSinceLastSave = computed(() => {
-	return filterStepsLastSave !== filterStepsStateHash;
+	return filterStepsLastSave.value !== filterStepsStateHash.value;
 });
 
-const multiDragKey = navigator.platform.match(/^(iP|Mac)/) ? 'Meta' : 'Control';
-
 const sampleIndex = computed(() => {
-	const index = selectedFilterStep ? filterSteps.indexOf(selectedFilterStep) + 1 : -1;
-	return index >= 0 ? index : samples.length - 1;
+	const index = selectedFilterStep.value ? filterSteps.value.indexOf(selectedFilterStep.value) + 1 : -1;
+	return index >= 0 ? index : samples.value.length - 1;
 });
 
 const comparingSampleIndex = computed(() => {
 	// Trick: comparingFilterStep == SampleStep -> indexOf == -1 -> index == 0
-	return filterSteps.indexOf(comparingFilterStep) + 1;
+	return filterSteps.value.indexOf(comparingFilterStep.value) + 1;
 });
 
 const sample = computed(() => {
-	return samples.length > sampleIndex ? samples[sampleIndex] : null;
+	return samples.value.length > sampleIndex.value ? samples.value[sampleIndex.value] : null;
 });
 
 const displayDiff = computed(() => {
-	return comparingFilterStep !== null;
+	return comparingFilterStep.value !== null;
 });
 
 
@@ -166,7 +165,7 @@ function diffSample(previous, sample) {
 }
 
 const differences = computed(() => {
-	return diffSample(samples[comparingSampleIndex], samples[sampleIndex]);
+	return diffSample(samples.value[comparingSampleIndex.value], samples.value[sampleIndex.value]);
 });
 
 const diffStats = computed(() => {
@@ -188,7 +187,7 @@ const diffStats = computed(() => {
 watch(filterSteps, fetchSample, {deep:true});
 			
 // TODO: I'd expected this one to be picked up by default since fetchFilterSteps accesses this.dataset.name
-watch(props.dataset, fetchFilterSteps);
+watch(dataset, fetchFilterSteps);
 
 onMounted(async () => {
 	await fetchFilters();
@@ -197,55 +196,55 @@ onMounted(async () => {
 })
 
 async function fetchFilters() {
-	const response = await fetch('/filters/');
+	const response = await fetch('/api/filters/');
 	// Turn the {name:Filter} map into a [Filter] list and fold the 'name' attribute into the Filter.name property.
-	filters = Array.from(Object.entries(await response.json()), ([name, value]) => Object.assign(value, {name}));
+	filters.value = Array.from(Object.entries(await response.json()), ([name, value]) => Object.assign(value, {name}));
 }
 
 async function fetchSample() {
 	sampleAbortController.abort();
 
 	sampleAbortController = new AbortController();
-	isFetchingSamples = true;
-	samples.splice(0, samples.length);
+	isFetchingSamples.value = true;
+	samples.value.splice(0, samples.value.length);
 
-	const response = stream(`/datasets/${encodeURIComponent(props.dataset.name)}/sample`, {
+	const response = stream(`/api/datasets/${encodeURIComponent(dataset.value.name)}/sample`, {
 		method: 'POST',
 		signal: sampleAbortController.signal,
 		headers: {
 			'Content-Type': 'application/json',
 			'Accept': 'application/json',
 		},
-		body: JSON.stringify(filterSteps)
+		body: JSON.stringify(filterSteps.value)
 	});
 
 	for await (let sample of response) {
-		samples.push(sample);
+		samples.value.push(sample);
 	}
 
-	isFetchingSamples = false;
+	isFetchingSamples.value = false;
 }
 
 async function fetchFilterSteps() {
-	const response = await fetch(`/datasets/${encodeURIComponent(props.dataset.name)}/configuration.json`)
-	filterSteps = await response.json();
-	filterStepsLastSave = filterStepsStateHash;
+	const response = await fetch(`/api/datasets/${encodeURIComponent(dataset.value.name)}/configuration.json`)
+	filterSteps.value = await response.json();
+	filterStepsLastSave.value = filterStepsStateHash.value;
 }
 
 async function saveFilterSteps() {
 	const hash = filterStepsStateHash;
 
-	const response = await fetch(`/datasets/${encodeURIComponent(props.dataset.name)}/configuration.json`, {
+	const response = await fetch(`/api/datasets/${encodeURIComponent(dataset.value.name)}/configuration.json`, {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 			'Accept': 'application/json'
 		},
-		body: JSON.stringify(filterSteps)
+		body: JSON.stringify(filterSteps.value)
 	});
 
 	if (response.ok)
-		filterStepsLastSave = hash;
+		filterStepsLastSave.value = hash;
 	else
 		alert(await response.text());
 }
@@ -274,11 +273,13 @@ function filterRequiresLanguage(filterStep) {
 	return filterDefinition(filterStep).type == 'monolingual';
 }
 
+let serial = 0;
+
 const stamps = new WeakMap();
 
 function stamp(obj) {
 	if (!stamps.has(obj))
-		stamps.set(obj, ++_serial);
+		stamps.set(obj, ++serial);
 	return stamps.get(obj);
 }
 
@@ -299,7 +300,7 @@ function formatNumberSuffix(n) {
 <template>
 	<div class="controls" translate="no">
 		<label>
-			Dataset: <em>{{ props.dataset.name }}</em>
+			Dataset: <em>{{ dataset.name }}</em>
 		</label>
 
 		<label>

@@ -1,0 +1,30 @@
+# Datasets are already TSV files
+datasets:
+  - test/data/clean
+  - test/data/medium
+  - test/data/dirty
+
+stages:
+  - start
+  - mid
+  - end
+
+start:
+  - clean 0.8
+  - medium 0.2
+  - dirty 0
+  - until clean 2 # Until two epochs of clean
+
+mid:
+  - clean 0.6
+  - medium 0.3
+  - dirty 0.1
+  - until medium 1
+
+end:
+  - clean 0.4
+  - medium 0.3
+  - dirty 0.3
+  - until dirty inf
+
+trainer: /path/to/marian/runme.sh

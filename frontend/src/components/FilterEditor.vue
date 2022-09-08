@@ -1,4 +1,4 @@
-<script setup>
+<script>
 // Docs for Vue@3: https://vuejs.org/guide/introduction.html
 // Docs for draggable@4: https://github.com/SortableJS/vue.draggable.next
 import {ref, computed, defineProps, watch, onMounted} from 'vue';
@@ -20,70 +20,11 @@ function cyrb53(str, seed = 0) {
 	return 4294967296 * (2097151 & h2) + (h1>>>0);
 }
 
-const multiDragKey = navigator.platform.match(/^(iP|Mac)/) ? 'Meta' : 'Control';
-
-const {dataset} = defineProps({
-	dataset: Object
-});
-
-const displayAsRows = ref(false);
-
-const samples = ref([]);
-
-const isFetchingSamples = ref(false);
-
-let sampleAbortController = new AbortController();
-
-const filters = ref([]);
-
-const filterSteps = ref([]);
-
-const filterStepsLastSave = ref(null);
-
-const selectedFilterStep = ref(null);
-
-const comparingFilterStep = ref(null);
+const multiDragKey = navigator.platform.match(/^(Mac|iPhone$)/) ? 'Meta' : 'Control';
 
 const SampleStep = Symbol('SampleStep');
 
-const languages = computed(() => {
-	const languages = Array.from(Object.keys(dataset.value.columns)).sort();
-	// First try non-alphabetical order. If no success, return alphabetical order
-	if (!dataset.value.name.includes(languages.reverse().join('-')))
-		languages.reverse();
-
-	return languages;
-});
-
-const filterStepsStateHash = computed(() => {
-	return cyrb53(JSON.stringify(filterSteps.value));
-});
-
-
-const filterStepsChangedSinceLastSave = computed(() => {
-	return filterStepsLastSave.value !== filterStepsStateHash.value;
-});
-
-const sampleIndex = computed(() => {
-	const index = selectedFilterStep.value ? filterSteps.value.indexOf(selectedFilterStep.value) + 1 : -1;
-	return index >= 0 ? index : samples.value.length - 1;
-});
-
-const comparingSampleIndex = computed(() => {
-	// Trick: comparingFilterStep == SampleStep -> indexOf == -1 -> index == 0
-	return filterSteps.value.indexOf(comparingFilterStep.value) + 1;
-});
-
-const sample = computed(() => {
-	return samples.value.length > sampleIndex.value ? samples.value[sampleIndex.value] : null;
-});
-
-const displayDiff = computed(() => {
-	return comparingFilterStep.value !== null;
-});
-
-
-function diffSample(previous, sample) {
+function diffSample(languages, previous, sample) {
 	// Only mark different if neither of the columns is the same.
 	const equals = (a, b) => !languages.every(lang => a[lang] != b[lang]);
 	
@@ -164,115 +105,6 @@ function diffSample(previous, sample) {
 	return chunks;
 }
 
-const differences = computed(() => {
-	return diffSample(samples.value[comparingSampleIndex.value], samples.value[sampleIndex.value]);
-});
-
-const diffStats = computed(() => {
-	let additions = 0, deletions = 0, changes = 0;
-
-	differences.forEach(({added, removed, changed, count}) => {
-		if (added)
-			additions += count;
-		else if (removed)
-			deletions += count;
-		else if (changed)
-			changes += count;
-	});
-
-	return {additions, deletions, changes};
-});
-
-
-watch(filterSteps, fetchSample, {deep:true});
-			
-// TODO: I'd expected this one to be picked up by default since fetchFilterSteps accesses this.dataset.name
-watch(dataset, fetchFilterSteps);
-
-onMounted(async () => {
-	await fetchFilters();
-	await fetchFilterSteps();
-	// ... that will then trigger fetchSample with the filter configuration applied.
-})
-
-async function fetchFilters() {
-	const response = await fetch('/api/filters/');
-	// Turn the {name:Filter} map into a [Filter] list and fold the 'name' attribute into the Filter.name property.
-	filters.value = Array.from(Object.entries(await response.json()), ([name, value]) => Object.assign(value, {name}));
-}
-
-async function fetchSample() {
-	sampleAbortController.abort();
-
-	sampleAbortController = new AbortController();
-	isFetchingSamples.value = true;
-	samples.value.splice(0, samples.value.length);
-
-	const response = stream(`/api/datasets/${encodeURIComponent(dataset.value.name)}/sample`, {
-		method: 'POST',
-		signal: sampleAbortController.signal,
-		headers: {
-			'Content-Type': 'application/json',
-			'Accept': 'application/json',
-		},
-		body: JSON.stringify(filterSteps.value)
-	});
-
-	for await (let sample of response) {
-		samples.value.push(sample);
-	}
-
-	isFetchingSamples.value = false;
-}
-
-async function fetchFilterSteps() {
-	const response = await fetch(`/api/datasets/${encodeURIComponent(dataset.value.name)}/configuration.json`)
-	filterSteps.value = await response.json();
-	filterStepsLastSave.value = filterStepsStateHash.value;
-}
-
-async function saveFilterSteps() {
-	const hash = filterStepsStateHash;
-
-	const response = await fetch(`/api/datasets/${encodeURIComponent(dataset.value.name)}/configuration.json`, {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-			'Accept': 'application/json'
-		},
-		body: JSON.stringify(filterSteps.value)
-	});
-
-	if (response.ok)
-		filterStepsLastSave.value = hash;
-	else
-		alert(await response.text());
-}
-
-function createFilterStep(filter) {
-	return {
-		filter: filter.name,
-		language: filterRequiresLanguage({filter:filter.name}) ? languages[0] : null,
-		parameters: Object.fromEntries(Object.entries(filter.parameters).map(([key, parameter]) => [key, parameter.default]))
-	}
-}
-
-function addFilterStep(filter) {
-	filterSteps.push(createFilterStep(filter));
-}
-
-function removeFilterStep(i) {
-	filterSteps.splice(i, 1);
-}
-
-function filterDefinition(filterStep) {
-	return filters.find(filter => filter.name === filterStep.filter);
-}
-
-function filterRequiresLanguage(filterStep) {
-	return filterDefinition(filterStep).type == 'monolingual';
-}
-
 let serial = 0;
 
 const stamps = new WeakMap();
@@ -295,6 +127,189 @@ function formatNumberSuffix(n) {
 
 	return `${n}${suffix}`;
 }
+
+const shared = {
+	// These are here just so they're available to the template
+	multiDragKey,
+	SampleStep 
+};
+
+export default {
+	name: 'FilterEditor',
+
+	props: {
+		dataset: Object
+	},
+
+	data() {
+		return Object.assign(Object.create(shared), {
+			displayAsRows: false,
+			samples: [],
+			isFetchingSamples: false,
+			filters: [],
+			filterSteps: [],
+			filterStepsLastSave: null,
+			selectedFilterStep: null,
+			comparingFilterStep: null,
+		});
+	},
+
+	computed: {
+		languages() {
+			const languages = Array.from(Object.keys(this.dataset.columns)).sort();
+			// First try non-alphabetical order. If no success, return alphabetical order
+			if (!this.dataset.name.includes(languages.reverse().join('-')))
+				languages.reverse();
+			
+			return languages;
+		},
+		filterStepsStateHash() {
+			return cyrb53(JSON.stringify(this.filterSteps));
+		},
+		filterStepsChangedSinceLastSave() {
+			return this.filterStepsLastSave !== this.filterStepsStateHash;
+		},
+		sampleIndex() {
+			const index = this.selectedFilterStep ? this.filterSteps.indexOf(this.selectedFilterStep) + 1 : -1;
+			return index >= 0 ? index : this.samples.length - 1;
+		},
+		comparingSampleIndex() {
+			// Trick: comparingFilterStep == SampleStep -> indexOf == -1 -> index == 0
+			return this.filterSteps.indexOf(this.comparingFilterStep) + 1;
+		},
+		sample() {
+			return this.samples.length > this.sampleIndex ? this.samples[this.sampleIndex] : null;
+		},
+		displayDiff() {
+			return this.comparingFilterStep !== null;
+		},
+		diff() {
+			return diffSample(
+				this.languages,
+				this.samples[this.comparingSampleIndex],
+				this.samples[this.sampleIndex]);
+		},
+		diffStats() {
+			let additions = 0, deletions = 0, changes = 0;
+
+			this.diff.forEach(({added, removed, changed, count}) => {
+				if (added)
+					additions += count;
+				else if (removed)
+					deletions += count;
+				else if (changed)
+					changes += count;
+			});
+
+			return {additions, deletions, changes};
+		}
+	},
+
+	watch: {
+		filterSteps: {
+			deep: true,
+			handler() {
+				this.fetchSample()
+			}
+		},
+		// TODO: I'd expected this one to be picked up by default since fetchFilterSteps accesses this.dataset.name
+		dataset: {
+			handler() {
+				this.fetchFilterSteps();
+			}
+		}
+	},
+
+	created() {
+		this._sampleAbortController = new AbortController();
+		this._serial = 0;
+	},
+
+	async mounted() {
+		await this.fetchFilters();
+		await this.fetchFilterSteps();
+		// ... that will then trigger fetchSample with the filter configuration applied.
+	},
+
+	components: {
+		draggable,
+		InlineDiff,
+	},
+
+	methods: {
+		async fetchFilters() {
+			const response = await fetch('/api/filters/');
+			// Turn the {name:Filter} map into a [Filter] list and fold the 'name' attribute into the Filter.name property.
+			this.filters = Array.from(Object.entries(await response.json()), ([name, value]) => Object.assign(value, {name}));
+		},
+		async fetchSample() {
+			this._sampleAbortController.abort();
+			this._sampleAbortController = new AbortController();
+			
+			this.isFetchingSamples = true;
+			this.samples.splice(0, this.samples.length);
+
+			const response = stream(`/api/datasets/${encodeURIComponent(this.dataset.name)}/sample`, {
+				method: 'POST',
+				signal: this._sampleAbortController.signal,
+				headers: {
+					'Content-Type': 'application/json',
+					'Accept': 'application/json',
+				},
+				body: JSON.stringify(this.filterSteps)
+			});
+
+			for await (let sample of response) {
+				this.samples.push(sample);
+			}
+
+			this.isFetchingSamples = false;
+		},
+		async fetchFilterSteps() {
+			const response = await fetch(`/api/datasets/${encodeURIComponent(this.dataset.name)}/configuration.json`)
+			this.filterSteps = await response.json();
+			this.filterStepsLastSave = this.filterStepsStateHash;
+		},
+		async saveFilterSteps() {
+			const hash = this.filterStepsStateHash;
+
+			const response = await fetch(`/api/datasets/${encodeURIComponent(this.dataset.name)}/configuration.json`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'Accept': 'application/json'
+				},
+				body: JSON.stringify(this.filterSteps)
+			});
+
+			if (response.ok)
+				this.filterStepsLastSave = hash;
+			else
+				alert(await response.text());
+		},
+		createFilterStep(filter) {
+			return {
+				filter: filter.name,
+				language: this.filterRequiresLanguage({filter:filter.name}) ? this.languages[0] : null,
+				parameters: Object.fromEntries(Object.entries(filter.parameters).map(([key, parameter]) => [key, parameter.default]))
+			}
+		},
+		addFilterStep(filter) {
+			this.filterSteps.push(this.createFilterStep(filter));
+		},
+		removeFilterStep(i) {
+			this.filterSteps.splice(i, 1);
+		},
+		filterDefinition(filterStep) {
+			return this.filters.find(filter => filter.name === filterStep.filter);
+		},
+		filterRequiresLanguage(filterStep) {
+			return this.filterDefinition(filterStep).type == 'monolingual';
+		},
+		stamp,
+		formatNumberSuffix,
+	}
+};
 </script>
 
 <template>

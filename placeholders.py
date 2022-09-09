@@ -8,7 +8,7 @@ import random
 import json
 import sentencepiece as spm
 
-placeholders, vocab = {}, None
+placeholders, sp = {}, None
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-c', '--config', type=str, help='Path to yaml configuration file', required=True)
@@ -31,7 +31,7 @@ class Text(str):
         """Replaces strings that match the regex patterns from the config file
         and words that cause the appearance of <unk>
         """
-        global placeholders, vocab, sp
+        global placeholders, sp
         
         def get_key_from_placeholders(val):
             """Get key correpsonding to given value from the placeholders dictionary
@@ -58,7 +58,7 @@ class Text(str):
                 self = re.sub(grp, f'@{new_number}', self)
 
         # check for <unk>
-        if vocab:
+        if sp:
             for token in self.split():
                 # search for '(?<=@)\d+' pattern
                 if res := re.search(r'(?<=@)\d+', token):
@@ -124,5 +124,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if args.vocab:
         sp = spm.SentencePieceProcessor(args.vocab)
-        vocab = {sp.id_to_piece(id).strip('▁') for id in range(sp.get_piece_size())}
     encode() if args.encode else decode()

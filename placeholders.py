@@ -80,13 +80,14 @@ class Text(str):
                     self = replace(self, token)
 
         return self
-        
+
 
     def replace_placeholders(self, placeholders):
         """Replaces placeholders with corresponding strings
         """
-        for idx, placeholder in placeholders.items():
-            self = re.sub(f'{args.placeholder_symbol}{idx}', placeholder, self)
+        # iterate through placeholder-text pairs sorted by text length
+        for idx, placeholder in sorted(placeholders.items(), key=lambda x: len(x), reverse=True):
+            self = re.sub(r'{}(?!\d)'.format(idx), placeholder, self)
         return self
 
 

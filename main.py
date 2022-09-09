@@ -6,7 +6,7 @@ import re
 from typing import Optional, Iterable, TypeVar, Union, Literal, Any, AsyncIterator, cast, IO, List, Dict, Tuple
 from contextlib import ExitStack
 from itertools import chain
-from pydantic import BaseModel, parse_obj_as, validator
+from pydantic import BaseModel, parse_obj_as, validator, ValidationError
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse, StreamingResponse, HTMLResponse

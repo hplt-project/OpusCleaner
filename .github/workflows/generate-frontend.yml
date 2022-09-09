@@ -1,0 +1,26 @@
+name: generate-frontend
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        ref: ${{ github.head_ref }}
+    - name: Install nodejs
+    - uses: actions/setup-node@v3
+      with:
+        node-version: '18.x'
+        registry-url: 'https://registry.npmjs.org'
+    - name: Install node_modules
+      run: npm ci
+    - name: Build frontend
+      run: npm run build
+    - name: Commit built frontend files
+      uses: stefanzweifel/git-auto-commit-action@v4
+      with:
+        commit_message: Build frontend
+        file_pattern: frontend/dist

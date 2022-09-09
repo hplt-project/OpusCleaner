@@ -3,10 +3,13 @@
 for different stages of the training. Data is uncompressed and TSV formatted src\ttrg'''
 import os
 import argparse
+import weakref
 from sys import stderr
+from dataclasses import dataclass
 from subprocess import check_call, CalledProcessError
 from collections import namedtuple
 from typing import List, Type, Tuple
+from math import inf
 
 import json
 import yaml
@@ -20,22 +23,61 @@ def parse_user_args():
     parser.add_argument("--temporary-dir", '-t', default="./TMP", type=str, help='Temporary dir, used for shuffling.')
     return parser.parse_args()
 
+Stage = namedtuple('Stage', ['datasets', 'until_dataset', 'until_epoch'])
+
+@dataclass
 class Executor:
     '''This class takes in the config file and starts running training'''
-    def __init__(self, ymlpath: str):
+    def __init__(self, ymlpath: str, tmpdir: str, seed: str):
         ymldata = None
         with open(ymlpath, 'rt', encoding="utf-8") as myfile:
             ymldata = list(yaml.load_all(myfile, Loader=SafeLoader))[0]
         self.dataset_paths = ymldata['datasets']
         self.dataset_names = [x.split('/')[-1] for x in self.dataset_paths]
-        self.stages = ymldata['stages']
+        # Correlate dataset path with dataset name:
+        tmpdict = {}
+        for path in self.dataset_paths:
+            tmpdict[path.split('/')[-1]] = path
+        self.dataset_paths = tmpdict
+        self.stage_names = ymldata['stages']
         self.trainer = ymldata['trainer']
+        # Parse the individual training stages into convenient struct:
+        self.stages = {}
+        self.dataset_objects = {}
+
+        for stage in self.stage_names:
+            stageparse: List[str] = ymldata[stage]
+            # We only want the first N - 1 as the last one describes the finishing condition
+            stagesdict = {}
+            for i in range(len(stageparse) -1):
+                stagename, weight = stageparse[i].split()
+                weight = float(weight)
+                stagesdict[stagename] = weight
+
+            _, until_stagename, termination_epoch = stageparse[-1].split()
+            mystage = Stage(stagesdict, until_stagename, termination_epoch)
+            self.stages[stage] = mystage
+
+        # Initialise the dataset filestreams. For now just do identity initialisation, do more later.
+        for dataset in self.dataset_names:
+            self.dataset_objects[dataset] = Dataset(self.dataset_paths[dataset], tmpdir, seed, 0.1, inf)
 
 
+    def __init_stage__(self, stage): #@TODO make the stupid stage a full object so i can have proper attributes
+        '''Init a certain stage of the training'''
+        for dataset in stage.datasets.keys():
+            self.dataset_objects[dataset].set_weight(stage.datasets[dataset])
+        self.dataset_objects[stage.until_dataset].set_max_epoch(stage.until_epoch)
+
+        # Now start training
+
+
+
+@dataclass
 class Dataset:
     '''This class takes care of iterating through a dataset. It takes care of shuffling and
     remembering the position of the dataset'''
-    def __init__(self, datapath: str, tmpdir: str, seed: int, weight: float):
+    def __init__(self, datapath: str, tmpdir: str, seed: int, weight: float, max_epoch: int):
         # Create the temporary directory if it doesn't exist
         if not os.path.exists(tmpdir):
             os.makedirs(tmpdir)
@@ -54,6 +96,7 @@ class Dataset:
         self.filehandle = None
         # dataset epoch
         self.epoch = 0
+        self.max_epoch = max_epoch
 
         # Write random seed
         self.__set_seed__(seed)
@@ -62,6 +105,9 @@ class Dataset:
         # Open the current file for reading
         self.__openfile__(self.shufffile)
 
+        # On object destruction, cleanup
+        self._finalizer = weakref.finalize(self, self._cleanup_, self.filehandle)
+
     def __set_seed__(self, myseed):
         with open(self.rng, 'w', encoding="utf-8") as seedfile:
             seedfile.write(str(myseed) + "\n")
@@ -69,6 +115,15 @@ class Dataset:
     def set_weight(self, neweight):
         '''Used for when we want to switch the sampling strategy based on our schedule'''
         self.weight = neweight
+
+    def set_max_epoch(self, new_max_epoch):
+        '''Used for when we want to switch the sampling strategy based on our schedule'''
+        self.max_epoch = new_max_epoch
+
+    def reset_epoch(self):
+        '''Used to reset the training epoch of the file, so that training can continue
+        from the same shuffling point without eextra fluff'''
+        self.epoch = 0
 
     def __ammend_seed__(self, newseed=None):
         if newseed is None:
@@ -98,7 +153,7 @@ class Dataset:
 
     @staticmethod
     def load(filepath) -> Type['Dataset']:
-        """Loads a dataset object, also setting back the state"""
+        """Loads a dataset object from json, also setting back the state"""
         my_dataset: Type['Dataset'] = json.load(filepath)
         my_dataset.__set_seed__(my_dataset.seed)
         my_dataset.__shuffle__(my_dataset.orig, my_dataset.shufffile)
@@ -116,13 +171,24 @@ class Dataset:
             for _ in range(int(self.weight*100)):
                 retlist.append(next(self.filehandle))
         except StopIteration:
-            # Update seed and re-shuffle the file
-            self.filehandle.close()
-            self.__ammend_seed__()
-            self.__shuffle__(self.orig, self.shufffile)
-            self.__openfile__(self.shufffile)
-            self.epoch = self.epoch + 1
+            # Update seed and re-shuffle the file UNLESS we have reached the max epoch
+            if self.max_epoch < self.epoch:
+                self.filehandle.close()
+                self.__ammend_seed__()
+                self.__shuffle__(self.orig, self.shufffile)
+                self.__openfile__(self.shufffile)
+                self.epoch = self.epoch + 1
         return (myepoch, retlist)
+
+    @staticmethod
+    def _cleanup_(my_filehandle):
+        if my_filehandle:
+            my_filehandle.close()
+        # @TODO save the training state
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self._finalizer()
+
 
 if __name__ == '__main__':
     args = parse_user_args()

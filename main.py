@@ -282,8 +282,12 @@ async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[Filter
 
         params = {name: props.export(filter_step.parameters[name])
                   for name, props in filter_definition.parameters.items()}
-        vars_setter = '; '.join(f"{k}={quote(v)}" for k, v in params.items())
-        command = f'{vars_setter}; {command}'
+
+        if params:
+            vars_setter = '; '.join(f"{k}={quote(v)}" for k, v in params.items())
+            command = f'{vars_setter}; {command}'
+
+        print(command)
 
         p_filter = await asyncio.create_subprocess_shell(command,
             stdin=asyncio.subprocess.PIPE,

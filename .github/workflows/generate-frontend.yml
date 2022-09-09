@@ -16,8 +16,10 @@ jobs:
         node-version: '18.x'
         registry-url: 'https://registry.npmjs.org'
     - name: Install node_modules
+      working-directory: frontend
       run: npm ci
     - name: Build frontend
+      working-directory: frontend
       run: npm run build
     - name: Commit built frontend files
       uses: stefanzweifel/git-auto-commit-action@v4

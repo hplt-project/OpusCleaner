@@ -28,7 +28,8 @@ class Rule(object):
 class Text(str):
 
     def make_placeholders(self, *rules):
-        """
+        """Replaces strings that match the regex patterns from the config file
+        and words that cause the appearance of <unk>
         """
         global placeholders, vocab, sp
         
@@ -39,12 +40,18 @@ class Text(str):
                 if val == value:
                     return key
  
+        def generate_random_in_range() -> int:
+            """Generates random number in range defined by `num_placeholders` argparse argument 
+            that is not in `placeholders.keys()`
+            """
+            return random.choice([x for x in range(args.num_placeholders) if x not in placeholders.keys()])
+
         # use regex rules
         for rule in rules:
             for grp in [match.group() for match in re.finditer(rule.pattern, self)]:
                 if grp not in placeholders:
                     # generate new unique number for placeholder
-                    new_number = random.choice([x for x in range(args.num_placeholders) if x not in placeholders.keys()])
+                    new_number = generate_random_in_range()
                     placeholders[new_number] = grp
                 else:
                     new_number = get_key_from_placeholders(grp)
@@ -66,7 +73,7 @@ class Text(str):
 
                 if piece == "<unk>":
                     # generate new unique number for placeholder
-                    new_number = random.choice([x for x in range(args.num_placeholders) if x not in placeholders.keys()])
+                    new_number = generate_random_in_range()
                     placeholders[new_number] = token
                     self = re.sub(token, f'@{new_number}', self)
                 elif token in placeholders:
@@ -104,15 +111,13 @@ def encode() -> None:
 
 
 def decode() -> None:
-    """
-    """
     with open(args.config, 'r') as config_file, \
          open(args.target_file, 'w') as target_file:
         
         text = get_src()
         placeholders = yaml.safe_load(config_file)['placeholders']
         [target_file.write(Text(line).replace_placeholders(placeholders)) for line in text]
-        print(json.dumps(placeholders, indent=4)) if args.dump_placeholders else None
+    print(json.dumps(placeholders, indent=4)) if args.dump_placeholders else None
         
 
 if __name__ == "__main__":

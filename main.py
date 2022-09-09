@@ -146,6 +146,12 @@ class FilterStep(BaseModel):
         return language
 
 
+class FilterPipeline(BaseModel):
+    version: Literal[1]
+    files: List[str]
+    filters: List[FilterStep]
+
+
 def list_filters(path) -> Iterable[Filter]:
     for filename in glob(path, recursive=True):
         try:
@@ -371,13 +377,29 @@ def api_get_dataset_filters(name:str) -> List[FilterStep]:
         return []
 
     with open(filter_configuration_path(name), 'r') as fh:
-        return parse_obj_as(List[FilterStep], json.load(fh))
+        data = json.load(fh)
+        try:
+            return parse_obj_as(FilterPipeline, data).filters
+        except ValidationError:
+            # Backwards compatibility
+            return parse_obj_as(List[FilterStep], data)
 
 
 @app.post('/datasets/{name:path}/configuration.json')
 def api_update_dataset_filters(name:str, filters:List[FilterStep]):
+    columns = list_datasets(DATA_PATH)[name]
+
+    pipeline = FilterPipeline(
+        version=1,
+        files=[file.name
+            for _, file in
+            sorted(columns.items(), key=lambda pair: pair[0])
+        ],
+        filters=filters
+    )
+
     with open(filter_configuration_path(name), 'w') as fh:
-        return json.dump([step.dict() for step in filters], fh)
+        return json.dump(pipeline.dict(), fh, indent=2)
 
 
 @app.get('/filters/')

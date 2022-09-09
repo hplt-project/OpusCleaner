@@ -25,5 +25,6 @@ jobs:
       uses: stefanzweifel/git-auto-commit-action@v4
       with:
         commit_message: Build frontend
-        add_options: --force
         file_pattern: frontend/dist
+        add_options: --force
+        skip_dirty_check: True

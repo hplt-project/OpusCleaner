@@ -15,6 +15,7 @@ parser.add_argument('-c', '--config', type=str, help='Path to yaml configuration
 parser.add_argument('-s', '--source_file', type=str, help='Path to the input file')
 parser.add_argument('-v', '--vocab', type=str, help='Path to the vocab file')
 parser.add_argument('-n', '--num_placeholders', type=int, default=20, help='Maximum number of placeholders')
+parser.add_argument('--placeholder_symbol', type=str, default='@')
 mutex_group_1 = parser.add_mutually_exclusive_group(required=True)
 mutex_group_1.add_argument('--decode', action='store_true')
 mutex_group_1.add_argument('--encode', action='store_true')
@@ -48,24 +49,26 @@ class Text(str):
             """
             return random.choice([x for x in range(args.num_placeholders) if x not in placeholders.keys()])
 
+        def replace(text, token):
+            """Replaces `token` in `text` with placeholder
+            """
+            new_placeholder = f'{args.placeholder_symbol}{generate_random_in_range()}' if token not in placeholders.values() \
+                        else get_key_from_placeholders(token)
+            placeholders[new_placeholder] = token
+            return re.sub(token, new_placeholder, text)
+
         # use regex rules
         for rule in rules:
             for grp in [match.group() for match in re.finditer(rule.pattern, self)]:
-                if grp not in [placeholder for placeholder in placeholders.values()]:
-                    # generate new unique number for placeholder
-                    new_number = generate_random_in_range()
-                    placeholders[new_number] = grp
-                else:
-                    new_number = get_key_from_placeholders(grp)
-                self = re.sub(grp, f'@{new_number}', self)
+                self = replace(self, grp)
 
         # check for <unk>
         if sp:
             for token in self.split():
-                # search for '(?<=@)\d+' pattern
-                if res := re.search(r'(?<=@)\d+', token):
+                # search for '@\d+' pattern
+                if res := re.search(r'{}\d+'.format(args.placeholder_symbol), token):
                     # continue if search result is already existing placeholder
-                    if res and int(res.group()) in placeholders.keys():
+                    if res and res.group() in placeholders.keys():
                         continue
                 
                 try:  # get piece
@@ -74,24 +77,21 @@ class Text(str):
                     piece = "not_unk"
 
                 if piece == "<unk>":
-                    # generate new unique number for placeholder
-                    new_number = generate_random_in_range() if token not in placeholders.values() \
-                            else get_key_from_placeholders(token)
-                    placeholders[new_number] = token
-                    self = re.sub(token, f'@{new_number}', self)
+                    self = replace(self, token)
+
         return self
+        
 
     def replace_placeholders(self, placeholders):
         """Replaces placeholders with corresponding strings
         """
         for idx, placeholder in placeholders.items():
-            self = re.sub(f'@{idx}', placeholder, self)
+            self = re.sub(f'{args.placeholder_symbol}{idx}', placeholder, self)
         return self
 
 
 def dump_placeholders():
-    [print(f'@{placeholder}', end=' ') for placeholder in placeholders.keys()]
-    print()
+    print(*placeholders.keys())
 
 
 def get_src() -> List[str]:

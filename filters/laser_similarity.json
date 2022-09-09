@@ -1,0 +1,31 @@
+{
+    "type": "bilingual",
+    "description": "Filter a parallel dataset using LASER.",
+    "parameters": {
+        "THRESHOLD": {
+            "type": "float",
+            "required": false,
+            "default": 0.5,
+            "help": "Minimum accepted LASER score."
+        },
+        "BATCHSIZE": {
+            "type": "int",
+            "required": false,
+            "default": 32,
+            "help": "LASER batch size"
+        },
+        "SRCLANG": {
+            "type": "str",
+            "required": true,
+            "default": null,
+            "help": "Two-letter source language code (ISO 639-1)"
+        },
+        "TGTLANG": {
+            "type": "str",
+            "required": true,
+            "default": null,
+            "help": "Two-letter target language code (ISO 639-1)"
+        }
+    },
+    "command": "./laser_similarity.py --threshold $THRESHOLD --batch-size $BATCHSIZE --src-lang $SRCLANG --tgt-lang $TGTLANG"
+}

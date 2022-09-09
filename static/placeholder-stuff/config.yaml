@@ -1,0 +1,12 @@
+num-placeholders: 6
+placeholders:
+  5: https://www.google.com/
+  7: http://www.google.com/
+  8: firstname.secondname@domain.com
+  11: ⌚
+  13: https://www.google.com/
+  16: www.google.com/
+regexes:
+- (https?:\/\/www\.\w{1,63}\.\w{1,63}(?:\/\w{0,63}){0,})
+- (www\.\w{1,63}\.\w{1,63}(?:\/\w{0,63}){0,})
+- ([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)

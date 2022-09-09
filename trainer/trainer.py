@@ -4,8 +4,10 @@ for different stages of the training. Data is uncompressed and TSV formatted src
 import os
 import argparse
 import weakref
+import threading
 from sys import stderr
 from dataclasses import dataclass
+import subprocess
 from subprocess import check_call, CalledProcessError
 from collections import namedtuple
 from typing import List, Type, Tuple
@@ -24,6 +26,30 @@ def parse_user_args():
     return parser.parse_args()
 
 Stage = namedtuple('Stage', ['datasets', 'until_dataset', 'until_epoch'])
+
+@dataclass
+class Runner(threading.Thread):
+    '''This class takes some sort of script, writes to its stdin and reads its stdiout'''
+    def __init__(self, executable_path):
+        self.stdout = None
+        self.stderr = None
+        self.my_trainer = None
+        self.executable_path = executable_path
+        threading.Thread.__init__(self)
+
+    def run(self):
+        self.my_trainer = subprocess.Popen(self.executable_path,
+                             shell=False,
+                             stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
+
+        self.stdout, self.stderr = self.my_trainer.communicate()
+
+    def echo(self, myinput: List[str]) -> None:
+        '''Echoes input in'''
+        mylines = "\n".join(myinput)
+        self.my_trainer.stdin.write(mylines)
+
 
 @dataclass
 class Executor:
@@ -62,6 +88,10 @@ class Executor:
         for dataset in self.dataset_names:
             self.dataset_objects[dataset] = Dataset(self.dataset_paths[dataset], tmpdir, seed, 0.1, inf)
 
+        # Start training
+        for stage in self.stage_names:
+            self.__init_stage__(self.stages[stage])
+
 
     def __init_stage__(self, stage): #@TODO make the stupid stage a full object so i can have proper attributes
         '''Init a certain stage of the training'''
@@ -69,8 +99,11 @@ class Executor:
             self.dataset_objects[dataset].set_weight(stage.datasets[dataset])
         self.dataset_objects[stage.until_dataset].set_max_epoch(stage.until_epoch)
 
-        # Now start training
-
+    def __init_runner__(self):
+        '''Initialises the runner process'''
+    def train_stage(self, stage):
+        '''Trains up to a training stage'''
+        return None
 
 
 @dataclass

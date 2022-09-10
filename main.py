@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import gzip
+from shlex import quote
 import sys
 import re
 from typing import Optional, Iterable, TypeVar, Union, Literal, Any, AsyncIterator, cast, IO, List, Dict, Tuple
@@ -112,6 +113,13 @@ class Filter(BaseModel):
     command: str
     basedir: Optional[str] # same as .json file by default
     parameters: Dict[str,FilterParameter]
+
+    @validator('parameters')
+    def check_keys(cls, parameters):
+        for var_name in parameters.keys():
+            if not re.match(r"^[a-zA-Z_][a-zA-Z_0-9]*$", var_name):
+                raise ValueError(f"Parameter name is not a valid bash variable: {var_name}")
+        return parameters
 
 
 class FilterStep(BaseModel):
@@ -264,10 +272,6 @@ async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[Filter
     for i, filter_step in enumerate(filters):
         filter_definition = FILTERS[filter_step.filter]
 
-        filter_env = os.environ.copy()
-        for name, props in filter_definition.parameters.items():
-            filter_env[name] = props.export(filter_step.parameters[name])
-
         if filter_definition.type == FilterType.BILINGUAL:
             command = filter_definition.command
         elif filter_definition.type == FilterType.MONOLINGUAL:
@@ -276,11 +280,17 @@ async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[Filter
         else:
             raise NotImplementedError()
 
+        params = {name: props.export(filter_step.parameters[name])
+                  for name, props in filter_definition.parameters.items()}
+
+        if params:
+            vars_setter = '; '.join(f"{k}={quote(v)}" for k, v in params.items())
+            command = f'{vars_setter}; {command}'
+
         p_filter = await asyncio.create_subprocess_shell(command,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            env=filter_env,
             cwd=filter_definition.basedir)
 
         # Check exit codes, testing most obvious problems first.

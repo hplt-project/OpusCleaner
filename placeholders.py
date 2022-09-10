@@ -21,7 +21,7 @@ mutex_group_1.add_argument('--decode', action='store_true')
 mutex_group_1.add_argument('--encode', action='store_true')
 mutex_group_2 = parser.add_mutually_exclusive_group()
 mutex_group_2.add_argument('-t', '--target_file', type=str, help='Path to the target file')
-mutex_group_2.add_argument('--dump_placeholders', action='store_true', help='Check to print placeholders out') 
+mutex_group_2.add_argument('--dump_placeholders', action='store_true', help='Check to print placeholders out')
 
 
 @dataclass
@@ -35,16 +35,16 @@ class Text(str):
         and words that cause the appearance of <unk>
         """
         global placeholders, sp
-        
+
         def get_key_from_placeholders(val):
             """Get key correpsonding to given value from the placeholders dictionary
             """
             for key, value in placeholders.items():
                 if val == value:
                     return key
- 
+
         def generate_random_in_range() -> int:
-            """Generates random number in range defined by `num_placeholders` argparse argument 
+            """Generates random number in range defined by `num_placeholders` argparse argument
             that is not in `placeholders.keys()`
             """
             return random.choice([x for x in range(args.num_placeholders) if x not in placeholders.keys()])
@@ -70,7 +70,7 @@ class Text(str):
                     # continue if search result is already existing placeholder
                     if res and res.group() in placeholders.keys():
                         continue
-                
+
                 try:  # get piece
                     piece = sp.id_to_piece(sp.encode(token))[1]
                 except IndexError:
@@ -119,7 +119,7 @@ def encode() -> None:
 def decode() -> None:
     with open(args.target_file, 'w') if args.target_file else sys.stdout as target_file, \
          open(args.config, 'r') as config_file:
-        
+
         text = get_src()
         placeholders = yaml.safe_load(config_file)['placeholders']
         [target_file.write(Text(line).replace_placeholders(placeholders)) for line in text]

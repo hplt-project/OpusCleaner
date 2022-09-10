@@ -31,6 +31,9 @@ from pprint import pprint
 from datasets import list_datasets, Path
 from sample import sample
 
+import mimetypes
+mimetypes.add_type('application/javascript', '.js')
+
 
 DATA_PATH = os.getenv('DATA_PATH', 'data/train-parts/*.*.gz')
 
@@ -315,33 +318,9 @@ def stream_jsonl(iterable):
         media_type='application/json')
 
 
-class JSFiles(StaticFiles):
-    """Like StaticFiles, but if you try to access "thingy", and "thingy.js"
-    exists, it will redirect to that one. Just like unpkg.com!"""
-
-    async def get_response(self, path: str, scope: Scope) -> Response:
-        # Check if file exists
-        full_path_js, stat_result = await anyio.to_thread.run_sync(self.lookup_path, path)
-
-        # if not, and it isn't already suffixed with .js, try that
-        if not stat_result and not path.endswith('.js'):
-            full_path_js, stat_result = await anyio.to_thread.run_sync(self.lookup_path, path + ".js")
-            if stat_result:
-                url = URL(scope=scope)
-                url = url.replace(path=url.path + ".js")
-                return RedirectResponse(url=url)
-
-        return await super().get_response(path, scope)
-
-
 app = FastAPI()
 
-app.mount('/static/vendor', JSFiles(directory='static/vendor'), name='static/vendor')
-
-app.mount('/static', StaticFiles(directory='static'), name='static')
-
-
-@app.get('/datasets/')
+@app.get('/api/datasets/')
 def api_list_datasets() -> List[Dataset]:
     return [
         Dataset(name=name, columns={
@@ -352,7 +331,7 @@ def api_list_datasets() -> List[Dataset]:
     ]
 
 
-@app.get('/datasets/{name:path}/')
+@app.get('/api/datasets/{name:path}/')
 def api_get_dataset(name:str) -> Dataset:
     columns = list_datasets(DATA_PATH).get(name)
 
@@ -365,17 +344,17 @@ def api_get_dataset(name:str) -> Dataset:
     })
 
 
-@app.get('/datasets/{name:path}/sample')
+@app.get('/api/datasets/{name:path}/sample')
 async def api_get_sample(name:str) -> AsyncIterator[FilterOutput]:
     return stream_jsonl(get_sample(name, []))
 
 
-@app.post('/datasets/{name:path}/sample')
+@app.post('/api/datasets/{name:path}/sample')
 async def api_get_filtered_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[FilterOutput]:
     return stream_jsonl(get_sample(name, filters))
 
 
-@app.get('/datasets/{name:path}/configuration.json')
+@app.get('/api/datasets/{name:path}/configuration.json')
 def api_get_dataset_filters(name:str) -> List[FilterStep]:
     if not os.path.exists(filter_configuration_path(name)):
         return []
@@ -384,13 +363,13 @@ def api_get_dataset_filters(name:str) -> List[FilterStep]:
         return parse_obj_as(List[FilterStep], json.load(fh))
 
 
-@app.post('/datasets/{name:path}/configuration.json')
+@app.post('/api/datasets/{name:path}/configuration.json')
 def api_update_dataset_filters(name:str, filters:List[FilterStep]):
     with open(filter_configuration_path(name), 'w') as fh:
         return json.dump([step.dict() for step in filters], fh)
 
 
-@app.get('/filters/')
+@app.get('/api/filters/')
 def api_get_filters():
     reload_filters()
     return FILTERS
@@ -398,12 +377,15 @@ def api_get_filters():
 
 @app.get('/')
 def redirect_to_interface():
-    return RedirectResponse('/static/index.html')
+    return RedirectResponse('/frontend/index.html')
+
+
+app.mount('/frontend/', StaticFiles(directory='frontend/dist', html=True), name='static')
 
 
 def main_serve(args):
     import uvicorn
-    uvicorn.run('main:app', port=args.port, reload=args.reload, log_level='info')
+    uvicorn.run(f'main:app', port=args.port, reload=args.reload, log_level='info')
 
 
 async def sample_all_datasets(args):

@@ -10,16 +10,6 @@
 - `data/train-parts` is scanned for datasets
 - `filters` should contain filter json (but that's not implemented yet, right now it just has a hard-coded `FILTERS` dict in code)
 
-# Placeholders script usage
-```
-# encode
-python3 placeholders.py -s static/placeholder-stuff/test_encode_input -t static/placeholder-stuff/test_encode_output --encode --vocab static/placeholder-stuff/vocab.fren.spm --config static/placeholder-stuff/config.yaml
-# decode
-python3 placeholders.py -s static/placeholder-stuff/test_encode_output -t static/placeholder-stuff/test_decode_output --decode --vocab static/placeholder-stuff/vocab.fren.spm --config static/placeholder-stuff/config.yaml
-# decode output and encode input should be the same
-diff static/placeholder-stuff/test_encode_input static/placeholder-stuff/test_decode_output
-```
-
 # Installation for development
 ```sh
 python3 -m venv .env

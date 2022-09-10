@@ -287,8 +287,6 @@ async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[Filter
             vars_setter = '; '.join(f"{k}={quote(v)}" for k, v in params.items())
             command = f'{vars_setter}; {command}'
 
-        print(command)
-
         p_filter = await asyncio.create_subprocess_shell(command,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,

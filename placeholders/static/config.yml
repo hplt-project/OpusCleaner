@@ -1,10 +1,7 @@
+vocab: "static/vocab.fren.spm"
+placeholder-symbol: "11PLACEHOLDER11"
 num-placeholders: 4
-placeholders:
-  '@15': https://www.google.com/
-  '@17': http://www.google.com/
-  '@3': ⌚
-  '@8': www.google.com/
 regexes:
-- (https?:\/\/www\.\w{1,63}\.\w{1,63}(?:\/\w{0,63}){0,})
-- (www\.\w{1,63}\.\w{1,63}(?:\/\w{0,63}){0,})
-- ([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)
+    - (https?:\/\/www\.\w{1,63}\.\w{1,63}(?:\/\w{0,63}){0,})
+    - (www\.\w{1,63}\.\w{1,63}(?:\/\w{0,63}){0,})
+    - ([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)

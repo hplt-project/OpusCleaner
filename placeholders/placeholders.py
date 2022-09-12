@@ -1,142 +1,160 @@
 #!/usr/bin/env python3
+"""An encoder/decoder for placeholders in python3, using spm vocabulary"""
 import sys
-from typing import List
-import yaml
+from typing import List, Dict, Type, Tuple
+from copy import deepcopy
 from dataclasses import dataclass
 import re
 import argparse
 import random
 import sentencepiece as spm
-
-placeholders, sp = {}, None
+import yaml
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-c', '--config', type=str, help='Path to yaml configuration file', required=True)
-parser.add_argument('-s', '--source_file', type=str, help='Path to the input file')
-parser.add_argument('-v', '--vocab', type=str, help='Path to the vocab file')
-parser.add_argument('-n', '--num_placeholders', type=int, default=20, help='Maximum number of placeholders')
-parser.add_argument('--placeholder_symbol', type=str, default='@')
+parser.add_argument('-c', '--config', type=str, help='Path to yaml configuration file, required for encoding')
+parser.add_argument('-m', '--mappings_file', type=str, default="mappings.yml", help='Path to the mappings, one yaml entry per line.')
 mutex_group_1 = parser.add_mutually_exclusive_group(required=True)
 mutex_group_1.add_argument('--decode', action='store_true')
 mutex_group_1.add_argument('--encode', action='store_true')
-mutex_group_2 = parser.add_mutually_exclusive_group()
-mutex_group_2.add_argument('-t', '--target_file', type=str, help='Path to the target file')
-mutex_group_2.add_argument('--dump_placeholders', action='store_true', help='Check to print placeholders out')
-
+mutex_group_1.add_argument('--dump_placeholders', action='store_true', help='Check to print placeholders out')
 
 @dataclass
-class Rule(object):
+class Rule:
+    """Just a wrapper for regex rules"""
     pattern: str
 
-class Text(str):
+@dataclass
+class Configuration:
+    """Object holding the yaml config"""
+    def __init__(self, config_file):
+        with open(config_file, 'r', encoding='utf-8') as config_handle:
+            my_config = yaml.safe_load(config_handle)
+            # Parse
+            self.rules = [Rule(regex) for regex in my_config['regexes']]
+            self.placeholder_symbol = '@'
+            self.num_placeholders = 20
+            if 'placeholder-symbol' in my_config:
+                self.placeholder_symbol = my_config['placeholder-symbol']
+            if 'num-placeholders' in my_config:
+                self.num_placeholders = my_config['num-placeholders']
+            self.placeholders = [self.placeholder_symbol + str(i) for i in range(self.num_placeholders)]
 
-    def make_placeholders(self, *rules):
+            # During encoding assert that we have vocab
+            if 'vocab' in my_config:
+                vocab = my_config['vocab']
+                self.sp = spm.SentencePieceProcessor(vocab)
+
+                # Ensure that the placeholder symbol doesn't contain unk anywhere (including in the numbers)
+                for placeholder in self.placeholders:
+                    for token_proto in self.sp.encode(placeholder, out_type='immutable_proto').pieces:
+                        if token_proto.id == self.sp.unk_id():
+                            sys.stderr.write("The unk token is contained within the placeholder: " + str(token_proto.surface) +
+                             " which will cause all sorts of trouble. Please choose a different one.\n")
+                            sys.exit(1)
+            else:
+                self.sp = None
+
+
+class Encoder:
+    '''Encodes spm strings'''
+    def __init__(self, placeholders: List[str], spm_vocab: Type['spm'], myrules: List[Type['Rule']]):
+        self.placeholders = placeholders
+        self.sp = spm_vocab
+        self.rules = myrules
+        self.unk_id  = self.sp.unk_id()
+
+    def make_placeholders(self, inputline) -> Tuple[str, Dict[str, str]]:
         """Replaces strings that match the regex patterns from the config file
         and words that cause the appearance of <unk>
         """
-        global placeholders, sp
+        my_placeholders = deepcopy(self.placeholders) # For each line start with the full set of placeholders
+        replacements = {}
 
-        def get_key_from_placeholders(val):
-            """Get key correpsonding to given value from the placeholders dictionary
-            """
-            for key, value in placeholders.items():
-                if val == value:
-                    return key
-
-        def generate_random_in_range() -> int:
+        def generate_random_placeholder() -> str | None:
             """Generates random number in range defined by `num_placeholders` argparse argument
             that is not in `placeholders.keys()`
             """
-            return random.choice([x for x in range(args.num_placeholders) if x not in placeholders.keys()])
+            if my_placeholders != {}:
+                mychoice = random.choice(my_placeholders)
+                my_placeholders.remove(mychoice)
+                return mychoice
 
-        def replace(text, token):
-            """Replaces `token` in `text` with placeholder
+            return None
+
+        def replace(text, token) -> str:
+            """Replaces `token` in `text` with placeholder. In case we don't have enough placeholders left,
+               return the text unchanged.
             """
-            new_placeholder = f'{args.placeholder_symbol}{generate_random_in_range()}' if token not in placeholders.values() \
-                        else get_key_from_placeholders(token)
-            placeholders[new_placeholder] = token
-            return re.sub(token, new_placeholder, text)
+            cur_replacement = None
+            if token in replacements:
+                cur_replacement = replacements[token]
+            elif len(my_placeholders) != 0:
+                cur_replacement = generate_random_placeholder()
+                replacements[token] = cur_replacement
+            if cur_replacement is not None:
+                return re.sub(token, cur_replacement, text)
+            return text # We don't have enough placeholders left so just don't encode
 
         # use regex rules
-        for rule in rules:
-            for grp in [match.group() for match in re.finditer(rule.pattern, self)]:
-                self = replace(self, grp)
+        for rule in self.rules:
+            for grp in [match.group() for match in re.finditer(rule.pattern, inputline)]:
+                inputline = replace(inputline, grp)
 
         # check for <unk>
-        if sp:
-            for token in self.split():
-                # search for '@\d+' pattern
-                if res := re.search(r'{}\d+'.format(args.placeholder_symbol), token):
-                    # continue if search result is already existing placeholder
-                    if res and res.group() in placeholders.keys():
-                        continue
+        input_proto = self.sp.encode(inputline, out_type='immutable_proto')
+        for token_proto in input_proto.pieces:
+            if token_proto.id == self.unk_id:
+                inputline = replace(inputline, token_proto.surface)
 
-                try:  # get piece
-                    piece = sp.id_to_piece(sp.encode(token))[1]
-                except IndexError:
-                    piece = "not_unk"
-
-                if piece == "<unk>":
-                    self = replace(self, token)
-
-        return self
+        return (inputline, dict((v, k) for k, v in replacements.items()))
 
 
-    def replace_placeholders(self, placeholders):
-        """Replaces placeholders with corresponding strings
-        """
-        # iterate through placeholder-text pairs sorted by text length
-        for idx, placeholder in sorted(placeholders.items(), key=lambda x: len(x), reverse=True):
-            self = re.sub(r'{}(?!\d)'.format(idx), placeholder, self)
-        return self
+def encode(my_placeholders: Dict[str, str], my_sp: Type['spm_vocab'], my_rules) -> None:
+    '''Encodes everything form stdin, dumping it to stdout and dumping a file with
+       all replacements'''
+    encoder = Encoder(my_placeholders, my_sp, my_rules)
+    counter = 0
+    with open(args.mappings_file, 'w', encoding='utf-8') as yamlout:
+        for line in sys.stdin:
 
+            encoded_line, mappings = encoder.make_placeholders(line)
+            sys.stdout.write(encoded_line) # Write the encoded line to stdout
 
-def dump_placeholders():
-    print(*placeholders.keys())
-
-
-def get_src() -> List[str]:
-    if not args.source_file:
-        return [line for line in sys.stdin]
-    with open(args.source_file, 'r') as f:
-        text = f.readlines()
-    return text
-
-
-def encode() -> None:
-    with open(args.target_file, 'w') if args.target_file else sys.stdout as target_file, \
-         open(args.config, 'r') as config_file:
-
-        config, text = yaml.safe_load(config_file), get_src()
-        rules = [Rule(regex) for regex in config['regexes']]
-        [target_file.write(Text(line).make_placeholders(*rules)) for line in text]
-        config["placeholders"], config["num-placeholders"] = placeholders, len(placeholders)
-
-    with open(args.config, 'w') as config_file:
-        yaml.dump(config, config_file, allow_unicode=True)
+            # Keep track of which sentence has what replacement mappings via a yaml config
+            sent_mapping = {}
+            sent_mapping[counter] = mappings
+            yaml.dump(sent_mapping, yamlout, allow_unicode=True)
+            yamlout.flush()
+            counter = counter + 1 # Move to the next sentence
 
 
 def decode() -> None:
-    with open(args.target_file, 'w') if args.target_file else sys.stdout as target_file, \
-         open(args.config, 'r') as config_file:
-
-        text = get_src()
-        placeholders = yaml.safe_load(config_file)['placeholders']
-        [target_file.write(Text(line).replace_placeholders(placeholders)) for line in text]
-
+    """Decodes a string from stdin, given a mappings file and spits it to stdout"""
+    with open(args.mappings_file, 'r', encoding='utf-8') as mappings:
+        placeholder_lines = yaml.safe_load(mappings)
+    counter = 0
+    for line in sys.stdin:
+        try:
+            my_placeholders = placeholder_lines[counter]
+            for placeholder in my_placeholders.keys():
+                line = line.replace(placeholder, my_placeholders[placeholder])
+            sys.stdout.write(line)
+            counter = counter + 1
+        except KeyError:
+            sys.stderr.write("The mappings file contains less lines than the input.")
+            sys.exit(1)
 
 if __name__ == "__main__":
     args = parser.parse_args()
 
-    if args.vocab:
-        sp = spm.SentencePieceProcessor(args.vocab)
+    if args.encode or args.dump_placeholders:
+        config = Configuration(args.config)
 
     if args.dump_placeholders:
-        with open(args.config, 'r') as config_file:
-            placeholders = yaml.safe_load(config_file)['placeholders']
-            dump_placeholders()
-        exit()
+        print(" ".join(config.placeholders))
+        sys.exit(0)
+    elif args.encode:
+        encode(config.placeholders, config.sp, config.rules)
+    else:
+        decode()
 
-    if not args.target_file:
-        print(f'No target file provided for {sys.argv[0]}, output will be directed to stdout', file=sys.stderr)
-    encode() if args.encode else decode()

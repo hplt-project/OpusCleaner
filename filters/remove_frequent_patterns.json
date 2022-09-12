@@ -1,0 +1,14 @@
+{
+    "description": "Removes patterns from the texts that usually appears on only one side. See the script for examples.",
+
+    "type": "bilingual",
+    "command": "./remove_frequent_patterns.py --pattern-file $PATTERN_FILE ${DEBUG:+--debug}",
+    "parameters":
+    {
+        "PATTERN_FILE":
+        {
+            "type": "str",
+            "default": "remove_frequent_patterns.txt"
+        }
+    }
+}

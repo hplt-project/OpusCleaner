@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 import random
+import subprocess
 from math import exp, log, floor
-from typing import TypeVar, Iterable, Iterator, Generic
+from typing import TypeVar, Iterable, Iterator, Generic, List, Tuple
 
 
 T = TypeVar('T')
 
 
-def reservoir_sample(k:int, it:Iterable[T], *, rand: random.Random = random._inst, sort=False) -> list[T]:
+def reservoir_sample(k:int, it:Iterable[T], *, rand: random.Random = random._inst, sort=False) -> List[T]:
 	"""Take k samples from iterable by reading from start to end. If sort is
 	True, it will return the selected samples in the order they appeared in.
 	"""
-	sample: list[tuple[int,T]] = []
+	sample: List[Tuple[int,T]] = []
 
 	numbered_it = enumerate(it)
 
@@ -23,11 +24,11 @@ def reservoir_sample(k:int, it:Iterable[T], *, rand: random.Random = random._ins
 	try:
 		while True:
 				next_i = i + floor(log(rand.random()) / log(1 - w)) + 1
-				
+
 				# Skip forward
 				while i < next_i:
 					i, line = next(numbered_it)
-					
+
 				sample[rand.randrange(k)] = (i, line)
 				w = w * exp(log(rand.random()) / k)
 	except StopIteration:
@@ -44,7 +45,7 @@ class Tailer(Iterable[T]):
 	you can read from `tail`."""
 
 	def __init__(self, k:int, it:Iterable[T]):
-		self.sample: list[T] = []
+		self.sample: List[T] = []
 		self.k = k
 		self.i = 0
 		self.it = iter(it)
@@ -60,23 +61,23 @@ class Tailer(Iterable[T]):
 			self.i += 1
 
 	@property
-	def tail(self) -> list[T]:
+	def tail(self) -> List[T]:
 		return self.sample[(self.i % len(self.sample)):] + self.sample[0:(self.i % len(self.sample))]
 
 
-def sample(k:int, iterable:Iterable[T], sort=False) -> tuple[list[T],list[T],list[T]]:
+def sample(k:int, iterable:Iterable[T], sort=False) -> Iterable[Iterable[T]]:
 	"""Take `k` items from the start, the end and the middle from `iterable`. If
 	`sort` is True, the items in the middle will be in the order they appeared
 	in."""
 	it = iter(iterable)
 
-	head = [next(it) for _ in range(k)]
+	yield (next(it) for _ in range(k))
 
 	tailer = Tailer(k, it)
 
-	middle = reservoir_sample(k, tailer, sort=sort)
+	yield reservoir_sample(k, tailer, sort=sort)
 
-	return head, middle, tailer.tail
+	yield tailer.tail
 
 
 if __name__ == '__main__':
@@ -84,20 +85,27 @@ if __name__ == '__main__':
 	import gzip
 	import argparse
 	from itertools import count, chain
-	from contextlib import ExitStack
+	from contextlib import ExitStack, contextmanager
 	from typing import IO, cast, BinaryIO, Iterator
 	from io import BufferedReader
 
+	@contextmanager
+	def gunzip(path):
+		with subprocess.Popen(['gzip', '-cd', path], stdout=subprocess.PIPE) as proc:
+			yield proc.stdout
+			if proc.wait() != 0:
+				raise RuntimeError(f'gzip returned error code {proc.returncode}')
+
 	def magic_open_or_stdin(ctx:ExitStack, path:str) -> IO[bytes]:
-		fh: BinaryIO = sys.stdin.buffer if path == '-' else ctx.enter_context(open(path, 'rb'))
-
-		# TODO: make this work instead of throwing "ValueError: I/O operation on closed file."
-		# Check for gzip header
-		# reader = BufferedReader(fh)
-		# if reader.peek(2).startswith(b'\x1f\x8b'):
-		# 	fh = ctx.enter_context(gzip.open(reader, 'rb'))
-
-		return fh
+		# TODO ideally we would look at the magic bytes, but that would entail
+		# consuming the input file partially and then I can't pass the complete
+		# file onto gzip afterwards
+		if path.endswith('.gz'):
+			return ctx.enter_context(gunzip(path))
+		elif path == '-':
+			return sys.stdin.buffer
+		else:
+			return ctx.enter_context(open(path, 'rb'))
 
 	parser = argparse.ArgumentParser(description="Take a file's head, tail and a random sample from the rest.")
 	parser.add_argument('-n', dest='lines', type=int, default=10, help="number of lines for each section of the sample")
@@ -107,20 +115,20 @@ if __name__ == '__main__':
 	args = parser.parse_args()
 
 	with ExitStack() as ctx:
-		files:list[Iterator[bytes]] = [magic_open_or_stdin(ctx, file) for file in args.files]
+		files:List[Iterator[bytes]] = [magic_open_or_stdin(ctx, file) for file in args.files]
 
 		if args.line_numbers:
 			files = [(str(i).encode() for i in count()), *files]
-		
-		pairs = zip(*files)
 
-		head, middle, tail = sample(args.lines, pairs, sort=True)
+		pairs = zip(*files)
 
 		delimiter = args.delimiter.replace("\\t", "\t").replace("\\n", "\n").encode()
 
-		for pair in chain(head, middle, tail):
-			for col, entry in enumerate(pair):
-				if col > 0:
-					sys.stdout.buffer.write(delimiter)
-				sys.stdout.buffer.write(entry.rstrip(b"\n"))
-			sys.stdout.buffer.write(b"\n")
+		for section in sample(args.lines, pairs, sort=True):
+			for pair in section:
+				for col, entry in enumerate(pair):
+					if col > 0:
+						sys.stdout.buffer.write(delimiter)
+					sys.stdout.buffer.write(entry.rstrip(b"\n"))
+				sys.stdout.buffer.write(b"\n")
+			sys.stdout.buffer.flush()

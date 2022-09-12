@@ -1,14 +1,24 @@
+#!/usr/bin/env python3
 import os
 import gzip
+from shlex import quote
 import sys
-from typing import Optional, Iterable, TypeVar, Union, Literal, Any
+import re
+from typing import Optional, Iterable, TypeVar, Union, Literal, Any, AsyncIterator, cast, IO, List, Dict, Tuple
 from contextlib import ExitStack
 from itertools import chain
 from pydantic import BaseModel, parse_obj_as, validator
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, StreamingResponse, HTMLResponse
+from fastapi.encoders import jsonable_encoder
+import anyio
+from starlette.datastructures import URL
+from starlette.exceptions import HTTPException
+from starlette.responses import FileResponse, RedirectResponse, Response
+from starlette.types import Scope
 from enum import Enum
+import asyncio
 import json
 import subprocess
 import hashlib
@@ -17,17 +27,27 @@ from tempfile import TemporaryFile
 from shutil import copyfileobj
 from pprint import pprint
 
-from datasets import list_datasets
+
+from datasets import list_datasets, Path
 from sample import sample
 
+import mimetypes
+mimetypes.add_type('application/javascript', '.js')
 
-DATA_PATH = 'data/train-parts'
+
+DATA_PATH = os.getenv('DATA_PATH', 'data/train-parts/*.*.gz')
 
 FILTER_PATH = 'filters/*.json'
 
 # col.py is used to apply a monolingual filter to a bilingual dataset. Needs
 # to be absolute since filters can run from different cwds.
 COL_PY = os.path.abspath('./col.py')
+
+SAMPLE_PY = os.path.abspath('./sample.py')
+
+# Size of each of the three sections (head, random sample of middle, tail) of
+# the dataset sample that we operate on.
+SAMPLE_SIZE = int(os.getenv('SAMPLE_SIZE', '100'))
 
 
 class File(BaseModel):
@@ -37,7 +57,7 @@ class File(BaseModel):
 
 class Dataset(BaseModel):
     name: str
-    columns: dict[str,File]
+    columns: Dict[str,File]
 
 
 class FilterType(Enum):
@@ -78,7 +98,7 @@ class FilterParameterBool(FilterParameterBase):
 class FilterParameterStr(FilterParameterBase):
     type: Literal["str"]
     default: Optional[str]
-    allowed_values: Optional[list[str]]
+    allowed_values: Optional[List[str]]
 
 
 FilterParameter = Union[
@@ -95,12 +115,19 @@ class Filter(BaseModel):
     description: Optional[str]
     command: str
     basedir: Optional[str] # same as .json file by default
-    parameters: dict[str,FilterParameter]
+    parameters: Dict[str,FilterParameter]
+
+    @validator('parameters')
+    def check_keys(cls, parameters):
+        for var_name in parameters.keys():
+            if not re.match(r"^[a-zA-Z_][a-zA-Z_0-9]*$", var_name):
+                raise ValueError(f"Parameter name is not a valid bash variable: {var_name}")
+        return parameters
 
 
 class FilterStep(BaseModel):
     filter: str
-    parameters: dict[str,Any]
+    parameters: Dict[str,Any]
     language: Optional[str]
 
     @validator('filter')
@@ -144,7 +171,7 @@ def list_filters(path) -> Iterable[Filter]:
 
 
 
-FILTERS: dict[str,Filter] = {}
+FILTERS: Dict[str,Filter] = {}
 
 def reload_filters():
     global FILTERS
@@ -163,109 +190,138 @@ def none_throws(optional: Optional[T], message: str = "Unexpected `None`") -> T:
     return optional
 
 
+def dataset_path(name:str, template:str):
+    # TODO: fix this hack to get the file path from the name this is silly we
+    # should just use get_dataset(name).path or something
+    root = DATA_PATH.split('*')[0]
+
+    # If the dataset name is a subdirectory, do some hacky shit to get to a
+    # .sample.gz file in said subdirectory.
+    parts = name.rsplit('/', maxsplit=2)
+    if len(parts) == 2:
+        root = os.path.join(root, parts[0])
+        filename = parts[1]
+    else:
+        filename = parts[0]
+
+    return os.path.join(root, template.format(filename))
+
+
 def sample_path(name:str, langs: Iterable[str]):
     languages = '.'.join(sorted(langs))
-    return os.path.join(DATA_PATH, f'.sample.{name}.{languages}.gz')
+    return dataset_path(name, f'.sample.{{}}.{languages}')
 
 
-def compute_sample(name:str, columns:list[tuple[str,os.DirEntry]]):
+def filter_configuration_path(name:str) -> str:
+    return dataset_path(name, '{}.filters.json')
+
+
+async def compute_sample(name:str, columns:List[Tuple[str,File]]):
     langs = [lang for lang, _ in columns]
-    with ExitStack() as ctx, gzip.open(sample_path(name, langs), 'wb') as fout:
-        files = [ctx.enter_context(gzip.open(file.path, 'rb')) for _, file in columns]
+    with TemporaryFile() as tempfile:  # type: ignore[name-defined]
+        proc = await asyncio.subprocess.create_subprocess_exec(
+            SAMPLE_PY,
+            '-n', str(SAMPLE_SIZE),
+            *[str(file.resolve()) for _, file in columns],
+            stdout=tempfile,
+            stderr=asyncio.subprocess.PIPE)
 
-        pairs = zip(*files)
-        
-        head, middle, tail = sample(10, pairs)
+        _, stderr = await proc.communicate()
 
-        for pair in chain(head, middle, tail):
-            fout.write(b'\t'.join(line.rstrip(b'\n') for line in pair) + b'\n')
+        if proc.returncode != 0:
+            raise Exception(f'sample.py returned {proc.returncode}: {stderr.decode()}')
+
+        tempfile.seek(0)
+
+        with open(sample_path(name, langs), 'wb') as fdest:
+            copyfileobj(tempfile, fdest)
 
 
 class FilterOutput(BaseModel):
-    stdout: list[dict[str,str]]
+    stdout: List[Dict[str,str]]
     stderr: Optional[str]
 
+    def __init__(self, langs:List[str], stdout:bytes, stderr:Optional[bytes] = None):
+        lines = []
 
-def get_sample(name:str, filters:list[FilterStep]) -> FilterOutput:
-    columns: list[tuple[str,os.DirEntry]] = sorted(list_datasets(DATA_PATH)[name].items(), key=lambda pair: pair[0])
+        for lineno, line in enumerate(stdout.split(b'\n'), start=1):
+            values = []
+            for colno, field in enumerate(line.split(b'\t'), start=1):
+                try:
+                    values.append(field.decode())
+                except UnicodeDecodeError as e:
+                    values.append(f'[Error: Cannot decode line {lineno} column {colno}: {e!s}]')
+            lines.append(dict(zip(langs, values)))
+
+        super().__init__(
+            stdout=lines,
+            stderr=stderr.decode() if stderr is not None else None)
+
+
+async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[FilterOutput]:
+    columns: List[Tuple[str,Path]] = sorted(list_datasets(DATA_PATH)[name].items(), key=lambda pair: pair[0])
     langs = [lang for lang, _ in columns]
 
     # If we don't have a sample stored, generate one. Doing it in bytes because
     # it might save us parsing utf-8 (also assumptions! It it utf-8?)
     if not os.path.exists(sample_path(name, langs)):
-        compute_sample(name, columns)
+        await compute_sample(name, columns)
 
-    sample_file = sample_path(name, langs)
+    with open(sample_path(name, langs), 'rb') as fh:
+        sample = fh.read()
 
-    filter_hash = ''
-
-    p_filter_stderr:Optional[bytes] = None
+    yield FilterOutput(langs, sample)
 
     for i, filter_step in enumerate(filters):
         filter_definition = FILTERS[filter_step.filter]
-        filter_json = json.dumps(filter_step.dict(), sort_keys=True)
-        filter_hash = hashlib.sha256((filter_hash + filter_json).encode()).hexdigest()
-        
-        # If we already have this cached, skip it. Unless it is the last step,
-        # we always re-execute that one for debug output etc.
-        if not os.path.exists(sample_path(name, langs) + filter_hash) or i + 1 == len(filters):
-            with TemporaryFile('w+b') as fout:
-                # Decompress input
-                p_gunzip = subprocess.Popen(['pigz', '-cd', sample_file], stdout=subprocess.PIPE)
 
-                # Compress output
-                p_gzip = subprocess.Popen(['pigz', '-9c'], stdin=subprocess.PIPE, stdout=fout)
+        if filter_definition.type == FilterType.BILINGUAL:
+            command = filter_definition.command
+        elif filter_definition.type == FilterType.MONOLINGUAL:
+            column = langs.index(none_throws(filter_step.language))
+            command = f'{COL_PY} {column} {filter_definition.command}'
+        else:
+            raise NotImplementedError()
 
-                filter_env = os.environ.copy()
-                for name, props in filter_definition.parameters.items():
-                    filter_env[name] = props.export(filter_step.parameters[name])
+        params = {name: props.export(filter_step.parameters[name])
+                  for name, props in filter_definition.parameters.items()}
 
-                if filter_definition.type == FilterType.BILINGUAL:
-                    command = [filter_definition.command]
-                elif filter_definition.type == FilterType.MONOLINGUAL:
-                    column = langs.index(none_throws(filter_step.language))
-                    command = [f'{COL_PY} {column} {filter_definition.command}']
-                else:
-                    raise NotImplementedError()
-                
-                p_filter = subprocess.Popen(command, env=filter_env, stdin=p_gunzip.stdout, stdout=p_gzip.stdin, stderr=subprocess.PIPE, shell=True, cwd=filter_definition.basedir)
-                
-                # Disconnect from the pipes only used by the spawned processes
-                none_throws(p_gunzip.stdout).close()
-                none_throws(p_gzip.stdin).close()
+        if params:
+            vars_setter = '; '.join(f"{k}={quote(v)}" for k, v in params.items())
+            command = f'{vars_setter}; {command}'
 
-                # Check exit codes, testing most obvious problems first.
-                _, p_filter_stderr = p_filter.communicate()
-                if p_filter.returncode != 0:
-                    raise Exception(f"Step {i}: {filter_step.filter} failed:\n{p_filter_stderr!s}")
+        p_filter = await asyncio.create_subprocess_shell(command,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=filter_definition.basedir)
 
-                if p_gunzip.wait() != 0:
-                    raise Exception(f"Decompression of input {sample_file} for step {i} failed. Previous step might have caused an error?")
+        # Check exit codes, testing most obvious problems first.
+        filter_output, filter_stderr = await p_filter.communicate(input=sample)
+        # if p_filter.returncode != 0:
+            # raise Exception(f"Step {i}: {filter_step.filter} failed:\n{filter_stderr!s}")
 
-                if p_gzip.wait() != 0:
-                    raise Exception(f"Compression & writing output to temp file failed. Did the filter in {i} crash?")
+        yield FilterOutput(langs, filter_output, filter_stderr)
 
-                # Now we know reading was a success, move data to a more permanent location.
-                with open(sample_path(name, langs) + filter_hash, 'wb') as fdest:
-                    fout.seek(0)
-                    copyfileobj(fout, fdest)
+        if p_filter.returncode != 0:
+            break
 
-        sample_file = sample_path(name, langs) + filter_hash
+        sample = filter_output
 
 
-    # Read the sample data as a dict[lang:str: line:str]
-    with gzip.open(sample_file, 'rt') as fh:
-        return FilterOutput(
-            stdout=[dict(zip(langs, line.rstrip('\n').split('\t'))) for line in fh],
-            stderr=p_filter_stderr.decode() if p_filter_stderr is not None else None)
+def stream_jsonl(iterable):
+    return StreamingResponse(
+        (
+            json.dumps(jsonable_encoder(line), separators=(',', ':')).encode() + b"\n"
+            async for line in iterable
+        ),
+        media_type='application/json')
 
 
 app = FastAPI()
 
-app.mount('/static', StaticFiles(directory='static'), name='static')
-
-@app.get('/datasets/')
-def api_list_datasets() -> list[Dataset]:
+@app.get('/api/datasets/')
+def api_list_datasets() -> List[Dataset]:
     return [
         Dataset(name=name, columns={
             lang: File(path=file.name, size=file.stat().st_size)
@@ -275,36 +331,45 @@ def api_list_datasets() -> list[Dataset]:
     ]
 
 
-@app.get('/datasets/{name}/sample')
-def api_get_dataset(name:str) -> FilterOutput:
-    return get_sample(name, [])
+@app.get('/api/datasets/{name:path}/')
+def api_get_dataset(name:str) -> Dataset:
+    columns = list_datasets(DATA_PATH).get(name)
+
+    if not columns:
+        raise HTTPException(status_code=404, detail='Dataset not found')
+
+    return Dataset(name=name, columns={
+        lang: File(path=file.name, size=file.stat().st_size)
+        for lang, file in columns.items()
+    })
 
 
-@app.post('/datasets/{name}/sample')
-def api_get_filtered_dataset(name:str, filters:list[FilterStep]) -> FilterOutput:
-    return get_sample(name, filters)
+@app.get('/api/datasets/{name:path}/sample')
+async def api_get_sample(name:str) -> AsyncIterator[FilterOutput]:
+    return stream_jsonl(get_sample(name, []))
 
 
-def filter_configuration_path(name:str) -> str:
-    return os.path.join(DATA_PATH, f'{name}.filters.json')
+@app.post('/api/datasets/{name:path}/sample')
+async def api_get_filtered_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[FilterOutput]:
+    return stream_jsonl(get_sample(name, filters))
 
 
-@app.get('/datasets/{name}/configuration')
-def api_get_dataset_filters(name:str) -> list[FilterStep]:
+@app.get('/api/datasets/{name:path}/configuration.json')
+def api_get_dataset_filters(name:str) -> List[FilterStep]:
     if not os.path.exists(filter_configuration_path(name)):
         return []
 
     with open(filter_configuration_path(name), 'r') as fh:
-        return parse_obj_as(list[FilterStep], json.load(fh))
+        return parse_obj_as(List[FilterStep], json.load(fh))
 
 
-@app.post('/datasets/{name}/configuration')
-def api_update_dataset_filters(name:str, filters:list[FilterStep]):
+@app.post('/api/datasets/{name:path}/configuration.json')
+def api_update_dataset_filters(name:str, filters:List[FilterStep]):
     with open(filter_configuration_path(name), 'w') as fh:
         return json.dump([step.dict() for step in filters], fh)
 
 
-@app.get('/filters/')
+@app.get('/api/filters/')
 def api_get_filters():
     reload_filters()
     return FILTERS
@@ -312,5 +377,59 @@ def api_get_filters():
 
 @app.get('/')
 def redirect_to_interface():
-    return RedirectResponse('/static/index.html')
+    return RedirectResponse('/frontend/index.html')
 
+
+app.mount('/frontend/', StaticFiles(directory='frontend/dist', html=True), name='static')
+
+
+def main_serve(args):
+    import uvicorn
+    uvicorn.run(f'main:app', port=args.port, reload=args.reload, log_level='info')
+
+
+async def sample_all_datasets(args):
+    tasks = []
+
+    for name, columns in list_datasets(DATA_PATH).items():
+        sorted_cols = sorted(columns.items(), key=lambda pair: pair[0])
+        langs = [lang for lang, _ in columns]
+        if not os.path.exists(sample_path(name, langs)):
+            print(f"Sampling {name}...", file=sys.stderr)
+            tasks.append([name, sorted_cols])
+
+    for task, result in zip(tasks, await asyncio.gather(*[compute_sample(*task) for task in tasks], return_exceptions=True)):
+        if isinstance(result, Exception):
+            print(f"Could not compute sample for {task[0]}: {result!s}", file=sys.stderr)
+
+
+def main_sample(args):
+    asyncio.run(sample_all_datasets(args))
+
+
+def main_list_commands(args):
+    print("Error: No command specified.\n\n"
+          "Available commands:\n"
+          "  serve      run webserver\n"
+          "  sample     sample all datasets\n"
+          "", file=sys.stderr)
+    sys.exit(1)
+
+
+if __name__ == '__main__':
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Fill up those seats on your empty train.')
+    parser.set_defaults(func=main_list_commands)
+    subparsers = parser.add_subparsers()
+
+    parser_serve = subparsers.add_parser('serve')
+    parser_serve.add_argument('-p', '--port', type=int, default=8000, help='Bind socket to this port. (default: 8000)')
+    parser_serve.add_argument('--reload', action='store_true', help='Enable auto-reload.')
+    parser_serve.set_defaults(func=main_serve)
+
+    parser_sample = subparsers.add_parser('sample')
+    parser_sample.set_defaults(func=main_sample)
+
+    args = parser.parse_args()
+    args.func(args)

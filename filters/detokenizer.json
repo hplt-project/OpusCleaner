@@ -1,0 +1,21 @@
+{
+    "description": "Detokenizes tokenized text. If the language is unsupported, enter 'other'",
+    "type": "monolingual",
+    "command": "./deescape-special-chars.perl -l $LANG1",
+    "parameters": {
+        "LANG1":
+        {
+            "type": "str",
+            "default": "en",
+            "allowed_values":
+            [
+                "en",
+                "cs",
+                "fr",
+                "it",
+                "fi",
+                "other"
+            ]
+        }
+    }
+}

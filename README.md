@@ -20,7 +20,26 @@ mkdir -p data
 mtdata get -l ara-eng -tr OPUS-elrc_2922-v1-ara-eng --compress -o data
 mtdata get -l fra-eng -tr OPUS-elitr_eca-v1-eng-fra --compress -o data
 
+cd frontend
+npm clean-install
+npm run build
+cd ..
+
 ./main.py serve --reload
+```
+
+If you're doing frontend developemnt, try also running:
+```sh
+cd frontend
+npm run dev
+```
+
+This will put vite in hot-reloading mode for easier javascript dev. All api requests will be proxied to the `main.py serve` running in 8000.
+
+If you want to use LASER, you will also need to download its assets:
+
+```sh
+python -m laserembeddings download-models
 ```
 
 Then go to http://127.0.0.1:8000/ for the "interface" or http://127.0.0.1:8000/docs for the API.

@@ -1,27 +1,43 @@
 #!/usr/bin/env python3
+"""Stand-alone filter pipeline runner. Executes all of the filters defined in
+a dataset filtering pipeline created by empty-train in their own process and
+links them together through pipes. Can read from stdin but by default reads
+the dataset from the same folder as the pipeline configuration file.
+"""
 import sys
 import os
 import argparse
 import json
-import glob
-import subprocess
+from glob import glob
 from queue import SimpleQueue
 from threading import Thread
-from select import select
-from typing import List, Tuple
+from subprocess import Popen, PIPE
+from typing import List, Tuple, Any, BinaryIO, Optional, TypeVar, Iterable
 
 
 COL_PY = os.path.join(os.path.dirname(__file__), 'col.py')
 
-def encode_env(type_name, value):
+
+T = TypeVar("T")
+
+def none_throws(optional: Optional[T], message: str = "Unexpected `None`") -> T:
+    if optional is None:
+        raise AssertionError(message)
+    return optional
+
+
+def encode_env(type_name: str, value: Any) -> str:
     if type_name == 'bool':
         return '1' if value else ''
     else:
         return str(value)
 
 
-def list_filters(path):
-    for filename in glob.glob(path, recursive=True):
+def list_filters(path: str) -> Iterable[dict]:
+    """Scans all files matching the path pattern and attempts to parse them as
+    filter json definitions.
+    """
+    for filename in glob(path, recursive=True):
         try:
             with open(filename) as fh:
                 defaults = {
@@ -33,10 +49,14 @@ def list_filters(path):
             print(f"Could not parse {filename}: {e}", file=sys.stderr)
 
 
-def babysit_child(child, name, print_queue, ctrl_queue):
+def babysit_child(child: Popen, name: str, print_queue: SimpleQueue, ctrl_queue: SimpleQueue):
+    """Thread that looks after a child process and passes (and prefixes) all of
+    its stderr to a queue. It will tell the parent thread about the end of the
+    child through the ctrl_queue.
+    """
     prefix = f'[{name}] '.encode()
 
-    for line in child.stderr:
+    for line in none_throws(child.stderr):
         print_queue.put(prefix + line)
 
     child.wait()
@@ -46,12 +66,15 @@ def babysit_child(child, name, print_queue, ctrl_queue):
     ctrl_queue.put(child.returncode)
 
 
-def print_lines(queue, fout):
+def print_lines(queue: SimpleQueue, fout: BinaryIO):
+    """Thread that prints stderr lines from all the children to stderr in an
+    orderly fashion.
+    """
     while True:
         line = queue.get()
         if line is None:
             break
-        fout.buffer.write(line)
+        fout.write(line)
 
 
 def main(argv):
@@ -81,33 +104,39 @@ def main(argv):
     # Assert we have all filters we need
     assert set(step['filter'] for step in pipeline['filters']) - set(FILTERS.keys()) == set()
 
+    # List of child processes used for extracting & filtering dataset
     children: List[Popen] = []
 
+    # List of threads that watch each child process, one for each child
     babysitters: List[Thread] = []
 
+    # Queue filled by the babysitters with the stderr of the children, consumed
+    # by `print_lines()` to prevent racing on stderr.
     print_queue = SimpleQueue() # type: SimpleQueue[Optional[bytes]]
 
+    # Queue filled by the babysitters with the return code of each of the
+    # children. Used by the main thread to catch errors in the pipeline.
     ctrl_queue = SimpleQueue() # type: SimpleQueue[int]
 
     # If we're not reading from stdin, read from files and paste them together
     if not args.input:
         for filename in pipeline['files']:
-            child = subprocess.Popen(
+            child = Popen(
                 ['gzip', '-cd', filename],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stdout=PIPE,
+                stderr=PIPE,
                 cwd=args.basedir)
 
             children.append(child)
 
-            thread = Thread(target=babysit_child, args=[child, f'ungzip {filename}', print_queue, ctrl_queue])
+            thread = Thread(target=babysit_child, args=[child, f'gunzip {filename}', print_queue, ctrl_queue])
             thread.start()
             babysitters.append(thread)
 
-        child = subprocess.Popen(
+        child = Popen(
             ['paste'] + [f'/dev/fd/{child.stdout.fileno()}' for child in children],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=PIPE,
+            stderr=PIPE,
             pass_fds=[child.stdout.fileno() for child in children])
 
         thread = Thread(target=babysit_child, args=[child, 'paste', print_queue, ctrl_queue])
@@ -134,10 +163,10 @@ def main(argv):
 
         is_last_step = i + 1 == len(pipeline['filters'])
 
-        child = subprocess.Popen(command,
+        child = Popen(command,
             stdin=args.input if len(children) == 0 else children[-1].stdout,
-            stdout=args.output if is_last_step else subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=args.output if is_last_step else PIPE,
+            stderr=PIPE,
             env=filter_env,
             cwd=filter_definition['basedir'],
             shell=True)
@@ -148,7 +177,7 @@ def main(argv):
 
         children.append(child)
 
-    print_thread = Thread(target=print_lines, args=[print_queue, sys.stderr])
+    print_thread = Thread(target=print_lines, args=[print_queue, sys.stderr.buffer])
     print_thread.start()
 
     # Wait for the children to exit, and depending on their retval exit early

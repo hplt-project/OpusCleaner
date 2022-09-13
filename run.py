@@ -77,6 +77,10 @@ def print_lines(queue: SimpleQueue, fout: BinaryIO):
             break
         fout.write(line)
 
+        # Since we're writing stderr, we flush after each line to make it more
+        # useful for debugging
+        fout.flush()
+
 
 def main(argv):
     parser = argparse.ArgumentParser()
@@ -159,6 +163,11 @@ def main(argv):
     else:
         languages = args.languages
 
+    # First start the print thread so that we get immediate feedback from the
+    # children even if all of them haven't started yet.
+    print_thread = Thread(target=print_lines, args=[print_queue, sys.stderr.buffer])
+    print_thread.start()
+
     # Start child processes, each reading the output from the previous sibling
     for i, step in enumerate(pipeline['filters']):
         filter_definition = FILTERS[step['filter']]
@@ -190,14 +199,13 @@ def main(argv):
             cwd=filter_definition['basedir'],
             shell=True)
 
+        print_queue.put(f'[run.py] step {i}: Executing {command_str}\n'.encode())
+
         thread = Thread(target=babysit_child, args=[child, f'step {i}', print_queue, ctrl_queue])
         thread.start()
         babysitters.append(thread)
 
         children.append(child)
-
-    print_thread = Thread(target=print_lines, args=[print_queue, sys.stderr.buffer])
-    print_thread.start()
 
     # Wait for the children to exit, and depending on their retval exit early
     running_children = len(children)

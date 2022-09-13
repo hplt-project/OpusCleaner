@@ -188,7 +188,7 @@ def main(argv):
 
         # Command, prefixed by variable definitions so they get expanded
         # correctly in the command bit.
-        command_str = ';'.join(filter_params + [command])
+        command_str = '; '.join(filter_params + [command])
 
         is_last_step = i + 1 == len(pipeline['filters'])
 

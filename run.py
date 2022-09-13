@@ -8,6 +8,7 @@ import sys
 import os
 import argparse
 import json
+from shlex import quote
 from glob import glob
 from queue import SimpleQueue
 from threading import Thread
@@ -162,10 +163,6 @@ def main(argv):
     for i, step in enumerate(pipeline['filters']):
         filter_definition = FILTERS[step['filter']]
         
-        filter_env = os.environ.copy()
-        for name, props in filter_definition['parameters'].items():
-            filter_env[name] = encode_env(props['type'], step['parameters'][name])
-
         if filter_definition['type'] == 'bilingual':
             command = filter_definition['command']
         elif filter_definition['type'] == 'monolingual':
@@ -174,13 +171,22 @@ def main(argv):
         else:
             raise NotImplementedError()
 
+        # List of k=v shell variable definitions
+        filter_params = [
+            '{}={}'.format(name, quote(encode_env(props['type'], step['parameters'][name])))
+            for name, props in filter_definition['parameters'].items()    
+        ]
+
+        # Command, prefixed by variable definitions so they get expanded
+        # correctly in the command bit.
+        command_str = ';'.join(filter_params + [command])
+
         is_last_step = i + 1 == len(pipeline['filters'])
 
-        child = Popen(command,
+        child = Popen(command_str,
             stdin=args.input if len(children) == 0 else children[-1].stdout,
             stdout=args.output if is_last_step else PIPE,
             stderr=PIPE,
-            env=filter_env,
             cwd=filter_definition['basedir'],
             shell=True)
 

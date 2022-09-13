@@ -84,7 +84,7 @@ def main(argv):
     parser.add_argument('--output', '-o', type=argparse.FileType('wb'), default=sys.stdout.buffer)
     parser.add_argument('--basedir', '-b', type=str, help='Directory to look for data files when -i is not used')
     parser.add_argument('pipeline', metavar='PIPELINE', type=argparse.FileType('r'))
-    parser.add_argument('languages', metavar='LANG', type=str, nargs=2)
+    parser.add_argument('languages', metavar='LANG', type=str, nargs='*')
 
     args = parser.parse_args(argv)
 
@@ -92,6 +92,9 @@ def main(argv):
     # which is the default save location for empty-train.
     if not args.basedir:
         args.basedir = os.path.dirname(args.pipeline.name)
+
+    if args.input is not None and not args.languages:
+        parser.error('When --input is specified, each colum\'s LANG has to be specified as well.')
 
     pipeline = json.load(args.pipeline)
 
@@ -120,6 +123,13 @@ def main(argv):
 
     # If we're not reading from stdin, read from files and paste them together
     if not args.input:
+        # Matches datasets.py:list_datasets(path)
+        languages = [
+            filename.rsplit('.', 2)[1]
+            for filename in pipeline['files']
+        ]
+
+        # Open `gzunip` for each language file
         for filename in pipeline['files']:
             child = Popen(
                 ['gzip', '-cd', filename],
@@ -133,6 +143,7 @@ def main(argv):
             thread.start()
             babysitters.append(thread)
 
+        # .. and a `paste` to combine them into columns
         child = Popen(
             ['paste'] + [f'/dev/fd/{child.stdout.fileno()}' for child in children],
             stdout=PIPE,
@@ -144,6 +155,8 @@ def main(argv):
         babysitters.append(thread)
 
         children.append(child)
+    else:
+        languages = args.languages
 
     # Start child processes, each reading the output from the previous sibling
     for i, step in enumerate(pipeline['filters']):
@@ -156,7 +169,7 @@ def main(argv):
         if filter_definition['type'] == 'bilingual':
             command = filter_definition['command']
         elif filter_definition['type'] == 'monolingual':
-            column = args.languages.index(step['language'])
+            column = languages.index(step['language'])
             command = f'{COL_PY} {column} {filter_definition["command"]}'
         else:
             raise NotImplementedError()

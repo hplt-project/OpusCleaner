@@ -81,19 +81,26 @@ class Encoder:
 
             return None
 
-        def replace(text, token) -> str:
-            """Replaces `token` in `text` with placeholder. In case we don't have enough placeholders left,
-               return the text unchanged.
-            """
+        def replace_one(token) -> str | None:
+            """Replaces one token with a placeholder, without going through the whole text.
+               returns none if we don't have an available token."""
             cur_replacement = None
             if token in replacements:
                 cur_replacement = replacements[token]
             elif len(my_placeholders) != 0:
                 cur_replacement = generate_random_placeholder()
                 replacements[token] = cur_replacement
+            return cur_replacement
+
+        def replace(text, token) -> str:
+            """Replaces `token` in `text` with placeholder. In case we don't have enough placeholders left,
+               return the text unchanged.
+            """
+            cur_replacement = replace_one(token)
             if cur_replacement is not None:
                 return re.sub(token, cur_replacement, text)
             return text # We don't have enough placeholders left so just don't encode
+
 
         # use regex rules
         for rule in self.rules:
@@ -102,9 +109,17 @@ class Encoder:
 
         # check for <unk>
         input_proto = self.sp.encode(inputline, out_type='immutable_proto')
+        inputline = ""
         for token_proto in input_proto.pieces:
             if token_proto.id == self.unk_id:
-                inputline = replace(inputline, token_proto.surface)
+                candidate = replace_one(token_proto.surface)
+                if candidate is not None:
+                    inputline = inputline + candidate
+                else:
+                    inputline = inputline + token_proto.surface
+            else:
+                inputline = inputline + token_proto.surface
+        inputline = inputline + '\n'
 
         return (inputline, dict((v, k) for k, v in replacements.items()))
 

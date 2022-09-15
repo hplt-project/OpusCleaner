@@ -17,6 +17,8 @@ import json
 import yaml
 from yaml.loader import SafeLoader
 
+import pexpect
+
 def parse_user_args():
     """Parse the arguments necessary for this filter"""
     parser = argparse.ArgumentParser(description="Feeds marian tsv data for training.")
@@ -26,29 +28,6 @@ def parse_user_args():
     return parser.parse_args()
 
 Stage = namedtuple('Stage', ['datasets', 'until_dataset', 'until_epoch'])
-
-@dataclass
-class Runner(threading.Thread):
-    '''This class takes some sort of script, writes to its stdin and reads its stdiout'''
-    def __init__(self, executable_path):
-        self.stdout = None
-        self.stderr = None
-        self.my_trainer = None
-        self.executable_path = executable_path
-        threading.Thread.__init__(self)
-
-    def run(self):
-        self.my_trainer = subprocess.Popen(self.executable_path,
-                             shell=False,
-                             stdout=subprocess.PIPE,
-                             stderr=subprocess.PIPE)
-
-        self.stdout, self.stderr = self.my_trainer.communicate()
-
-    def echo(self, myinput: List[str]) -> None:
-        '''Echoes input in'''
-        mylines = "\n".join(myinput)
-        self.my_trainer.stdin.write(mylines)
 
 
 @dataclass
@@ -66,7 +45,7 @@ class Executor:
             tmpdict[path.split('/')[-1]] = path
         self.dataset_paths = tmpdict
         self.stage_names = ymldata['stages']
-        self.trainer = ymldata['trainer']
+        self.trainer = pexpect.spawn(ymldata['trainer'])
         # Parse the individual training stages into convenient struct:
         self.stages = {}
         self.dataset_objects = {}
@@ -81,7 +60,7 @@ class Executor:
                 stagesdict[stagename] = weight
 
             _, until_stagename, termination_epoch = stageparse[-1].split()
-            mystage = Stage(stagesdict, until_stagename, termination_epoch)
+            mystage = Stage(stagesdict, until_stagename, float(termination_epoch))
             self.stages[stage] = mystage
 
         # Initialise the dataset filestreams. For now just do identity initialisation, do more later.
@@ -90,7 +69,9 @@ class Executor:
 
         # Start training
         for stage in self.stage_names:
+            print(stage)
             self.__init_stage__(self.stages[stage])
+            self.train_stage(self.stages[stage])
 
 
     def __init_stage__(self, stage): #@TODO make the stupid stage a full object so i can have proper attributes
@@ -99,11 +80,18 @@ class Executor:
             self.dataset_objects[dataset].set_weight(stage.datasets[dataset])
         self.dataset_objects[stage.until_dataset].set_max_epoch(stage.until_epoch)
 
-    def __init_runner__(self):
-        '''Initialises the runner process'''
     def train_stage(self, stage):
         '''Trains up to a training stage'''
-        return None
+        stop_training = False
+        while not stop_training:
+            batch = []
+            for dataset in stage.datasets:
+                epoch, lines = self.dataset_objects[dataset].get()
+                print(epoch, dataset, stage.until_dataset, stage.until_epoch, len(lines))
+                batch.extend(lines)
+                if dataset == stage.until_dataset and epoch >= stage.until_epoch:
+                    stop_training = True
+            self.trainer.writelines(batch)
 
 
 @dataclass
@@ -116,7 +104,7 @@ class Dataset:
             os.makedirs(tmpdir)
         # Vars
         self.orig = datapath
-        self.filename: str = datapath.split('/')[-1].shuf.start
+        self.filename: str = datapath.split('/')[-1]
         self.tmpdir = tmpdir
         self.seed = seed
         self.shufffile = self.tmpdir + "/" + self.filename + ".shuf"
@@ -170,7 +158,9 @@ class Dataset:
 
     def __shuffle__(self, inputfile, outputfile):
         try:
-            check_call(["shuf", "--random-source=" + self.rng, "-o", outputfile, inputfile])
+            #print(self.rng, outputfile, inputfile)
+            #check_call(["/usr/bin/shuf", "--random-source", self.rng, "-o", outputfile, inputfile])
+            check_call(["/usr/bin/shuf", "-o", outputfile, inputfile])
         except CalledProcessError as err:
             print("Error shuffling", inputfile, file=stderr)
             print(err.cmd, file=stderr)
@@ -195,17 +185,17 @@ class Dataset:
         return my_dataset
 
     def get(self) -> Tuple[int, List[str]]:
-        '''Gets the next N lines based on the weight of the dataset.
+        '''Gets the next N lines based on the weight of the dataset. It also reports which
+        epoch it is.
         When the dataset reaches its end, it automatically takes care of wrapping it'''
-        #@TODO report which epoch we are at
         myepoch = self.epoch
         retlist: List[str] = []
         try:
-            for _ in range(int(self.weight*100)):
+            for _ in range(int(self.weight*1000)):
                 retlist.append(next(self.filehandle))
         except StopIteration:
             # Update seed and re-shuffle the file UNLESS we have reached the max epoch
-            if self.max_epoch < self.epoch:
+            if self.epoch < self.max_epoch:
                 self.filehandle.close()
                 self.__ammend_seed__()
                 self.__shuffle__(self.orig, self.shufffile)
@@ -229,6 +219,4 @@ if __name__ == '__main__':
     mytmpdir = args.temporary_dir
     theseed = args.seed
 
-    with open(config, 'rt', encoding="utf-8") as f:
-        data = list(yaml.load_all(f, Loader=SafeLoader))
-        print(data)
+    executor = Executor(config, mytmpdir, theseed)

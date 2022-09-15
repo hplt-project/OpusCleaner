@@ -27,4 +27,4 @@ end:
   - dirty 0.3
   - until dirty inf
 
-trainer: /path/to/marian/runme.sh
+trainer: /home/dheart/uni_stuff/postdoc/empty-train/trainer/test.py

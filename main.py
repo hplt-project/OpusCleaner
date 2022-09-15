@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 import os
 import gzip
+from shlex import quote
 import sys
 import re
 from typing import Optional, Iterable, TypeVar, Union, Literal, Any, AsyncIterator, cast, IO, List, Dict, Tuple
 from contextlib import ExitStack
 from itertools import chain
-from pydantic import BaseModel, parse_obj_as, validator
+from pydantic import BaseModel, parse_obj_as, validator, ValidationError
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse, StreamingResponse, HTMLResponse
@@ -29,6 +30,9 @@ from pprint import pprint
 
 from datasets import list_datasets, Path
 from sample import sample
+
+import mimetypes
+mimetypes.add_type('application/javascript', '.js')
 
 
 DATA_PATH = os.getenv('DATA_PATH', 'data/train-parts/*.*.gz')
@@ -113,6 +117,13 @@ class Filter(BaseModel):
     basedir: Optional[str] # same as .json file by default
     parameters: Dict[str,FilterParameter]
 
+    @validator('parameters')
+    def check_keys(cls, parameters):
+        for var_name in parameters.keys():
+            if not re.match(r"^[a-zA-Z_][a-zA-Z_0-9]*$", var_name):
+                raise ValueError(f"Parameter name is not a valid bash variable: {var_name}")
+        return parameters
+
 
 class FilterStep(BaseModel):
     filter: str
@@ -144,6 +155,12 @@ class FilterStep(BaseModel):
             elif FILTERS[values['filter']].type == FilterType.MONOLINGUAL and language is None:
                 raise ValueError('`language` attribute required for a monolingual filter')
         return language
+
+
+class FilterPipeline(BaseModel):
+    version: Literal[1]
+    files: List[str]
+    filters: List[FilterStep]
 
 
 def list_filters(path) -> Iterable[Filter]:
@@ -264,10 +281,6 @@ async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[Filter
     for i, filter_step in enumerate(filters):
         filter_definition = FILTERS[filter_step.filter]
 
-        filter_env = os.environ.copy()
-        for name, props in filter_definition.parameters.items():
-            filter_env[name] = props.export(filter_step.parameters[name])
-
         if filter_definition.type == FilterType.BILINGUAL:
             command = filter_definition.command
         elif filter_definition.type == FilterType.MONOLINGUAL:
@@ -276,11 +289,17 @@ async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[Filter
         else:
             raise NotImplementedError()
 
+        params = {name: props.export(filter_step.parameters[name])
+                  for name, props in filter_definition.parameters.items()}
+
+        if params:
+            vars_setter = '; '.join(f"{k}={quote(v)}" for k, v in params.items())
+            command = f'{vars_setter}; {command}'
+
         p_filter = await asyncio.create_subprocess_shell(command,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            env=filter_env,
             cwd=filter_definition.basedir)
 
         # Check exit codes, testing most obvious problems first.
@@ -305,33 +324,9 @@ def stream_jsonl(iterable):
         media_type='application/json')
 
 
-class JSFiles(StaticFiles):
-    """Like StaticFiles, but if you try to access "thingy", and "thingy.js"
-    exists, it will redirect to that one. Just like unpkg.com!"""
-
-    async def get_response(self, path: str, scope: Scope) -> Response:
-        # Check if file exists
-        full_path_js, stat_result = await anyio.to_thread.run_sync(self.lookup_path, path)
-
-        # if not, and it isn't already suffixed with .js, try that
-        if not stat_result and not path.endswith('.js'):
-            full_path_js, stat_result = await anyio.to_thread.run_sync(self.lookup_path, path + ".js")
-            if stat_result:
-                url = URL(scope=scope)
-                url = url.replace(path=url.path + ".js")
-                return RedirectResponse(url=url)
-
-        return await super().get_response(path, scope)
-
-
 app = FastAPI()
 
-app.mount('/static/vendor', JSFiles(directory='static/vendor'), name='static/vendor')
-
-app.mount('/static', StaticFiles(directory='static'), name='static')
-
-
-@app.get('/datasets/')
+@app.get('/api/datasets/')
 def api_list_datasets() -> List[Dataset]:
     return [
         Dataset(name=name, columns={
@@ -342,7 +337,7 @@ def api_list_datasets() -> List[Dataset]:
     ]
 
 
-@app.get('/datasets/{name:path}/')
+@app.get('/api/datasets/{name:path}/')
 def api_get_dataset(name:str) -> Dataset:
     columns = list_datasets(DATA_PATH).get(name)
 
@@ -355,32 +350,48 @@ def api_get_dataset(name:str) -> Dataset:
     })
 
 
-@app.get('/datasets/{name:path}/sample')
+@app.get('/api/datasets/{name:path}/sample')
 async def api_get_sample(name:str) -> AsyncIterator[FilterOutput]:
     return stream_jsonl(get_sample(name, []))
 
 
-@app.post('/datasets/{name:path}/sample')
+@app.post('/api/datasets/{name:path}/sample')
 async def api_get_filtered_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[FilterOutput]:
     return stream_jsonl(get_sample(name, filters))
 
 
-@app.get('/datasets/{name:path}/configuration.json')
+@app.get('/api/datasets/{name:path}/configuration.json')
 def api_get_dataset_filters(name:str) -> List[FilterStep]:
     if not os.path.exists(filter_configuration_path(name)):
         return []
 
     with open(filter_configuration_path(name), 'r') as fh:
-        return parse_obj_as(List[FilterStep], json.load(fh))
+        data = json.load(fh)
+        try:
+            return parse_obj_as(FilterPipeline, data).filters
+        except ValidationError:
+            # Backwards compatibility
+            return parse_obj_as(List[FilterStep], data)
 
 
-@app.post('/datasets/{name:path}/configuration.json')
+@app.post('/api/datasets/{name:path}/configuration.json')
 def api_update_dataset_filters(name:str, filters:List[FilterStep]):
+    columns = list_datasets(DATA_PATH)[name]
+
+    pipeline = FilterPipeline(
+        version=1,
+        files=[file.name
+            for _, file in
+            sorted(columns.items(), key=lambda pair: pair[0])
+        ],
+        filters=filters
+    )
+
     with open(filter_configuration_path(name), 'w') as fh:
-        return json.dump([step.dict() for step in filters], fh)
+        return json.dump(pipeline.dict(), fh, indent=2)
 
 
-@app.get('/filters/')
+@app.get('/api/filters/')
 def api_get_filters():
     reload_filters()
     return FILTERS
@@ -388,12 +399,15 @@ def api_get_filters():
 
 @app.get('/')
 def redirect_to_interface():
-    return RedirectResponse('/static/index.html')
+    return RedirectResponse('/frontend/index.html')
+
+
+app.mount('/frontend/', StaticFiles(directory='frontend/dist', html=True), name='static')
 
 
 def main_serve(args):
     import uvicorn
-    uvicorn.run('main:app', port=args.port, reload=args.reload, log_level='info')
+    uvicorn.run(f'main:app', port=args.port, reload=args.reload, log_level='info')
 
 
 async def sample_all_datasets(args):

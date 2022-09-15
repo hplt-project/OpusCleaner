@@ -46,6 +46,7 @@ class Executor:
         self.dataset_paths = tmpdict
         self.stage_names = ymldata['stages']
         self.trainer = pexpect.spawn(ymldata['trainer'])
+        self.trainer.delaybeforesend = None
         # Parse the individual training stages into convenient struct:
         self.stages = {}
         self.dataset_objects = {}
@@ -78,6 +79,8 @@ class Executor:
         '''Init a certain stage of the training'''
         for dataset in stage.datasets.keys():
             self.dataset_objects[dataset].set_weight(stage.datasets[dataset])
+            self.dataset_objects[dataset].set_max_epoch(inf)
+            self.dataset_objects[dataset].reset_epoch()
         self.dataset_objects[stage.until_dataset].set_max_epoch(stage.until_epoch)
 
     def train_stage(self, stage):
@@ -191,7 +194,7 @@ class Dataset:
         myepoch = self.epoch
         retlist: List[str] = []
         try:
-            for _ in range(int(self.weight*1000)):
+            for _ in range(int(self.weight*100)):
                 retlist.append(next(self.filehandle))
         except StopIteration:
             # Update seed and re-shuffle the file UNLESS we have reached the max epoch

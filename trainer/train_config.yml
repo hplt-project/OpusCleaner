@@ -25,6 +25,6 @@ end:
   - clean 0.4
   - medium 0.3
   - dirty 0.3
-  - until dirty inf
+  - until dirty 5
 
 trainer: /home/dheart/uni_stuff/postdoc/empty-train/trainer/test.py

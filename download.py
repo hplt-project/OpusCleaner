@@ -14,7 +14,7 @@ from mtdata.index import Index, get_entries
 from mtdata.iso.bcp47 import bcp47, BCP47Tag
 
 
-datasets = {str(entry.did): entry for entry in get_entries()}
+#datasets = {str(entry.did): entry for entry in get_entries()}
 
 
 app = FastAPI()
@@ -28,19 +28,19 @@ class Entry(BaseModel):
     langs: List[str]
 
 
-@app.get("/datasets/by-language")
-@app.get("/datasets/by-language/{lang1}")
-def list_languages(lang1:str = None) -> Iterable[str]:
-    langs: set[str] = set()
-    filter_lang = bcp47(lang1) if lang1 is not None else None
-    for entry in Index.get_instance().get_entries():
-        if filter_lang is not None and filter_lang not in entry.did.langs:
-            continue
-        langs.update(*entry.did.langs)
-    return sorted(lang for lang in langs if lang is not None)
+#@app.get("/by-language")
+#@app.get("/by-language/{lang1}")
+#def list_languages(lang1:str = None) -> Iterable[str]:
+#    langs: set[str] = set()
+#    filter_lang = bcp47(lang1) if lang1 is not None else None
+#    for entry in Index.get_instance().get_entries():
+#        if filter_lang is not None and filter_lang not in entry.did.langs:
+#            continue
+#        langs.update(*entry.did.langs)
+#    return sorted(lang for lang in langs if lang is not None)
 
 
-@app.get("/datasets/by-language/{langs}")
+@app.get("/by-language/{langs}")
 def list_datasets(langs:str) -> Iterable[Entry]:
     return (
         Entry(
@@ -86,14 +86,14 @@ def get_datasets(datasets: Iterable[Entry], path: str, num_threads: int=2) -> No
         _, _ = wait(futures)
 
 
-@app.get("/datasets/{did}")
-def read_dataset(did: str):
-    return datasets[did].did
+#@app.get("/datasets/{did}")
+#def read_dataset(did: str):
+#    return datasets[did].did
 
 
-@app.get("/datasets/{did}/sample")
-def read_dataset(did: str):
-    return datasets[did].did
+#@app.get("/datasets/{did}/sample")
+#def read_dataset(did: str):
+#    return datasets[did].did
 
 def test() -> None:
     """Tests downloading all eng-bul datasests with a threadpool of subprocess calls"""

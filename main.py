@@ -29,6 +29,7 @@ from pprint import pprint
 
 
 from datasets import list_datasets, Path
+from download import app as download_app
 from sample import sample
 
 import mimetypes
@@ -382,6 +383,7 @@ def redirect_to_interface():
 
 app.mount('/frontend/', StaticFiles(directory='frontend/dist', html=True), name='static')
 
+app.mount('/download/', download_app)
 
 def main_serve(args):
     import uvicorn

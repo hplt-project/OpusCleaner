@@ -30,3 +30,4 @@ coverage
 /data
 *__pycache__*
 .env
+placeholders/mappings.yml

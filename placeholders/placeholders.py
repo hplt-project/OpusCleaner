@@ -39,6 +39,9 @@ class Configuration:
         self.placeholders = [self.placeholder_symbol + str(i) for i in range(self.num_placeholders)]
 
         # Add a rule that escapes patterns that look like a placeholder already
+        # TODO: this will match placeholders we can't reach because `num_placeholders` might be smaller
+        # causing us to replace placeholders that will never be produced by us, and draining our
+        # available placeholders.
         self.rules.append(Rule(pattern=re.escape(self.placeholder_symbol) + r'\d+'))
 
         # During encoding assert that we have vocab

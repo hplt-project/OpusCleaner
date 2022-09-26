@@ -14,7 +14,7 @@ import yaml
 parser = argparse.ArgumentParser()
 parser.add_argument('-c', '--config', type=str, help='Path to yaml configuration file, required for encoding')
 parser.add_argument('-m', '--mappings_file', type=str, default="mappings.yml", help='Path to the mappings, one yaml entry per line.')
-parser.add_argument('-s', '--seed', type=int, default=None, help='Seed for random number generator. Use `-` for sequential numbering.')
+parser.add_argument('-s', '--seed', type=int, default=None, help='Seed for random number generator.')
 mutex_group_1 = parser.add_mutually_exclusive_group(required=True)
 mutex_group_1.add_argument('--decode', action='store_true')
 mutex_group_1.add_argument('--encode', action='store_true')

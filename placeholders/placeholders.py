@@ -41,7 +41,9 @@ class Configuration:
         # Add a rule that escapes patterns that look like a placeholder already
         # TODO: this will match placeholders we can't reach because `num_placeholders` might be smaller
         # causing us to replace placeholders that will never be produced by us, and draining our
-        # available placeholders.
+        # available placeholders. This will only ever happen when the placeholder symbol itself is in the
+        # text we are trying to encode. We don't expect this to happen otherwise, but we have a testcase
+        # for it in our example input.
         self.rules.append(Rule(pattern=re.escape(self.placeholder_symbol) + r'\d+'))
 
         # During encoding assert that we have vocab

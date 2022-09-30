@@ -371,7 +371,7 @@ export default {
 			</div>
 		</div>
 
-		<div class="filters" translate="no">
+		<div class="filters display-separately" translate="no">
 			<draggable tag="ul" class="available-filters"
 				v-model="filters" item-key="name"
 				v-bind:group="{name:'filters', pull:'clone', put:false}"
@@ -549,6 +549,23 @@ export default {
 	flex: 1 0 auto;
 	border-top: 1px solid #ccc;
 	overflow-y: auto;
+}
+
+.filters.display-separately {
+	flex-direction: row-reverse;
+	flex: 0 0 600px;
+	overflow: hidden;
+	border: 0;
+}
+
+.filters.display-separately .available-filters,
+.filters.display-separately .filter-steps {
+	flex: 0 0 50%;
+	overflow: hidden;
+	overflow-y: auto;
+	box-sizing: border-box;
+	border: 0;
+	border-left: 1px solid #ccc;
 }
 
 .filter {

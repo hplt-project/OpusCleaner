@@ -306,6 +306,14 @@ export default {
 		filterRequiresLanguage(filterStep) {
 			return this.filterDefinition(filterStep).type == 'monolingual';
 		},
+		getLoadingStage(index) {
+			if (this.samples.length === index + 1) // `+1` because first of samples is the raw sample)
+				return 'loading';
+			else if (this.samples.length >= index + 1)
+				return 'loaded';
+			else
+				return 'pending';
+		},
 		stamp,
 		formatNumberSuffix,
 	}
@@ -392,7 +400,7 @@ export default {
 				v-bind:multi-drag="true"
 				v-bind:multi-drag-key="multiDragKey">
 				<template v-slot:header>
-					<li class="property-list">
+					<li class="property-list" :class="{[getLoadingStage(-1)]: true}">
 						<header>
 							<span>Sample</span>
 						</header>
@@ -403,7 +411,7 @@ export default {
 					</li>
 				</template>
 				<template v-slot:item="{element:filterStep, index:i}">
-					<li class="property-list">
+					<li class="property-list" :class="{[getLoadingStage(i)]: true}">
 						<header>
 							<span>{{ filterStep.filter }}</span>
 							<button v-on:click="removeFilterStep(i)">Remove</button>
@@ -537,8 +545,8 @@ export default {
 	display: flex;
 	flex-direction: column;
 	flex: 0 0 300px;
-	border-left: 1px solid #ccc;
 	overflow: auto;
+	border-left: 1px solid #ccc;
 }
 
 .available-filters {
@@ -606,6 +614,23 @@ export default {
 	border-right: 1em solid transparent;
 	position: absolute;
 	left: calc(50% - 1em);
+}
+
+.filter-steps .property-list > header > span::after {
+	content: '';
+	float: right;
+}
+
+.filter-steps .property-list.loaded > header > span::after {
+	content: 'Loaded';
+}
+
+.filter-steps .property-list.loading > header > span::after {
+	content: 'Loading';
+}
+
+.filter-steps .property-list.pending > header > span::after {
+	content: 'Pending';
 }
 
 .controls, .available-filters, .filter-steps {

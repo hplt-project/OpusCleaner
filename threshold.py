@@ -22,11 +22,12 @@ class Entry:
 	__slots__ = ['score']
 	score: Optional[float]
 
-	def __init__(self, score: Optional[float]):
+	def __init__(self, score: Optional[float] = None):
 		self.score = score
 
 
 class Cache:
+	"""Just a subset of dict[] really!"""
 	def __init__(self):
 		self.entries = {}
 
@@ -47,6 +48,7 @@ class Cache:
 
 
 class PersistentEntry:
+	"""Mimics Entry(), but with a setter that updates the persistent cache."""
 	__slots__ = ['cache', 'key', '_score']
 
 	def __init__(self, cache, key: int, score: Optional[float] = None):
@@ -65,10 +67,13 @@ class PersistentEntry:
 
 
 class PersistentCache(Cache):
+	"""Similar to Cache, but will also look at the database file that's on disk
+	when queried for known entries.
+	"""
 	__slots__ = ['entries', 'db', '_backing']
 
 	def __init__(self, path: str):
-		self.db = dbm.open(path, 'cf')
+		self.db = dbm.open(path, 'cfu') # create, fast, unlocked (TODO unlocked?!)
 		self.entries: Dict[int,PersistentEntry] = {}
 
 	def __enter__(self):
@@ -178,6 +183,7 @@ def threshold_scores(queue, fchild, fout, threshold):
 
 
 def open_cache(path: Optional[str]) -> Cache:
+	"""Instantiates a cache type based on the path (or None) given."""
 	if path:
 		return PersistentCache(path)
 	else:
@@ -195,7 +201,8 @@ try:
 	# i.e. not all sentences could be scored by just the cache. I'm tempted to
 	# add yet another wrapper program that only starts the process once input
 	# is readable from stdin and then just re-attaches stdin to the child? Bit
-	# like how inetd works.
+	# like how inetd works. Or should this be a task for the downstream scorer
+	# i.e. only load the model once input is received?
 	child = Popen(args.scorer + scorer_args, stdin=PIPE, stdout=PIPE)
 
 	queue = SimpleQueue() # type: SimpleQueue[tuple[bytes,Entry]]

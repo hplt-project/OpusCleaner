@@ -4,6 +4,7 @@ import os
 import signal
 import argparse
 import pickle
+import dbm
 from pyhash import murmur3_32
 from traceback import print_exc
 from subprocess import Popen, PIPE
@@ -11,6 +12,7 @@ from threading import Thread
 from queue import SimpleQueue
 from typing import Callable, Optional, Type, TypeVar, Dict
 from functools import wraps
+import struct
 
 
 class Entry:
@@ -20,8 +22,85 @@ class Entry:
 	__slots__ = ['score']
 	score: Optional[float]
 
+	def __init__(self, score: Optional[float]):
+		self.score = score
+
+
+class Cache:
 	def __init__(self):
-		self.score = None
+		self.entries = {}
+
+	def __contains__(self, key: int) -> bool:
+		return key in self.entries
+	
+	def __getitem__(self, key: int) -> Entry:
+		return self.entries[key]
+
+	def __setitem__(self, key: int, value: Entry):
+		self.entries[key] = value
+
+	def __enter__(self):
+		return self
+
+	def __exit__(self, *args):
+		return
+
+
+class PersistentEntry:
+	__slots__ = ['cache', 'key', '_score']
+
+	def __init__(self, cache, key: int, score: Optional[float] = None):
+		self.cache = cache
+		self.key = key
+		self._score = score
+
+	@property
+	def score(self):
+		return self._score
+
+	@score.setter
+	def score(self, score):
+		self._score = score
+		self.cache._write(self.key, score)
+
+
+class PersistentCache(Cache):
+	__slots__ = ['entries', 'db', '_backing']
+
+	def __init__(self, path: str):
+		self.db = dbm.open(path, 'cf')
+		self.entries: Dict[int,PersistentEntry] = {}
+
+	def __enter__(self):
+		self._backing = self.db.__enter__()
+		return self
+
+	def __exit__(self, *args):
+		self._backing.__exit__(*args)
+
+	def __contains__(self, key: int):
+		return key in self.entries or self._key(key) in self._backing
+
+	def __getitem__(self, key: int) -> PersistentEntry:
+		if key not in self.entries:
+			score = self._decode(self._backing[self._key(key)])
+			self.entries[key] = PersistentEntry(self, key, score)
+		return self.entries[key]
+
+	def __setitem__(self, key: int, value: Entry):
+		self.entries[key] = PersistentEntry(self, key, value.score)
+
+	def _write(self, key: int, value: float):
+		self._backing[self._key(key)] = self._encode(value)
+
+	def _key(self, key: int) -> bytes:
+		return struct.pack('<L', key)
+
+	def _encode(self, value: float) -> bytes:
+		return struct.pack('<f', value)
+
+	def _decode(self, data: bytes) -> float:
+		return struct.unpack('<f', data)[0]
 
 
 T = TypeVar("T")
@@ -97,6 +176,13 @@ def threshold_scores(queue, fchild, fout, threshold):
 	# should at this point return EOF since its stdin is already closed.
 	fout.close()
 
+
+def open_cache(path: Optional[str]) -> Cache:
+	if path:
+		return PersistentCache(path)
+	else:
+		return Cache()
+
 try:
 	parser = argparse.ArgumentParser()
 	parser.add_argument('--cache', '-c', type=str)
@@ -112,38 +198,26 @@ try:
 	# like how inetd works.
 	child = Popen(args.scorer + scorer_args, stdin=PIPE, stdout=PIPE)
 
-	cache: Dict[int,Entry] = dict()
-
 	queue = SimpleQueue() # type: SimpleQueue[tuple[bytes,Entry]]
 
-	if args.cache and os.path.exists(args.cache):
-		with open(args.cache, 'rb') as fin:
-			cache = pickle.load(fin)
+	with open_cache(args.cache) as cache:
+		# Reads stdin, writes it to queue, and possibly to child for scoring.
+		feeder = Thread(target=exit_on_throw(feed_child), args=[queue, sys.stdin.buffer, child.stdin, cache])
+		feeder.start()
 
-	# Reads stdin, writes it to queue, and possibly to child for scoring.
-	feeder = Thread(target=exit_on_throw(feed_child), args=[queue, sys.stdin.buffer, child.stdin, cache])
-	feeder.start()
+		# Reads queue, writes to stdout, reading scores from child if necessary.
+		consumer = Thread(target=exit_on_throw(threshold_scores), args=[queue, child.stdout, sys.stdout.buffer, args.threshold])
+		consumer.start()
 
-	# Reads queue, writes to stdout, reading scores from child if necessary.
-	consumer = Thread(target=exit_on_throw(threshold_scores), args=[queue, child.stdout, sys.stdout.buffer, args.threshold])
-	consumer.start()
+		# Feeder will be done at this point
+		feeder.join()
 
-	# Feeder will be done at this point
-	feeder.join()
+		# Consumer will be done once it read the last None from the queue.
+		consumer.join()
 
-	# Consumer will be done once it read the last None from the queue.
-	consumer.join()
-
-	# Feeder will close child.stdin when all input is processed, which should
-	# cause child to terminate.
-	retval = child.wait()
-
-	# Save cache to disk for the next call
-	# (TODO: file lock?)
-	# TODO: make cache dependant on child cli args!
-	if args.cache:
-		with open(args.cache, 'wb') as fout:
-			pickle.dump(cache, fout)
+		# Feeder will close child.stdin when all input is processed, which should
+		# cause child to terminate.
+		retval = child.wait()
 
 	sys.exit(retval)
 except SystemExit:

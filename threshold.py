@@ -156,16 +156,21 @@ def feed_child(queue, fin, fchild, cache):
 	"""
 	derive_key = lambda val: xxh32(val).digest()
 
-	for line in fin:
-		key = derive_key(line)
-		# if key not in cache, we've never seen the sentence
-		if key not in cache:
-			fchild.write(line)
-			cache[key] = Entry()
+	try:
+		for line in fin:
+			key = derive_key(line)
+			# if key not in cache, we've never seen the sentence
+			if key not in cache:
+				fchild.write(line)
+				cache[key] = Entry()
 
-		queue.put((line, cache[key]))
-	queue.put(None) # End indicator
-	fchild.close()
+			queue.put((line, cache[key]))
+		fchild.close()
+	except BrokenPipeError:
+		pass
+	finally:
+		queue.put(None) # End indicator
+		fin.close()
 
 
 def threshold_scores(queue, fchild, fout, threshold, operator):
@@ -174,28 +179,33 @@ def threshold_scores(queue, fchild, fout, threshold, operator):
 	`fchild`. Because this is the only thread reading & writing to Entry objects
 	no locks are necessary.
 	"""
-	while True:
-		item = queue.get()
+	try:
+		while True:
+			item = queue.get()
 
-		# Poison
-		if item is None:
-			break
+			# Poison
+			if item is None:
+				break
 
-		# If no score yet, get it from the child
-		if item[1].score is None:
-			item[1].score = float(fchild.readline())
+			# If no score yet, get it from the child
+			if item[1].score is None:
+				item[1].score = float(fchild.readline())
 
-		# If no threshold is specified, print everything and prefix it with the score
-		if threshold is None:
-			fout.write(str(item[1].score).encode() + b'\t' + item[0])
+			# If no threshold is specified, print everything and prefix it with the score
+			if threshold is None:
+				fout.write(str(item[1].score).encode() + b'\t' + item[0])
+			
+			# Otherwise only print the actual line if threshold is met
+			elif operator(item[1].score, threshold):
+				fout.write(item[0])
 		
-		# Otherwise only print the actual line if threshold is met
-		elif operator(item[1].score, threshold):
-			fout.write(item[0])
-	
-	# TODO: test somehow that child has stopped producing? Reading from `fchild`
-	# should at this point return EOF since its stdin is already closed.
-	fout.close()
+		# TODO: test somehow that child has stopped producing? Reading from `fchild`
+		# should at this point return EOF since its stdin is already closed.
+		fout.close()
+	except BrokenPipeError:
+		pass
+	finally:
+		fchild.close()
 
 
 def open_cache(path: Optional[str]) -> Cache:
@@ -207,29 +217,29 @@ def open_cache(path: Optional[str]) -> Cache:
 
 
 if __name__ == '__main__':
+	parser = argparse.ArgumentParser(description=__doc__)
+	parser.add_argument('threshold', type=float, help='Threshold (b) to compare score to.')
+	parser.add_argument('scorer', type=str, nargs='+', help='Scorer program (a) and arguments.')
+	parser.add_argument('--cache', '-c', type=str, help='Path to cache database.')
+	
+	ops = parser.add_mutually_exclusive_group()
+	ops.set_defaults(operator=operator.ge) # default to --ge
+	for name in ['lt', 'le', 'eq', 'ne', 'ge', 'gt']:
+		ops.add_argument(f'--{name}', dest='operator', action='store_const', const=getattr(operator, name), help=getattr(operator, name).__doc__)
+
+	args, scorer_args = parser.parse_known_args()
+
+	# TODO: Make this Popen call only necessary if there was any need for it,
+	# i.e. not all sentences could be scored by just the cache. I'm tempted to
+	# add yet another wrapper program that only starts the process once input
+	# is readable from stdin and then just re-attaches stdin to the child? Bit
+	# like how inetd works. Or should this be a task for the downstream scorer
+	# i.e. only load the model once input is received?
+	child = Popen(args.scorer + scorer_args, stdin=PIPE, stdout=PIPE)
+
+	queue = SimpleQueue() # type: SimpleQueue[tuple[bytes,Entry]]
+
 	try:
-		parser = argparse.ArgumentParser(description=__doc__)
-		parser.add_argument('threshold', type=float, help='Threshold (b) to compare score to.')
-		parser.add_argument('scorer', type=str, nargs='+', help='Scorer program (a) and arguments.')
-		parser.add_argument('--cache', '-c', type=str, help='Path to cache database.')
-		
-		ops = parser.add_mutually_exclusive_group()
-		ops.set_defaults(operator=operator.ge) # default to --ge
-		for name in ['lt', 'le', 'eq', 'ne', 'ge', 'gt']:
-			ops.add_argument(f'--{name}', dest='operator', action='store_const', const=getattr(operator, name), help=getattr(operator, name).__doc__)
-
-		args, scorer_args = parser.parse_known_args()
-
-		# TODO: Make this Popen call only necessary if there was any need for it,
-		# i.e. not all sentences could be scored by just the cache. I'm tempted to
-		# add yet another wrapper program that only starts the process once input
-		# is readable from stdin and then just re-attaches stdin to the child? Bit
-		# like how inetd works. Or should this be a task for the downstream scorer
-		# i.e. only load the model once input is received?
-		child = Popen(args.scorer + scorer_args, stdin=PIPE, stdout=PIPE)
-
-		queue = SimpleQueue() # type: SimpleQueue[tuple[bytes,Entry]]
-
 		with open_cache(args.cache) as cache:
 			# Reads stdin, writes it to queue, and possibly to child for scoring.
 			feeder = Thread(target=exit_on_throw(feed_child), args=[queue, sys.stdin.buffer, child.stdin, cache])
@@ -247,14 +257,9 @@ if __name__ == '__main__':
 
 			# Feeder will close child.stdin when all input is processed, which should
 			# cause child to terminate.
-			retval = child.wait()
-
-		sys.exit(retval)
-	except SystemExit:
-		pass
-	except FileNotFoundError as e:
-		print(e, file=sys.stderr)
-		sys.exit(2)
 	except:
-		print_exc(file=sys.stderr)
-		sys.exit(127)
+		none_throws(child.stdin).close()
+	finally:
+		sys.stderr.close()
+		retval = child.wait()
+		sys.exit(retval)

@@ -8,12 +8,13 @@ import sys
 import os
 import argparse
 import json
+import signal
 from shlex import quote
 from glob import glob
 from queue import SimpleQueue
 from threading import Thread
 from subprocess import Popen, PIPE
-from typing import List, Tuple, Any, BinaryIO, Optional, TypeVar, Iterable
+from typing import List, Any, BinaryIO, Optional, TypeVar, Iterable
 
 
 COL_PY = os.path.join(os.path.dirname(__file__), 'col.py')
@@ -50,7 +51,7 @@ def list_filters(path: str) -> Iterable[dict]:
             print(f"Could not parse {filename}: {e}", file=sys.stderr)
 
 
-def babysit_child(child: Popen, name: str, print_queue: SimpleQueue, ctrl_queue: SimpleQueue):
+def babysit_child(n: int, child: Popen, name: str, print_queue: SimpleQueue, ctrl_queue: SimpleQueue):
     """Thread that looks after a child process and passes (and prefixes) all of
     its stderr to a queue. It will tell the parent thread about the end of the
     child through the ctrl_queue.
@@ -64,7 +65,7 @@ def babysit_child(child: Popen, name: str, print_queue: SimpleQueue, ctrl_queue:
 
     print_queue.put(f'[run.py] {name} exited with status code {child.returncode}\n'.encode())
 
-    ctrl_queue.put(child.returncode)
+    ctrl_queue.put((n, child.returncode))
 
 
 def print_lines(queue: SimpleQueue, fout: BinaryIO):
@@ -118,13 +119,20 @@ def main(argv):
     # List of threads that watch each child process, one for each child
     babysitters: List[Thread] = []
 
+    def babysit(child: Popen, name: str):
+        n = len(children)
+        thread = Thread(target=babysit_child, args=[n, child, name, print_queue, ctrl_queue])
+        thread.start()
+        babysitters.append(thread)
+        children.append(child)
+
     # Queue filled by the babysitters with the stderr of the children, consumed
     # by `print_lines()` to prevent racing on stderr.
     print_queue = SimpleQueue() # type: SimpleQueue[Optional[bytes]]
 
     # Queue filled by the babysitters with the return code of each of the
     # children. Used by the main thread to catch errors in the pipeline.
-    ctrl_queue = SimpleQueue() # type: SimpleQueue[int]
+    ctrl_queue = SimpleQueue() # type: SimpleQueue[tuple[int, int]]
 
     # If we're not reading from stdin, read from files and paste them together
     if not args.input:
@@ -142,24 +150,21 @@ def main(argv):
                 stderr=PIPE,
                 cwd=args.basedir)
 
-            children.append(child)
-
-            thread = Thread(target=babysit_child, args=[child, f'gunzip {filename}', print_queue, ctrl_queue])
-            thread.start()
-            babysitters.append(thread)
+            babysit(child, f'gunzip {filename}')
 
         # .. and a `paste` to combine them into columns
         child = Popen(
-            ['paste'] + [f'/dev/fd/{child.stdout.fileno()}' for child in children],
+            ['paste'] + [f'/dev/fd/{none_throws(child.stdout).fileno()}' for child in children],
             stdout=PIPE,
             stderr=PIPE,
-            pass_fds=[child.stdout.fileno() for child in children])
+            pass_fds=[none_throws(child.stdout).fileno() for child in children])
 
-        thread = Thread(target=babysit_child, args=[child, 'paste', print_queue, ctrl_queue])
-        thread.start()
-        babysitters.append(thread)
+        babysit(child, 'paste')
 
-        children.append(child)
+        # Now that `paste` has inherited all the children, close our connection to them
+        for child in children[:-1]:
+            none_throws(child.stdout).close()
+
     else:
         languages = args.languages
 
@@ -199,33 +204,38 @@ def main(argv):
             cwd=filter_definition['basedir'],
             shell=True)
 
+        # Close our reference to the child, now taken over by the next child
+        if len(children) > 0:
+            none_throws(children[-1].stdout).close()
+
         print_queue.put(f'[run.py] step {i}: Executing {command_str}\n'.encode())
 
-        thread = Thread(target=babysit_child, args=[child, f'step {i}', print_queue, ctrl_queue])
-        thread.start()
-        babysitters.append(thread)
-
-        children.append(child)
+        babysit(child, f'step {i}')
 
     # Wait for the children to exit, and depending on their retval exit early
     running_children = len(children)
 
     try:
         while running_children > 0:
-            retval = ctrl_queue.get()
+            child_i, retval = ctrl_queue.get()
             running_children -= 1
 
+            # TODO: When Child N exits with exit code 0, kill all N-1 children
+            # as well and ignore their exit code. This happens with e.g.
+            # `head -n 10`.
+
             # Early exit when a process errored out
-            if retval != 0:
+            if retval not in (0, -signal.SIGPIPE):
                 break
     except KeyboardInterrupt:
         print('[run.py] KeyboardInterrupt', file=sys.stderr)
         pass
 
-    # Kill all the processes that are still alive
+    # Wait for all the processes that are still alive
     for child in children:
         if child.returncode is None:
-            child.kill()
+            print(f"Waiting for {child!r}", file=sys.stderr)
+            child.wait()
 
     # Wait for the babysitters to exit, which happens when their process stops
     for thread in babysitters:

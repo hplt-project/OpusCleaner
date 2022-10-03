@@ -231,10 +231,9 @@ def main(argv):
         print('[run.py] KeyboardInterrupt', file=sys.stderr)
         pass
 
-    # Wait for all the processes that are still alive
+    # Wait for all the processes to prevent zombies
     for child in children:
         if child.returncode is None:
-            print(f"Waiting for {child!r}", file=sys.stderr)
             child.wait()
 
     # Wait for the babysitters to exit, which happens when their process stops

@@ -40,7 +40,7 @@ def main():
 
     for batch in chunked(sys.stdin, args.batch_size):
         # TODO error checking of column count?
-        scores = _compute_similarity(laser, [line.split("\t") for line in batch], args.src_lang, args.tgt_lang)
+        scores = _compute_similarity(laser, [tuple(line.split("\t")[:2]) for line in batch], args.src_lang, args.tgt_lang)
 
         if args.scores:
             for score in scores:

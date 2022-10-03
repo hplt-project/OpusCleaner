@@ -1,16 +1,29 @@
 #!/usr/bin/env python3
+"""Compute score and optionally threshold and cache per line of input.
+
+It passes every line of input onto the scorer program (unless --cache is
+specified and the line is already in the cache) that generates a score. If
+--threshold is specified (optionally with an operator specified, default is 
+greater or equal, c.f. --ge) then the line is printed if the threshold is met.
+If no threshold is specified, the score is added as the first column to the
+output.
+
+Note on --cache: make sure that if you change the arguments to the scorer
+program, you also change the path to the cache. Otherwise you'll get scores
+from the scorer that was run with different arguments.
+"""
 import sys
 import os
 import signal
 import argparse
-import pickle
 import dbm
-from pyhash import murmur3_32
+import operator
+from xxhash import xxh32
 from traceback import print_exc
 from subprocess import Popen, PIPE
 from threading import Thread
 from queue import SimpleQueue
-from typing import Callable, Optional, Type, TypeVar, Dict
+from typing import Optional, TypeVar, Dict
 from functools import wraps
 import struct
 
@@ -31,13 +44,13 @@ class Cache:
 	def __init__(self):
 		self.entries = {}
 
-	def __contains__(self, key: int) -> bool:
+	def __contains__(self, key: bytes) -> bool:
 		return key in self.entries
 	
-	def __getitem__(self, key: int) -> Entry:
+	def __getitem__(self, key: bytes) -> Entry:
 		return self.entries[key]
 
-	def __setitem__(self, key: int, value: Entry):
+	def __setitem__(self, key: bytes, value: Entry):
 		self.entries[key] = value
 
 	def __enter__(self):
@@ -50,18 +63,20 @@ class Cache:
 class PersistentEntry:
 	"""Mimics Entry(), but with a setter that updates the persistent cache."""
 	__slots__ = ['cache', 'key', '_score']
+	cache: "PersistentCache"
+	key: bytes
 
-	def __init__(self, cache, key: int, score: Optional[float] = None):
+	def __init__(self, cache, key: bytes, score: Optional[float] = None):
 		self.cache = cache
 		self.key = key
 		self._score = score
 
 	@property
-	def score(self):
+	def score(self) -> Optional[float]:
 		return self._score
 
 	@score.setter
-	def score(self, score):
+	def score(self, score: float):
 		self._score = score
 		self.cache._write(self.key, score)
 
@@ -74,7 +89,7 @@ class PersistentCache(Cache):
 
 	def __init__(self, path: str):
 		self.db = dbm.open(path, 'cfu') # create, fast, unlocked (TODO unlocked?!)
-		self.entries: Dict[int,PersistentEntry] = {}
+		self.entries: Dict[bytes,PersistentEntry] = {}
 
 	def __enter__(self):
 		self._backing = self.db.__enter__()
@@ -83,23 +98,20 @@ class PersistentCache(Cache):
 	def __exit__(self, *args):
 		self._backing.__exit__(*args)
 
-	def __contains__(self, key: int):
-		return key in self.entries or self._key(key) in self._backing
+	def __contains__(self, key: bytes):
+		return key in self.entries or key in self._backing
 
-	def __getitem__(self, key: int) -> PersistentEntry:
+	def __getitem__(self, key: bytes) -> PersistentEntry:
 		if key not in self.entries:
-			score = self._decode(self._backing[self._key(key)])
+			score = self._decode(self._backing[key])
 			self.entries[key] = PersistentEntry(self, key, score)
 		return self.entries[key]
 
-	def __setitem__(self, key: int, value: Entry):
+	def __setitem__(self, key: bytes, value: Entry):
 		self.entries[key] = PersistentEntry(self, key, value.score)
 
-	def _write(self, key: int, value: float):
-		self._backing[self._key(key)] = self._encode(value)
-
-	def _key(self, key: int) -> bytes:
-		return struct.pack('<L', key)
+	def _write(self, key: bytes, value: float):
+		self._backing[key] = self._encode(value)
 
 	def _encode(self, value: float) -> bytes:
 		return struct.pack('<f', value)
@@ -142,7 +154,7 @@ def feed_child(queue, fin, fchild, cache):
 	the queue and the order of feeding fchild are the same, the
 	`threshold_scores` thread will know how to link them back together.
 	"""
-	derive_key = murmur3_32()
+	derive_key = lambda val: xxh32(val).digest()
 
 	for line in fin:
 		key = derive_key(line)
@@ -156,7 +168,7 @@ def feed_child(queue, fin, fchild, cache):
 	fchild.close()
 
 
-def threshold_scores(queue, fchild, fout, threshold):
+def threshold_scores(queue, fchild, fout, threshold, operator):
 	"""Thread that reads the queue and, depending on the threshold, will write
 	the line to output. It will also read any missing scores from the child
 	`fchild`. Because this is the only thread reading & writing to Entry objects
@@ -173,8 +185,12 @@ def threshold_scores(queue, fchild, fout, threshold):
 		if item[1].score is None:
 			item[1].score = float(fchild.readline())
 
-		# Only print the actual line if threshold is met
-		if item[1].score >= threshold:
+		# If no threshold is specified, print everything and prefix it with the score
+		if threshold is None:
+			fout.write(str(item[1].score).encode() + b'\t' + item[0])
+		
+		# Otherwise only print the actual line if threshold is met
+		elif operator(item[1].score, threshold):
 			fout.write(item[0])
 	
 	# TODO: test somehow that child has stopped producing? Reading from `fchild`
@@ -189,49 +205,56 @@ def open_cache(path: Optional[str]) -> Cache:
 	else:
 		return Cache()
 
-try:
-	parser = argparse.ArgumentParser()
-	parser.add_argument('--cache', '-c', type=str)
-	parser.add_argument('threshold', type=float)
-	parser.add_argument('scorer', type=str, nargs='+')
 
-	args, scorer_args = parser.parse_known_args()
+if __name__ == '__main__':
+	try:
+		parser = argparse.ArgumentParser(description=__doc__)
+		parser.add_argument('threshold', type=float, help='Threshold (b) to compare score to.')
+		parser.add_argument('scorer', type=str, nargs='+', help='Scorer program (a) and arguments.')
+		parser.add_argument('--cache', '-c', type=str, help='Path to cache database.')
+		
+		ops = parser.add_mutually_exclusive_group()
+		ops.set_defaults(operator=operator.ge) # default to --ge
+		for name in ['lt', 'le', 'eq', 'ne', 'ge', 'gt']:
+			ops.add_argument(f'--{name}', dest='operator', action='store_const', const=getattr(operator, name), help=getattr(operator, name).__doc__)
 
-	# TODO: Make this Popen call only necessary if there was any need for it,
-	# i.e. not all sentences could be scored by just the cache. I'm tempted to
-	# add yet another wrapper program that only starts the process once input
-	# is readable from stdin and then just re-attaches stdin to the child? Bit
-	# like how inetd works. Or should this be a task for the downstream scorer
-	# i.e. only load the model once input is received?
-	child = Popen(args.scorer + scorer_args, stdin=PIPE, stdout=PIPE)
+		args, scorer_args = parser.parse_known_args()
 
-	queue = SimpleQueue() # type: SimpleQueue[tuple[bytes,Entry]]
+		# TODO: Make this Popen call only necessary if there was any need for it,
+		# i.e. not all sentences could be scored by just the cache. I'm tempted to
+		# add yet another wrapper program that only starts the process once input
+		# is readable from stdin and then just re-attaches stdin to the child? Bit
+		# like how inetd works. Or should this be a task for the downstream scorer
+		# i.e. only load the model once input is received?
+		child = Popen(args.scorer + scorer_args, stdin=PIPE, stdout=PIPE)
 
-	with open_cache(args.cache) as cache:
-		# Reads stdin, writes it to queue, and possibly to child for scoring.
-		feeder = Thread(target=exit_on_throw(feed_child), args=[queue, sys.stdin.buffer, child.stdin, cache])
-		feeder.start()
+		queue = SimpleQueue() # type: SimpleQueue[tuple[bytes,Entry]]
 
-		# Reads queue, writes to stdout, reading scores from child if necessary.
-		consumer = Thread(target=exit_on_throw(threshold_scores), args=[queue, child.stdout, sys.stdout.buffer, args.threshold])
-		consumer.start()
+		with open_cache(args.cache) as cache:
+			# Reads stdin, writes it to queue, and possibly to child for scoring.
+			feeder = Thread(target=exit_on_throw(feed_child), args=[queue, sys.stdin.buffer, child.stdin, cache])
+			feeder.start()
 
-		# Feeder will be done at this point
-		feeder.join()
+			# Reads queue, writes to stdout, reading scores from child if necessary.
+			consumer = Thread(target=exit_on_throw(threshold_scores), args=[queue, child.stdout, sys.stdout.buffer, args.threshold, args.operator])
+			consumer.start()
 
-		# Consumer will be done once it read the last None from the queue.
-		consumer.join()
+			# Feeder will be done at this point
+			feeder.join()
 
-		# Feeder will close child.stdin when all input is processed, which should
-		# cause child to terminate.
-		retval = child.wait()
+			# Consumer will be done once it read the last None from the queue.
+			consumer.join()
 
-	sys.exit(retval)
-except SystemExit:
-	pass
-except FileNotFoundError as e:
-	print(e, file=sys.stderr)
-	sys.exit(2)
-except:
-	print_exc(file=sys.stderr)
-	sys.exit(127)
+			# Feeder will close child.stdin when all input is processed, which should
+			# cause child to terminate.
+			retval = child.wait()
+
+		sys.exit(retval)
+	except SystemExit:
+		pass
+	except FileNotFoundError as e:
+		print(e, file=sys.stderr)
+		sys.exit(2)
+	except:
+		print_exc(file=sys.stderr)
+		sys.exit(127)

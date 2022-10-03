@@ -616,21 +616,40 @@ export default {
 	left: calc(50% - 1em);
 }
 
+@keyframes spin { 
+    100% { 
+        -webkit-transform: rotate(360deg); 
+        transform:rotate(360deg); 
+    } 
+}
+
 .filter-steps .property-list > header > span::after {
+	position: absolute;
+	left: 0.5em;
 	content: '';
-	float: right;
+	width: 1em;
+	height: 1em;
+	border: 2px solid currentColor;
+	border-radius: 50%;
 }
 
 .filter-steps .property-list.loaded > header > span::after {
-	content: 'Loaded';
+	content: '✔';
+	line-height: 1.2;
+	text-indent: 0.1em;
 }
 
 .filter-steps .property-list.loading > header > span::after {
-	content: 'Loading';
+	border-right-color: transparent;
+	animation: spin 1s linear infinite;
 }
 
 .filter-steps .property-list.pending > header > span::after {
-	content: 'Pending';
+	border-style: dotted;
+}
+
+.filter-steps .property-list > header > span {
+	text-indent: 1.5em;
 }
 
 .controls, .available-filters, .filter-steps {

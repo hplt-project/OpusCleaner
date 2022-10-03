@@ -5,6 +5,7 @@ import {ref, computed, defineProps, watch, onMounted} from 'vue';
 import draggable from 'vuedraggable';
 import {diff} from '../diff.js';
 import InlineDiff from './InlineDiff.vue';
+import LoadingIndicator from './LoadingIndicator.vue';
 import {stream} from '../stream.js';
 
 // Simple hash function for creating string hashes
@@ -234,6 +235,7 @@ export default {
 	components: {
 		draggable,
 		InlineDiff,
+		LoadingIndicator
 	},
 
 	methods: {
@@ -309,6 +311,8 @@ export default {
 		getLoadingStage(index) {
 			if (this.samples.length === index + 1) // `+1` because first of samples is the raw sample)
 				return 'loading';
+			else if (this.samples.length >= index + 1 && this.samples[index + 1].stderr)
+				return 'failed';
 			else if (this.samples.length >= index + 1)
 				return 'loaded';
 			else
@@ -400,9 +404,10 @@ export default {
 				v-bind:multi-drag="true"
 				v-bind:multi-drag-key="multiDragKey">
 				<template v-slot:header>
-					<li class="property-list" :class="{[getLoadingStage(-1)]: true}">
+					<li class="property-list">
 						<header>
-							<span>Sample</span>
+							<LoadingIndicator class="loading-indicator" :state="getLoadingStage(-1)"/>
+							<span class="filter-name">Sample</span>
 						</header>
 						<footer>
 							<button v-on:click="selectedFilterStep=SampleStep">Show output</button>
@@ -411,9 +416,10 @@ export default {
 					</li>
 				</template>
 				<template v-slot:item="{element:filterStep, index:i}">
-					<li class="property-list" :class="{[getLoadingStage(i)]: true}">
+					<li class="property-list">
 						<header>
-							<span>{{ filterStep.filter }}</span>
+							<LoadingIndicator class="loading-indicator" :state="getLoadingStage(i)"/>
+							<span class="filter-name">{{ filterStep.filter }}</span>
 							<button v-on:click="removeFilterStep(i)">Remove</button>
 						</header>
 						<div v-if="filterRequiresLanguage(filterStep)">
@@ -616,42 +622,6 @@ export default {
 	left: calc(50% - 1em);
 }
 
-@keyframes spin { 
-    100% { 
-        -webkit-transform: rotate(360deg); 
-        transform:rotate(360deg); 
-    } 
-}
-
-.filter-steps .property-list > header > span::after {
-	position: absolute;
-	left: 0.5em;
-	content: '';
-	width: 1em;
-	height: 1em;
-	border: 2px solid currentColor;
-	border-radius: 50%;
-}
-
-.filter-steps .property-list.loaded > header > span::after {
-	content: '✔';
-	line-height: 1.2;
-	text-indent: 0.1em;
-}
-
-.filter-steps .property-list.loading > header > span::after {
-	border-right-color: transparent;
-	animation: spin 1s linear infinite;
-}
-
-.filter-steps .property-list.pending > header > span::after {
-	border-style: dotted;
-}
-
-.filter-steps .property-list > header > span {
-	text-indent: 1.5em;
-}
-
 .controls, .available-filters, .filter-steps {
 	margin: 0;
 	padding: 0.5em 1em;
@@ -679,26 +649,40 @@ input[type=checkbox] {
 	background: #ccc;
 }
 
+.property-list > * > *:first-child {
+	margin-left: 0;
+}
+
 .property-list > header > button {
-	align-self: flex-end;
+	flex: 0;
+}
+
+.property-list > header > .filter-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.property-list > header > .loading-indicator {
+	flex: 0;
+	align-self: flex-start;
 }
 
 .property-list > * {
 	padding: 0.5em;
 	display: flex;
 	flex-wrap: wrap;
+	justify-content: space-between;
+}
+
+.property-list > header > *,
+.property-list > footer > * {
+	flex: 1;
 }
 
 .property-list > * > * {
 	flex: 0;
 	align-self: center;
 	margin-left: 0.5em;
-}
-
-.property-list > * > *:first-child {
-	flex: 1;
-	align-self: flex-start;
-	margin-left: 0;
 }
 
 .property-list > * > small {

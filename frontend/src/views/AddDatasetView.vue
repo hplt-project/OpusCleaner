@@ -46,6 +46,8 @@ const datasets = computed(() => {
 	return cache.get(key).value;
 });
 
+const selection = ref([]); // List of datasets to download
+
 onMounted(async () => {
 	fetchSourceLanguages().then(languages => {
 		srcLangs.value = languages;
@@ -87,28 +89,72 @@ async function fetchDatasets(srcLang, trgLang) {
 </script>
 
 <template>
-	<div class="controls">
-		<select v-model="srcLang">
-			<option v-for="lang in srcLangs" :key="lang" :value="lang">{{ lang }}</option>
-		</select>
-		<select v-model="trgLang">
-			<option v-for="lang in trgLangs" :key="lang" :value="lang">{{ lang }}</option>
-		</select>
-	</div>
-	<div class="dataset-list">
-		<table>
-			<tr v-for="dataset in datasets" :key="dataset.id">
-				<td>{{ dataset.name }}</td>
-				<td>{{ dataset.group }}</td>
-				<td>{{ dataset.version }}</td>
-				<td>{{ dataset.langs.join(', ') }}</td>
-			</tr>
-		</table>
+	<div class="downloader">
+		<div class="filter-controls">
+			<label>
+				Source
+				<select v-model="srcLang">
+					<option v-for="lang in srcLangs" :key="lang" :value="lang">{{ lang }}</option>
+				</select>
+			</label>
+			<label>
+				Target
+				<select v-model="trgLang">
+					<option v-for="lang in trgLangs" :key="lang" :value="lang">{{ lang }}</option>
+				</select>
+			</label>
+		</div>
+		<div class="dataset-list">
+			<table>
+				<tr v-for="dataset in datasets" :key="dataset.id">
+					<td><input type="checkbox" v-model="selection" :value="dataset"></td>
+					<td>{{ dataset.name }}</td>
+					<td>{{ dataset.group }}</td>
+					<td>{{ dataset.version }}</td>
+					<td>{{ dataset.langs.join(', ') }}</td>
+				</tr>
+			</table>
+		</div>
+		<div class="dataset-selection">
+			<h2>Shopping cart</h2>
+			<ul>
+				<li v-for="dataset in selection" :key="dataset.id">{{ dataset.name }}</li>
+			</ul>
+		</div>
 	</div>
 </template>
 
 <style scoped>
+.downloader {
+	flex: 1;
+	display: flex;
+	flex-direction: row;
+}
+
+.downloader > * {
+	padding: 1em;
+}
+
+.downloader > *:not(:first-child) {
+	border-left: 1px solid #ccc;
+}
+
+.filter-controls {
+	flex: 0 0 200px;
+}
+
+.filter-controls label {
+	display: block;
+}
+
 .dataset-list {
+	flex: 1;
 	overflow: auto;
 }
+
+.dataset-selection {
+	flex: 0 0 300px;
+	overflow: auto;
+}
+
 </style>

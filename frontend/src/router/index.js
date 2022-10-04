@@ -12,7 +12,12 @@ const router = createRouter({
       path: '/datasets/:datasetName/configuration',
       name: 'edit-filters',
       component: () => import('../views/EditFiltersView.vue')
-    }
+    },
+    {
+      path: '/download/',
+      name: 'add-dataset',
+      component: () => import('../views/AddDatasetView.vue')
+    },
   ]
 })
 

@@ -1,5 +1,6 @@
 <script setup>
 import {ref, onMounted} from 'vue';
+import { RouterLink } from 'vue-router';
 
 const datasets = ref([]);
 
@@ -21,5 +22,12 @@ function languages(dataset) {
 			<td>{{ languages(dataset).join(', ') }}</td>
 			<td><router-link :to="{name: 'edit-filters', params: {datasetName: dataset.name}}">Filters</router-link></td>
 		</tr>
+		<tfoot>
+			<tr>
+				<td colspan="3">
+					<RouterLink v-bind:to="{name:'add-dataset'}">Download dataset…</RouterLink>
+				</td>
+			</tr>
+		</tfoot>
 	</table>
 </template>

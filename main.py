@@ -405,7 +405,7 @@ def redirect_to_interface():
 
 app.mount('/frontend/', StaticFiles(directory='frontend/dist', html=True), name='static')
 
-app.mount('/download/', download_app)
+app.mount('/api/download/', download_app)
 
 def main_serve(args):
     import uvicorn

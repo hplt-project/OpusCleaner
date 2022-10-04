@@ -28,16 +28,16 @@ class Entry(BaseModel):
     langs: List[str]
 
 
-#@app.get("/by-language")
-#@app.get("/by-language/{lang1}")
-#def list_languages(lang1:str = None) -> Iterable[str]:
-#    langs: set[str] = set()
-#    filter_lang = bcp47(lang1) if lang1 is not None else None
-#    for entry in Index.get_instance().get_entries():
-#        if filter_lang is not None and filter_lang not in entry.did.langs:
-#            continue
-#        langs.update(*entry.did.langs)
-#    return sorted(lang for lang in langs if lang is not None)
+@app.get("/languages/")
+@app.get("/languages/{lang1}")
+def list_languages(lang1:str = None) -> Iterable[str]:
+   langs: set[str] = set()
+   filter_lang = bcp47(lang1) if lang1 is not None else None
+   for entry in Index.get_instance().get_entries():
+       if filter_lang is not None and filter_lang not in entry.did.langs:
+           continue
+       langs.update(*entry.did.langs)
+   return sorted(lang for lang in langs if lang is not None)
 
 
 @app.get("/by-language/{langs}")

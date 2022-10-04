@@ -7,7 +7,7 @@ import re
 from typing import Optional, Iterable, TypeVar, Union, Literal, Any, AsyncIterator, cast, IO, List, Dict, Tuple
 from contextlib import ExitStack
 from itertools import chain
-from pydantic import BaseModel, parse_obj_as, validator
+from pydantic import BaseModel, parse_obj_as, validator, ValidationError
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse, StreamingResponse, HTMLResponse
@@ -156,6 +156,12 @@ class FilterStep(BaseModel):
             elif FILTERS[values['filter']].type == FilterType.MONOLINGUAL and language is None:
                 raise ValueError('`language` attribute required for a monolingual filter')
         return language
+
+
+class FilterPipeline(BaseModel):
+    version: Literal[1]
+    files: List[str]
+    filters: List[FilterStep]
 
 
 def list_filters(path) -> Iterable[Filter]:
@@ -361,13 +367,29 @@ def api_get_dataset_filters(name:str) -> List[FilterStep]:
         return []
 
     with open(filter_configuration_path(name), 'r') as fh:
-        return parse_obj_as(List[FilterStep], json.load(fh))
+        data = json.load(fh)
+        try:
+            return parse_obj_as(FilterPipeline, data).filters
+        except ValidationError:
+            # Backwards compatibility
+            return parse_obj_as(List[FilterStep], data)
 
 
 @app.post('/api/datasets/{name:path}/configuration.json')
 def api_update_dataset_filters(name:str, filters:List[FilterStep]):
+    columns = list_datasets(DATA_PATH)[name]
+
+    pipeline = FilterPipeline(
+        version=1,
+        files=[file.name
+            for _, file in
+            sorted(columns.items(), key=lambda pair: pair[0])
+        ],
+        filters=filters
+    )
+
     with open(filter_configuration_path(name), 'w') as fh:
-        return json.dump([step.dict() for step in filters], fh)
+        return json.dump(pipeline.dict(), fh, indent=2)
 
 
 @app.get('/api/filters/')

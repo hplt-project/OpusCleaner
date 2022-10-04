@@ -476,7 +476,8 @@ export default {
 .sample table {
 	table-layout: fixed;
 	border-collapse: collapse;
-	width: fit-content;
+	width: 100%;
+	overflow: hidden;
 }
 
 .sample table td {

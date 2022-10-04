@@ -5,6 +5,7 @@ import {ref, computed, defineProps, watch, onMounted} from 'vue';
 import draggable from 'vuedraggable';
 import {diff} from '../diff.js';
 import InlineDiff from './InlineDiff.vue';
+import LoadingIndicator from './LoadingIndicator.vue';
 import {stream} from '../stream.js';
 
 // Simple hash function for creating string hashes
@@ -234,6 +235,7 @@ export default {
 	components: {
 		draggable,
 		InlineDiff,
+		LoadingIndicator
 	},
 
 	methods: {
@@ -306,6 +308,16 @@ export default {
 		filterRequiresLanguage(filterStep) {
 			return this.filterDefinition(filterStep).type == 'monolingual';
 		},
+		getLoadingStage(index) {
+			if (this.samples.length === index + 1) // `+1` because first of samples is the raw sample)
+				return 'loading';
+			else if (this.samples.length >= index + 1 && this.samples[index + 1].stderr)
+				return 'failed';
+			else if (this.samples.length >= index + 1)
+				return 'loaded';
+			else
+				return 'pending';
+		},
 		stamp,
 		formatNumberSuffix,
 	}
@@ -371,7 +383,7 @@ export default {
 			</div>
 		</div>
 
-		<div class="filters" translate="no">
+		<div class="filters display-separately" translate="no">
 			<draggable tag="ul" class="available-filters"
 				v-model="filters" item-key="name"
 				v-bind:group="{name:'filters', pull:'clone', put:false}"
@@ -394,7 +406,8 @@ export default {
 				<template v-slot:header>
 					<li class="property-list">
 						<header>
-							<span>Sample</span>
+							<LoadingIndicator class="loading-indicator" :state="getLoadingStage(-1)"/>
+							<span class="filter-name">Sample</span>
 						</header>
 						<footer>
 							<button v-on:click="selectedFilterStep=SampleStep">Show output</button>
@@ -405,7 +418,8 @@ export default {
 				<template v-slot:item="{element:filterStep, index:i}">
 					<li class="property-list">
 						<header>
-							<span>{{ filterStep.filter }}</span>
+							<LoadingIndicator class="loading-indicator" :state="getLoadingStage(i)"/>
+							<span class="filter-name">{{ filterStep.filter }}</span>
 							<button v-on:click="removeFilterStep(i)">Remove</button>
 						</header>
 						<div v-if="filterRequiresLanguage(filterStep)">
@@ -537,8 +551,8 @@ export default {
 	display: flex;
 	flex-direction: column;
 	flex: 0 0 300px;
-	border-left: 1px solid #ccc;
 	overflow: auto;
+	border-left: 1px solid #ccc;
 }
 
 .available-filters {
@@ -549,6 +563,23 @@ export default {
 	flex: 1 0 auto;
 	border-top: 1px solid #ccc;
 	overflow-y: auto;
+}
+
+.filters.display-separately {
+	flex-direction: row-reverse;
+	flex: 0 0 600px;
+	overflow: hidden;
+	border: 0;
+}
+
+.filters.display-separately .available-filters,
+.filters.display-separately .filter-steps {
+	flex: 0 0 50%;
+	overflow: hidden;
+	overflow-y: auto;
+	box-sizing: border-box;
+	border: 0;
+	border-left: 1px solid #ccc;
 }
 
 .filter {
@@ -618,26 +649,40 @@ input[type=checkbox] {
 	background: #ccc;
 }
 
+.property-list > * > *:first-child {
+	margin-left: 0;
+}
+
 .property-list > header > button {
-	align-self: flex-end;
+	flex: 0;
+}
+
+.property-list > header > .filter-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.property-list > header > .loading-indicator {
+	flex: 0;
+	align-self: flex-start;
 }
 
 .property-list > * {
 	padding: 0.5em;
 	display: flex;
 	flex-wrap: wrap;
+	justify-content: space-between;
+}
+
+.property-list > header > *,
+.property-list > footer > * {
+	flex: 1;
 }
 
 .property-list > * > * {
 	flex: 0;
 	align-self: center;
 	margin-left: 0.5em;
-}
-
-.property-list > * > *:first-child {
-	flex: 1;
-	align-self: flex-start;
-	margin-left: 0;
 }
 
 .property-list > * > small {

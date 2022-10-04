@@ -38,3 +38,4 @@ uvloop==0.16.0
 watchgod==0.8.2
 wcwidth==0.2.5
 websockets==10.3
+xxhash==3.0.0

@@ -1,5 +1,6 @@
 <script setup>
-import {ref, computed, onMounted} from 'vue';
+import {ref, reactive, computed, watch, onMounted} from 'vue';
+import { Interval } from '../interval.js';
 
 const loading = ref(0);
 
@@ -48,42 +49,89 @@ const datasets = computed(() => {
 
 const selection = ref([]); // List of datasets to download
 
+const downloads = reactive({});
+
 onMounted(async () => {
 	fetchSourceLanguages().then(languages => {
 		srcLangs.value = languages;
 	})
+
+	fetchDownloads().then(list => {
+		Object.assign(downloads, castDownloadListToMap(list))
+	})
 })
 
-async function fetchSourceLanguages() {
+let downloadUpdateInterval = new Interval(1000, async () => {
+	const list = await fetchDownloads();
+	Object.assign(downloads, castDownloadListToMap(list));
+})
+
+// Watch list of downloads to re-evaluate whether we need to do updating using
+// the downloadUpdateInterval. Stop updating once there's nothing active
+// anymore. The changes caused by downloadSelection() will re-trigger this
+// watch expression and enable the interval again.
+watch(downloads, (downloads) => {
+	const activeStates = new Set(['pending', 'downloading']);
+	if (Object.values(downloads).some(download => activeStates.has(download.state)))
+		downloadUpdateInterval.restart();
+	else
+		downloadUpdateInterval.stop();
+});
+
+function assignList(current, update, key = 'id') {
+	const updates = Object.fromEntries(update.map(entry => [entry[key], entry]));
+	for (let i = 0; i < current.length; ++i)
+		if (current[i][key] in updates)
+			Object.assign(current[i], updates[current[i][key]]);
+	return current;
+}
+
+function castDownloadListToMap(list) {
+	return Object.fromEntries(list.map(download => [download.entry.id, download]));
+}
+
+function downloadSelection() {
+	requestDownloadSelection(selection.value).then(update => {
+		Object.assign(downloads, castDownloadListToMap(update));
+	});
+	selection.value = [];
+}
+
+async function fetchJSON(url, options) {
 	try {
 		loading.value += 1;
-		const response = await fetch('/api/download/languages/');
+		const response = await fetch(url, options);
 		return await response.json();
 	} finally {
 		loading.value -= 1;
 	}
 }
 
+async function fetchSourceLanguages() {
+	return await fetchJSON('/api/download/languages/');
+}
+
 async function fetchTargetLanguages(sourceLanguage) {
-	try {
-		loading.value += 1;
-		const response = await fetch(`/api/download/languages/${encodeURIComponent(sourceLanguage)}`);
-		return await response.json();
-	} finally {
-		loading.value -= 1;
-	}
+	return await fetchJSON(`/api/download/languages/${encodeURIComponent(sourceLanguage)}`);
 }
 
 async function fetchDatasets(srcLang, trgLang) {
 	const key = `${srcLang}-${trgLang}`;
+	return await fetchJSON(`/api/download/by-language/${encodeURIComponent(key)}`);
+}
 
-	try {
-		loading.value += 1;
-		const response = await fetch(`/api/download/by-language/${encodeURIComponent(key)}`)
-		return await response.json();
-	} finally {
-		loading.value -= 1;
-	}
+async function fetchDownloads() {
+	return await fetchJSON(`/api/download/downloads/`);
+}
+
+async function requestDownloadSelection(datasets) {
+	return await fetchJSON('/api/download/downloads/', {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json'
+		},
+		body: JSON.stringify(datasets.map(({id}) => ({id})))
+	});
 }
 
 </script>
@@ -107,7 +155,7 @@ async function fetchDatasets(srcLang, trgLang) {
 		<div class="dataset-list">
 			<table>
 				<tr v-for="dataset in datasets" :key="dataset.id">
-					<td><input type="checkbox" v-model="selection" :value="dataset"></td>
+					<td><input type="checkbox" v-model="selection" :value="dataset" :disabled="dataset.id in downloads"></td>
 					<td>{{ dataset.name }}</td>
 					<td>{{ dataset.group }}</td>
 					<td>{{ dataset.version }}</td>
@@ -116,10 +164,15 @@ async function fetchDatasets(srcLang, trgLang) {
 			</table>
 		</div>
 		<div class="dataset-selection">
+			<h2>Downloads</h2>
+			<ul>
+				<li v-for="download in downloads" :key="download.entry.id">{{ download.entry.name }} <em>{{ download.state }}</em></li>
+			</ul>
 			<h2>Shopping cart</h2>
 			<ul>
 				<li v-for="dataset in selection" :key="dataset.id">{{ dataset.name }}</li>
 			</ul>
+			<button @click="downloadSelection">Download</button>
 		</div>
 	</div>
 </template>

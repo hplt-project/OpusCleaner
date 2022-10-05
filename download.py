@@ -111,7 +111,7 @@ def list_downloads() -> Iterable[EntryDownloadView]:
 
 
 @app.post('/downloads/')
-def add_downloads(datasets: List[EntryRef]) -> Iterable[EntryDownloadView]:
+def batch_add_downloads(datasets: List[EntryRef]) -> Iterable[EntryDownloadView]:
     """Batch download requests!"""
     needles = set(dataset.id for dataset in datasets if dataset.id not in downloads)
 

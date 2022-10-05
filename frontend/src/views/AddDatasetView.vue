@@ -129,6 +129,7 @@ async function fetchDatasets(srcLang, trgLang) {
 	flex: 1;
 	display: flex;
 	flex-direction: row;
+	overflow: hidden;
 }
 
 .downloader > * {

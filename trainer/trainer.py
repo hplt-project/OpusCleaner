@@ -2,6 +2,7 @@
 '''A translation model trainer. It feeds marian different sets of datasets with different thresholds
 for different stages of the training. Data is uncompressed and TSV formatted src\ttrg'''
 import os
+import sys
 import argparse
 import weakref
 import threading
@@ -90,7 +91,7 @@ class Executor:
             batch = []
             for dataset in stage.datasets:
                 epoch, lines = self.dataset_objects[dataset].get()
-                print(epoch, dataset, stage.until_dataset, stage.until_epoch, len(lines))
+                #print(epoch, dataset, stage.until_dataset, stage.until_epoch, len(lines))
                 batch.extend(lines)
                 if dataset == stage.until_dataset and epoch >= stage.until_epoch:
                     stop_training = True
@@ -121,6 +122,8 @@ class Dataset:
         # dataset epoch
         self.epoch = 0
         self.max_epoch = max_epoch
+
+        self.rng_filepath = str(os.path.dirname(os.path.realpath(__file__))) + "/random.sh" # HACKY
 
         # Write random seed
         self.__set_seed__(seed)
@@ -162,8 +165,8 @@ class Dataset:
     def __shuffle__(self, inputfile, outputfile):
         try:
             #print(self.rng, outputfile, inputfile)
-            #check_call(["/usr/bin/shuf", "--random-source", self.rng, "-o", outputfile, inputfile])
-            check_call(["/usr/bin/shuf", "-o", outputfile, inputfile])
+            check_call([self.rng_filepath, str(self.seed), outputfile, inputfile])
+            #check_call(["/usr/bin/shuf", "-o", outputfile, inputfile])
         except CalledProcessError as err:
             print("Error shuffling", inputfile, file=stderr)
             print(err.cmd, file=stderr)

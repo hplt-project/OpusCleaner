@@ -25,7 +25,7 @@ end:
   - clean 0.4
   - medium 0.3
   - dirty 0.3
-  - until dirty 5
+  - until dirty 5 # use `inf` to mean until forever
 
 uppercase: 0.05
 seed: 1111

@@ -2,13 +2,11 @@
 '''A translation model trainer. It feeds marian different sets of datasets with different thresholds
 for different stages of the training. Data is uncompressed and TSV formatted src\ttrg'''
 import os
-import sys
 import argparse
 import weakref
-import threading
+import random
 from sys import stderr
 from dataclasses import dataclass
-import subprocess
 from subprocess import check_call, CalledProcessError
 from collections import namedtuple
 from typing import List, Type, Tuple
@@ -24,7 +22,6 @@ def parse_user_args():
     """Parse the arguments necessary for this filter"""
     parser = argparse.ArgumentParser(description="Feeds marian tsv data for training.")
     parser.add_argument("--config", '-c', required=True, type=str, help='YML configuration input.')
-    parser.add_argument("--seed", '-s', type=int, default=1111, help='Random seed for shuffling.')
     parser.add_argument("--temporary-dir", '-t', default="./TMP", type=str, help='Temporary dir, used for shuffling.')
     return parser.parse_args()
 
@@ -34,7 +31,7 @@ Stage = namedtuple('Stage', ['datasets', 'until_dataset', 'until_epoch'])
 @dataclass
 class Executor:
     '''This class takes in the config file and starts running training'''
-    def __init__(self, ymlpath: str, tmpdir: str, seed: str):
+    def __init__(self, ymlpath: str, tmpdir: str):
         ymldata = None
         with open(ymlpath, 'rt', encoding="utf-8") as myfile:
             ymldata = list(yaml.load_all(myfile, Loader=SafeLoader))[0]
@@ -46,11 +43,16 @@ class Executor:
             tmpdict[path.split('/')[-1]] = path
         self.dataset_paths = tmpdict
         self.stage_names = ymldata['stages']
+        self.uppercase_ratio = float(ymldata['uppercase'])
+        self.random_seed = int(ymldata['seed'])
         self.trainer = pexpect.spawn(ymldata['trainer'])
         self.trainer.delaybeforesend = None
         # Parse the individual training stages into convenient struct:
         self.stages = {}
         self.dataset_objects = {}
+
+        # Set random seed
+        random.seed(self.random_seed)
 
         for stage in self.stage_names:
             stageparse: List[str] = ymldata[stage]
@@ -67,7 +69,7 @@ class Executor:
 
         # Initialise the dataset filestreams. For now just do identity initialisation, do more later.
         for dataset in self.dataset_names:
-            self.dataset_objects[dataset] = Dataset(self.dataset_paths[dataset], tmpdir, seed, 0.1, inf)
+            self.dataset_objects[dataset] = Dataset(self.dataset_paths[dataset], tmpdir, self.random_seed, 0.1, inf)
 
         # Start training
         for stage in self.stage_names:
@@ -95,6 +97,10 @@ class Executor:
                 batch.extend(lines)
                 if dataset == stage.until_dataset and epoch >= stage.until_epoch:
                     stop_training = True
+            # Shuffle the batch
+            random.shuffle(batch)
+            # Uppercase randomly
+            batch =  [x.upper() if random.random() < self.uppercase_ratio else x for x in batch]
             self.trainer.writelines(batch)
 
 
@@ -223,6 +229,5 @@ if __name__ == '__main__':
     args = parse_user_args()
     config = args.config
     mytmpdir = args.temporary_dir
-    theseed = args.seed
 
-    executor = Executor(config, mytmpdir, theseed)
+    executor = Executor(config, mytmpdir)

@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Various mtdata dataset downloading utilities"""
+import asyncio
 import os
+import signal
 from typing import NamedTuple, Optional, Iterable, Dict, List
 from enum import Enum
-from concurrent.futures import ProcessPoolExecutor, Future, wait
-from subprocess import check_call, CalledProcessError
+from queue import SimpleQueue
+from subprocess import Popen
+from threading import Thread
 from itertools import zip_longest
 from sys import stderr
 from collections import defaultdict
@@ -34,15 +37,78 @@ class Entry(EntryRef):
 
 class DownloadState(Enum):
     PENDING = 'pending'
-    CANCELLED = 'downloaded'
+    CANCELLED = 'cancelled'
     DOWNLOADING = 'downloading'
     DOWNLOADED = 'downloaded'
     FAILED = 'failed'
 
 
-class EntryDownload(NamedTuple):
+def get_dataset(entry: Entry, path: str) -> Popen:
+    """Gets datasets, using a subprocess call to mtdata. Might be less brittle to internal
+    mtdata interface changes"""
+    call_type: str # We have train/test/dev
+    if "dev" in entry.name:
+        call_type = "-dv"
+    elif "test" in entry.name:
+        call_type = "-ts"
+    else:
+        call_type = "-tr"
+
+    # Download the dataset
+    return Popen(["mtdata", "get", "-l", "-".join(entry.langs), call_type, entry.id, "--compress",  "-o", path])
+
+
+class EntryDownload:
     entry: Entry
-    future: Future
+
+    def __init__(self, entry:Entry):
+        self.entry = entry
+        self._child = None
+    
+    def start(self):
+        self._child = get_dataset(self.entry, DOWNLOAD_PATH)
+
+    def cancel(self):
+        if self._child and self._child.returncode is None:
+            self._child.kill()
+
+    @property
+    def state(self):
+        if not self._child:
+            return DownloadState.PENDING
+        elif self._child.returncode is None:
+            return DownloadState.DOWNLOADING
+        elif self._child.returncode == 0:
+            return DownloadState.DOWNLOADED
+        elif self._child.returncode > 0:
+            return DownloadState.FAILED
+        else:
+            return DownloadState.CANCELLED
+
+
+class Downloader:
+    def __init__(self, workers:int):
+        self.queue = SimpleQueue()
+        self.threads = []
+
+        for _ in range(workers):
+            thread = Thread(target=self.__class__.worker_thread, args=[self.queue], daemon=True)
+            thread.start()
+            self.threads.append(thread)
+
+    def download(self, entry:Entry) -> EntryDownload:
+        download = EntryDownload(entry=entry)
+        self.queue.put(download)
+        return download
+
+    @staticmethod
+    def worker_thread(queue):
+        while True:
+            entry = queue.get()
+            if not entry:
+                break
+            entry.start()
+            entry._child.wait()
 
 
 class EntryDownloadView(BaseModel):
@@ -54,7 +120,7 @@ app = FastAPI()
 
 downloads: Dict[str, EntryDownload] = {}
 
-downloader = ProcessPoolExecutor(2)
+downloader = Downloader(2)
 
 
 def cast_entry(entry) -> Entry:
@@ -65,19 +131,6 @@ def cast_entry(entry) -> Entry:
         version = entry.did.version,
         langs = [lang.lang for lang in entry.did.langs]
     )
-
-
-def cast_download_state(future:Future) -> DownloadState:
-    if future.cancelled():
-        return DownloadState.CANCELLED
-    elif future.running():
-        return DownloadState.DOWNLOADING
-    elif future.done() and future.exception():
-        return DownloadState.FAILED
-    elif future.done():
-        return DownloadState.DOWNLOADED
-    else:
-        return DownloadState.PENDING
 
 
 @app.get("/languages/")
@@ -104,7 +157,7 @@ def list_downloads() -> Iterable[EntryDownloadView]:
     return (
         EntryDownloadView(
             entry = download.entry,
-            state = cast_download_state(download.future)
+            state = download.state
         )
         for download in downloads.values()
     )
@@ -113,7 +166,9 @@ def list_downloads() -> Iterable[EntryDownloadView]:
 @app.post('/downloads/')
 def batch_add_downloads(datasets: List[EntryRef]) -> Iterable[EntryDownloadView]:
     """Batch download requests!"""
-    needles = set(dataset.id for dataset in datasets if dataset.id not in downloads)
+    needles = set(dataset.id
+        for dataset in datasets
+        if dataset.id not in downloads)
 
     entries = [
         cast_entry(entry)
@@ -122,10 +177,7 @@ def batch_add_downloads(datasets: List[EntryRef]) -> Iterable[EntryDownloadView]
     ]
 
     for entry in entries:
-        downloads[entry.id] = EntryDownload(
-            entry=entry,
-            future=downloader.submit(get_dataset, entry, DOWNLOAD_PATH)
-        )
+        downloads[entry.id] = downloader.download(entry)
 
     return list_downloads()
 
@@ -139,11 +191,11 @@ def cancel_download(dataset_id:str) -> EntryDownloadView:
         raise HTTPException(status_code=404, detail='Download not found')
 
     download = downloads[dataset_id]
-    download.future.cancel()
+    download.cancel()
 
     return EntryDownloadView(
         entry = download.entry,
-        state = cast_download_state(download.future)
+        state = download.state
     )
 
 
@@ -160,18 +212,3 @@ def dedupe_datasests(datasets: Iterable[Entry]) -> Iterable[Entry]:
         sorted(entrylist, key=lambda t: t.version, reverse=True)[0]
         for entrylist in datadict.values()
     ]
-
-
-def get_dataset(entry: Entry, path: str) -> None:
-    """Gets datasets, using a subprocess call to mtdata. Might be less brittle to internal
-    mtdata interface changes"""
-    call_type: str # We have train/test/dev
-    if "dev" in entry.name:
-        call_type = "-dv"
-    elif "test" in entry.name:
-        call_type = "-ts"
-    else:
-        call_type = "-tr"
-
-    # Download the dataset
-    check_call(["mtdata", "get", "-l", "-".join(entry.langs), call_type, entry.id, "--compress",  "-o", path])

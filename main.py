@@ -48,7 +48,7 @@ SAMPLE_PY = os.path.abspath('./sample.py')
 
 # Size of each of the three sections (head, random sample of middle, tail) of
 # the dataset sample that we operate on.
-SAMPLE_SIZE = int(os.getenv('SAMPLE_SIZE', '100'))
+SAMPLE_SIZE = int(os.getenv('SAMPLE_SIZE', '1000'))
 
 
 class File(BaseModel):

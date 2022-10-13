@@ -14,7 +14,7 @@ from math import inf
 
 import json
 import yaml
-from yaml.loader import SafeLoader
+from yaml.loader import SafeLoader, Loader
 
 import pexpect
 
@@ -38,53 +38,64 @@ class StateTracker:
            it always overwrites the previous input'''
         self.ymlpath = ymlpath
         self.stage: str = None
-        self.datasetStates: Dict['str', DatasetState] = {}
+        self.dataset_states: Dict['str', DatasetState] = {}
         self.random_state = None
         if restore and os.path.isfile(self.ymlpath) and os.access(self.ymlpath, os.R_OK):
             with open(self.ymlpath, 'rt', encoding="utf-8") as myfile:
-                ymldata = list(yaml.load_all(myfile, Loader=SafeLoader))[0]
+                ymldata = list(yaml.load_all(myfile, Loader=Loader))[0]
                 self.stage = ymldata['stage']
                 datasets: dict = ymldata['datasets']
-                for dataset in datasets:
+                for dataset, [seed, line, epoch] in datasets.items():
                     name = dataset
-                    seed = int(datasets[dataset][0])
-                    line = int(dataset[dataset][1])
-                    epoch = int(dataset[dataset][2])
-                    self.datasetStates[name] = DatasetState(seed, line, epoch)
+                    seed = int(seed)
+                    line = int(line)
+                    epoch = int(epoch)
+                    self.dataset_states[name] = DatasetState(seed, line, epoch)
                 # Restore random state
                 self.random_state = ymldata['random_state']
                 random.setstate(self.random_state)
 
-    def _dump_(self) -> None:
+    def dump(self) -> None:
         '''Dumps the current state to yml.
         This should only be called when there is a model save detected'''
         with open(self.ymlpath, 'w', encoding="utf-8") as ymlout:
             output = {}
             output['stage'] = self.stage
             output['datasets'] = {}
-            for dataset, state in self.datasetStates.items():
+            for dataset, state in self.dataset_states.items():
                 seed = state.seed
                 line = state.line
                 epoch = state.epoch
                 output['datasets'][dataset] = [seed, line, epoch]
+                output['random_state'] = self.random_state
             yaml.dump(output, ymlout, allow_unicode=True)
 
     def update_stage(self, newstage: str) -> None:
         '''Update the training stage'''
         self.stage = newstage
+
+    def update_seed(self) -> None:
+        '''Updates the random seed'''
         self.random_state = random.getstate()
 
     def update_dataset(self, dataset_name: str, dataset_state: DatasetState) -> None:
         '''Updates the state of the current dataset'''
-        self.datasetStates[dataset_name] = dataset_state
+        self.dataset_states[dataset_name] = dataset_state
 
+    def get_stage(self) -> str:
+        '''Returns the current training stage. Also restores the random seed'''
+        random.setstate(self.random_state)
+        return self.stage
 
+    def get_dataset(self, name: str) -> str:
+        '''Returns the state for a dataset'''
+        return self.dataset_states[name]
 
 
 @dataclass
 class Executor:
     '''This class takes in the config file and starts running training'''
-    def __init__(self, ymlpath: str, tmpdir: str):
+    def __init__(self, ymlpath: str, tmpdir: str, state_tracker: StateTracker):
         ymldata = None
         with open(ymlpath, 'rt', encoding="utf-8") as myfile:
             ymldata = list(yaml.load_all(myfile, Loader=SafeLoader))[0]
@@ -106,6 +117,8 @@ class Executor:
 
         # Set random seed
         random.seed(self.random_seed)
+        # Keep track of the state
+        self.state_tracker = state_tracker
 
         for stage in self.stage_names:
             stageparse: List[str] = ymldata[stage]
@@ -120,14 +133,15 @@ class Executor:
             mystage = Stage(stagesdict, until_stagename, float(termination_epoch))
             self.stages[stage] = mystage
 
-        # Initialise the dataset filestreams. For now just do identity initialisation, do more later.
+        # Initialise the dataset filestreams. For now just do identity initialisation, do more later
         for dataset in self.dataset_names:
-            self.dataset_objects[dataset] = Dataset(self.dataset_paths[dataset], tmpdir, self.random_seed, 0.1, inf)
+            self.dataset_objects[dataset] = Dataset(self.dataset_paths[dataset], tmpdir, self.random_seed, 0.1, inf, state_tracker)
 
         # Start training
         for stage in self.stage_names:
             print(stage)
             self.__init__stage_(self.stages[stage])
+            self.state_tracker.update_stage(stage)
             self.train_stage(self.stages[stage])
 
 
@@ -153,18 +167,21 @@ class Executor:
             # Shuffle the batch
             random.shuffle(batch)
             # Uppercase randomly
-            batch =  [x.upper() if random.random() < self.uppercase_ratio else x for x in batch]
-            self.trainer.writelines(batch)
+            batch = [x.upper() if random.random() < self.uppercase_ratio else x for x in batch]
+            self.trainer.writelines(batch) # @TODO This seems to just hang when the child process dies
+            self.state_tracker.update_seed()
+
 
 
 @dataclass
 class Dataset:
     '''This class takes care of iterating through a dataset. It takes care of shuffling and
     remembering the position of the dataset'''
-    def __init__(self, datapath: str, tmpdir: str, seed: int, weight: float, max_epoch: int):
+    def __init__(self, datapath: str, tmpdir: str, seed: int, weight: float, max_epoch: int, state_tracker: StateTracker):
         # Create the temporary directory if it doesn't exist
         if not os.path.exists(tmpdir):
             os.makedirs(tmpdir)
+        self.state_tracker = state_tracker
         # Vars
         self.orig = datapath
         self.filename: str = datapath.split('/')[-1]
@@ -221,21 +238,6 @@ class Dataset:
     def _openfile_(self, filepath):
         self.filehandle = open(filepath, 'rt', encoding="utf-8")
 
-    def save(self, filepath):
-        """Saves the current dataset training state to the disk"""
-        with open(filepath, 'w', encoding="utf-8") as myfilehandle:
-            json.dump(self, myfilehandle)
-
-    @staticmethod
-    def load(filepath) -> Type['Dataset']:
-        """Loads a dataset object from json, also setting back the state"""
-        my_dataset: Type['Dataset'] = json.load(filepath)
-        my_dataset._set_seed_(my_dataset.seed)
-        my_dataset._shuffle_(my_dataset.orig, my_dataset.shufffile)
-        my_dataset._openfile_(my_dataset.shufffile)
-        # @TODO rewind the file to the proper location
-        return my_dataset
-
     def get(self) -> Tuple[int, List[str]]:
         '''Gets the next N lines based on the weight of the dataset. It also reports which
         epoch it is.
@@ -258,13 +260,14 @@ class Dataset:
         # Send statistics to the state tracker
         name = self.filename
         state = DatasetState(self.seed, self.linenum, self.epoch)
+        self.state_tracker.update_dataset(name, state)
         return (myepoch, retlist)
 
     @staticmethod
     def _cleanup_(my_filehandle):
         if my_filehandle:
             my_filehandle.close()
-        # @TODO save the training state
+        # No need to save state, we should have the latest kept in the state tracker
 
     def _exit_(self, exc_type, exc_value, traceback):
         self._finalizer()
@@ -274,6 +277,7 @@ if __name__ == '__main__':
     args = parse_user_args()
     config = args.config
     mytmpdir = args.temporary_dir
-    state_tracker = StateTracker(mytmpdir + '/state.yml', args.resume)
+    mystate_tracker = StateTracker(mytmpdir + '/state.yml', args.resume)
 
-    executor = Executor(config, mytmpdir)
+    executor = Executor(config, mytmpdir, mystate_tracker)
+    mystate_tracker.dump() # //@TODO execute this in a cleanup (eg child process dies/we receive a kill signal)

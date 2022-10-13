@@ -9,7 +9,7 @@ from sys import stderr
 from dataclasses import dataclass
 from subprocess import check_call, CalledProcessError
 from collections import namedtuple
-from typing import List, Type, Tuple
+from typing import List, Type, Tuple, Dict
 from math import inf
 
 import json
@@ -22,10 +22,63 @@ def parse_user_args():
     """Parse the arguments necessary for this filter"""
     parser = argparse.ArgumentParser(description="Feeds marian tsv data for training.")
     parser.add_argument("--config", '-c', required=True, type=str, help='YML configuration input.')
-    parser.add_argument("--temporary-dir", '-t', default="./TMP", type=str, help='Temporary dir, used for shuffling.')
+    parser.add_argument("--temporary-dir", '-t', default="./TMP", type=str, help='Temporary dir, used for shuffling and tracking state')
+    parser.add_argument("--resume", '-r', default=True, type=bool, help='Resume from the previous training state')
     return parser.parse_args()
 
 Stage = namedtuple('Stage', ['datasets', 'until_dataset', 'until_epoch'])
+
+DatasetState = namedtuple('DatasetState', ['seed', 'line', 'epoch'])
+
+@dataclass
+class StateTracker:
+    '''The purpose of this class is to store an yml of every single state during training'''
+    def __init__(self, ymlpath, restore=True):
+        '''Tries to load the state from previous yml, else just writes a new yml. If restore==False
+           it always overwrites the previous input'''
+        self.ymlpath = ymlpath
+        self.stage: str = None
+        self.datasetStates: Dict['str', DatasetState] = {}
+        self.random_state = None
+        if restore and os.path.isfile(self.ymlpath) and os.access(self.ymlpath, os.R_OK):
+            with open(self.ymlpath, 'rt', encoding="utf-8") as myfile:
+                ymldata = list(yaml.load_all(myfile, Loader=SafeLoader))[0]
+                self.stage = ymldata['stage']
+                datasets: dict = ymldata['datasets']
+                for dataset in datasets:
+                    name = dataset
+                    seed = int(datasets[dataset][0])
+                    line = int(dataset[dataset][1])
+                    epoch = int(dataset[dataset][2])
+                    self.datasetStates[name] = DatasetState(seed, line, epoch)
+                # Restore random state
+                self.random_state = ymldata['random_state']
+                random.setstate(self.random_state)
+
+    def _dump_(self) -> None:
+        '''Dumps the current state to yml.
+        This should only be called when there is a model save detected'''
+        with open(self.ymlpath, 'w', encoding="utf-8") as ymlout:
+            output = {}
+            output['stage'] = self.stage
+            output['datasets'] = {}
+            for dataset, state in self.datasetStates.items():
+                seed = state.seed
+                line = state.line
+                epoch = state.epoch
+                output['datasets'][dataset] = [seed, line, epoch]
+            yaml.dump(output, ymlout, allow_unicode=True)
+
+    def update_stage(self, newstage: str) -> None:
+        '''Update the training stage'''
+        self.stage = newstage
+        self.random_state = random.getstate()
+
+    def update_dataset(self, dataset_name: str, dataset_state: DatasetState) -> None:
+        '''Updates the state of the current dataset'''
+        self.datasetStates[dataset_name] = dataset_state
+
+
 
 
 @dataclass
@@ -117,12 +170,9 @@ class Dataset:
         self.filename: str = datapath.split('/')[-1]
         self.tmpdir = tmpdir
         self.seed = seed
+        self.linenum = 0 # line number of the current file
         self.shufffile = self.tmpdir + "/" + self.filename + ".shuf"
         self.weight = weight
-        # RNG file for shuf to read
-        self.rng = tmpdir + '/rng'
-        # set up state in one file. Filename and line number
-        self.state = tmpdir + '/state_' + self.filename
         # filehandle
         self.filehandle = None
         # dataset epoch
@@ -131,8 +181,6 @@ class Dataset:
 
         self.rng_filepath = str(os.path.dirname(os.path.realpath(__file__))) + "/random.sh" # HACKY
 
-        # Write random seed
-        self._set_seed_(seed)
         # shuffle the initial file
         self._shuffle_(self.orig, self.shufffile)
         # Open the current file for reading
@@ -140,10 +188,6 @@ class Dataset:
 
         # On object destruction, cleanup
         self._finalizer = weakref.finalize(self, self._cleanup_, self.filehandle)
-
-    def _set_seed_(self, myseed):
-        with open(self.rng, 'w', encoding="utf-8") as seedfile:
-            seedfile.write(str(myseed) + "\n")
 
     def set_weight(self, neweight):
         '''Used for when we want to switch the sampling strategy based on our schedule'''
@@ -159,14 +203,10 @@ class Dataset:
         self.epoch = 0
 
     def _ammend_seed_(self, newseed=None):
+        '''Either adds one to the current random seed, or sets a new one completely'''
         if newseed is None:
-            old_seed = None
-            with open(self.rng, 'rt', encoding="utf-8") as myfile:
-                old_seed = int(myfile.readlines()[0].strip())
-            newseed = old_seed + 1
+            newseed = self.seed + 1
         self.seed = newseed
-        self._set_seed_(newseed)
-
 
     def _shuffle_(self, inputfile, outputfile):
         try:
@@ -205,6 +245,7 @@ class Dataset:
         try:
             for _ in range(int(self.weight*100)):
                 retlist.append(next(self.filehandle))
+                self.linenum = self.linenum + 1
         except StopIteration:
             # Update seed and re-shuffle the file UNLESS we have reached the max epoch
             if self.epoch < self.max_epoch:
@@ -213,6 +254,10 @@ class Dataset:
                 self._shuffle_(self.orig, self.shufffile)
                 self._openfile_(self.shufffile)
                 self.epoch = self.epoch + 1
+                self.linenum = 0
+        # Send statistics to the state tracker
+        name = self.filename
+        state = DatasetState(self.seed, self.linenum, self.epoch)
         return (myepoch, retlist)
 
     @staticmethod
@@ -229,5 +274,6 @@ if __name__ == '__main__':
     args = parse_user_args()
     config = args.config
     mytmpdir = args.temporary_dir
+    state_tracker = StateTracker(mytmpdir + '/state.yml', args.resume)
 
     executor = Executor(config, mytmpdir)

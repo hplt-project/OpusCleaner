@@ -1,25 +1,24 @@
 #!/usr/bin/env python3
 """Various mtdata dataset downloading utilities"""
-import asyncio
 import os
-import signal
-from typing import NamedTuple, Optional, Iterable, Dict, List
+from glob import iglob
+from itertools import chain
+from typing import Iterable, Dict, List, Optional, Set
 from enum import Enum
 from queue import SimpleQueue
 from subprocess import Popen
 from threading import Thread
-from itertools import zip_longest
-from sys import stderr
 from collections import defaultdict
-from pydantic import BaseModel
-from fastapi import FastAPI, HTTPException
+
+import mtdata.entry
 from mtdata.entry import lang_pair
 from mtdata.index import Index, get_entries
 from mtdata.iso.bcp47 import bcp47, BCP47Tag
+from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException
 
 
-#datasets = {str(entry.did): entry for entry in get_entries()}
-
+DATA_PATH = os.getenv('DATA_PATH', 'data/train-parts/*.*.gz')
 
 DOWNLOAD_PATH = 'data'
 
@@ -32,7 +31,8 @@ class Entry(EntryRef):
     group: str
     name: str
     version: str
-    langs: List[str]    
+    langs: List[str]
+    paths: Set[str]
 
 
 class DownloadState(Enum):
@@ -123,19 +123,29 @@ downloads: Dict[str, EntryDownload] = {}
 downloader = Downloader(2)
 
 
+def find_local_paths(entry: mtdata.entry.Entry) -> Set[str]:
+    return set(
+        filename
+        for data_root in [os.path.dirname(DATA_PATH), DOWNLOAD_PATH]
+        for lang in entry.did.langs
+        for filename in iglob(os.path.join(data_root, f'{entry.did!s}.{lang.lang}.gz'), recursive=True)
+    )
+
+
 def cast_entry(entry) -> Entry:
     return Entry(
         id = str(entry.did),
         group = entry.did.group,
         name = entry.did.name,
         version = entry.did.version,
-        langs = [lang.lang for lang in entry.did.langs]
+        langs = [lang.lang for lang in entry.did.langs],
+        paths = find_local_paths(entry)
     )
 
 
 @app.get("/languages/")
 @app.get("/languages/{lang1}")
-def list_languages(lang1:str = None) -> Iterable[str]:
+def list_languages(lang1:Optional[str] = None) -> Iterable[str]:
    langs: set[str] = set()
    filter_lang = bcp47(lang1) if lang1 is not None else None
    for entry in Index.get_instance().get_entries():

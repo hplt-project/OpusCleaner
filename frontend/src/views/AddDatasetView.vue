@@ -155,7 +155,7 @@ async function requestDownloadSelection(datasets) {
 		<div class="dataset-list">
 			<table>
 				<tr v-for="dataset in datasets" :key="dataset.id">
-					<td><input type="checkbox" v-model="selection" :value="dataset" :disabled="dataset.id in downloads"></td>
+					<td><input type="checkbox" v-model="selection" :value="dataset" :disabled="dataset.id in downloads || dataset.paths.length > 0"></td>
 					<td>{{ dataset.name }}</td>
 					<td>{{ dataset.group }}</td>
 					<td>{{ dataset.version }}</td>

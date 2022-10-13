@@ -417,7 +417,7 @@ async def sample_all_datasets(args):
 
     for name, columns in list_datasets(DATA_PATH).items():
         sorted_cols = sorted(columns.items(), key=lambda pair: pair[0])
-        langs = [lang for lang, _ in columns]
+        langs = [lang for lang, _ in sorted_cols]
         if not os.path.exists(sample_path(name, langs)):
             print(f"Sampling {name}...", file=sys.stderr)
             tasks.append([name, sorted_cols])

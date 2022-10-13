@@ -74,11 +74,11 @@ class Executor:
         # Start training
         for stage in self.stage_names:
             print(stage)
-            self.__init_stage__(self.stages[stage])
+            self.__init__stage_(self.stages[stage])
             self.train_stage(self.stages[stage])
 
 
-    def __init_stage__(self, stage): #@TODO make the stupid stage a full object so i can have proper attributes
+    def __init__stage_(self, stage): #@TODO make the stupid stage a full object so i can have proper attributes
         '''Init a certain stage of the training'''
         for dataset in stage.datasets.keys():
             self.dataset_objects[dataset].set_weight(stage.datasets[dataset])
@@ -132,16 +132,16 @@ class Dataset:
         self.rng_filepath = str(os.path.dirname(os.path.realpath(__file__))) + "/random.sh" # HACKY
 
         # Write random seed
-        self.__set_seed__(seed)
+        self._set_seed_(seed)
         # shuffle the initial file
-        self.__shuffle__(self.orig, self.shufffile)
+        self._shuffle_(self.orig, self.shufffile)
         # Open the current file for reading
-        self.__openfile__(self.shufffile)
+        self._openfile_(self.shufffile)
 
         # On object destruction, cleanup
         self._finalizer = weakref.finalize(self, self._cleanup_, self.filehandle)
 
-    def __set_seed__(self, myseed):
+    def _set_seed_(self, myseed):
         with open(self.rng, 'w', encoding="utf-8") as seedfile:
             seedfile.write(str(myseed) + "\n")
 
@@ -158,17 +158,17 @@ class Dataset:
         from the same shuffling point without eextra fluff'''
         self.epoch = 0
 
-    def __ammend_seed__(self, newseed=None):
+    def _ammend_seed_(self, newseed=None):
         if newseed is None:
             old_seed = None
             with open(self.rng, 'rt', encoding="utf-8") as myfile:
                 old_seed = int(myfile.readlines()[0].strip())
             newseed = old_seed + 1
         self.seed = newseed
-        self.__set_seed__(newseed)
+        self._set_seed_(newseed)
 
 
-    def __shuffle__(self, inputfile, outputfile):
+    def _shuffle_(self, inputfile, outputfile):
         try:
             #print(self.rng, outputfile, inputfile)
             check_call([self.rng_filepath, str(self.seed), outputfile, inputfile])
@@ -178,7 +178,7 @@ class Dataset:
             print(err.cmd, file=stderr)
             print(err.stderr, file=stderr)
 
-    def __openfile__(self, filepath):
+    def _openfile_(self, filepath):
         self.filehandle = open(filepath, 'rt', encoding="utf-8")
 
     def save(self, filepath):
@@ -190,9 +190,9 @@ class Dataset:
     def load(filepath) -> Type['Dataset']:
         """Loads a dataset object from json, also setting back the state"""
         my_dataset: Type['Dataset'] = json.load(filepath)
-        my_dataset.__set_seed__(my_dataset.seed)
-        my_dataset.__shuffle__(my_dataset.orig, my_dataset.shufffile)
-        my_dataset.__openfile__(my_dataset.shufffile)
+        my_dataset._set_seed_(my_dataset.seed)
+        my_dataset._shuffle_(my_dataset.orig, my_dataset.shufffile)
+        my_dataset._openfile_(my_dataset.shufffile)
         # @TODO rewind the file to the proper location
         return my_dataset
 
@@ -209,9 +209,9 @@ class Dataset:
             # Update seed and re-shuffle the file UNLESS we have reached the max epoch
             if self.epoch < self.max_epoch:
                 self.filehandle.close()
-                self.__ammend_seed__()
-                self.__shuffle__(self.orig, self.shufffile)
-                self.__openfile__(self.shufffile)
+                self._ammend_seed_()
+                self._shuffle_(self.orig, self.shufffile)
+                self._openfile_(self.shufffile)
                 self.epoch = self.epoch + 1
         return (myepoch, retlist)
 
@@ -221,7 +221,7 @@ class Dataset:
             my_filehandle.close()
         # @TODO save the training state
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def _exit_(self, exc_type, exc_value, traceback):
         self._finalizer()
 
 

@@ -358,7 +358,7 @@ export default {
 						</tr>
 					</thead>
 					<tbody v-if="displayDiff" class="table-diff">
-						<template v-for="(chunk, i) in differences">
+						<template v-for="(chunk, i) in diff">
 							<tr v-for="(entry, j) in chunk.value" v-bind:key="`${i}:${j}`" v-bind:class="{added:chunk.added, removed:chunk.removed, changed:chunk.changed}">
 								<td v-for="lang in languages" v-bind:key="lang" v-bind:lang="lang">
 									<template v-if="chunk.changed">

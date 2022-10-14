@@ -9,7 +9,7 @@ from sys import stderr
 from dataclasses import dataclass
 from subprocess import check_call, CalledProcessError
 from collections import namedtuple
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Union
 from math import inf
 
 import yaml
@@ -36,7 +36,7 @@ class StateTracker:
         '''Tries to load the state from previous yml, else just writes a new yml. If restore==False
            it always overwrites the previous input'''
         self.ymlpath = ymlpath
-        self.stage: str = None
+        self.stage: Union[str, None] = None
         self.dataset_states: Dict['str', DatasetState] = {}
         self.random_state = None
         if restore and os.path.isfile(self.ymlpath) and os.access(self.ymlpath, os.R_OK):
@@ -135,6 +135,12 @@ class Executor:
         # Initialise the dataset filestreams. For now just do identity initialisation, do more later
         for dataset in self.dataset_names:
             self.dataset_objects[dataset] = Dataset(self.dataset_paths[dataset], tmpdir, self.random_seed, 0.1, inf, state_tracker)
+
+        # Skip training stages based on if we are resuming the training
+        if state_tracker.stage is not None:
+            resume_stage_idx = self.stage_names.index(state_tracker.stage)
+            print("Skipping training stages", self.stage_names[0:resume_stage_idx], "as we are resuming training")
+            self.stage_names = self.stage_names[resume_stage_idx:]
 
         # Start training
         for stage in self.stage_names:
@@ -261,6 +267,20 @@ class Dataset:
         state = DatasetState(self.seed, self.linenum, self.epoch)
         self.state_tracker.update_dataset(name, state)
         return (myepoch, retlist)
+
+    def restore_state(self, state: DatasetState) -> None:
+        '''Restores the state from a previous training run'''
+        self.filehandle.close()
+        self.seed = state.seed
+        self.epoch = state.epoch
+        self._shuffle_(self.orig, self.shufffile)
+        self._openfile_(self.shufffile)
+        i = 0
+        while i < state.line:
+            self.filehandle.readline()
+            i = i + 1
+            self.linenum = self.linenum + 1
+
 
     @staticmethod
     def _cleanup_(my_filehandle):

@@ -9,10 +9,9 @@ from sys import stderr
 from dataclasses import dataclass
 from subprocess import check_call, CalledProcessError
 from collections import namedtuple
-from typing import List, Type, Tuple, Dict
+from typing import List, Tuple, Dict
 from math import inf
 
-import json
 import yaml
 from yaml.loader import SafeLoader, Loader
 
@@ -140,12 +139,12 @@ class Executor:
         # Start training
         for stage in self.stage_names:
             print(stage)
-            self.__init__stage_(self.stages[stage])
+            self._init_stage_(self.stages[stage])
             self.state_tracker.update_stage(stage)
             self.train_stage(self.stages[stage])
 
 
-    def __init__stage_(self, stage): #@TODO make the stupid stage a full object so i can have proper attributes
+    def _init_stage_(self, stage): #@TODO make the stupid stage a full object so i can have proper attributes
         '''Init a certain stage of the training'''
         for dataset in stage.datasets.keys():
             self.dataset_objects[dataset].set_weight(stage.datasets[dataset])

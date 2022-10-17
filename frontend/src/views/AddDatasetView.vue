@@ -97,6 +97,24 @@ function downloadSelection() {
 	selection.value = [];
 }
 
+const sizeRequests = new Map();
+
+watch(datasets, (datasets) => {
+	datasets.forEach(dataset => {
+		if (dataset.size)
+			return;
+
+		if (!sizeRequests.has(dataset.id))
+			sizeRequests.set(dataset.id,
+				fetch(`/api/download/datasets/${encodeURIComponent(dataset.id)}`)
+					.then(response => response.json()))
+
+		sizeRequests.get(dataset.id).then(remote => {
+			Object.assign(dataset, remote);
+		});
+	})
+})
+
 async function fetchJSON(url, options) {
 	try {
 		loading.value += 1;
@@ -134,6 +152,11 @@ async function requestDownloadSelection(datasets) {
 	});
 }
 
+function formatSize(size) {
+	const i = size == 0 ? 0 : Math.floor(Math.log(size) / Math.log(1024));
+	return (size / Math.pow(1024, i)).toFixed(2) + ' ' + ['B', 'kB', 'MB', 'GB', 'TB'][i];
+}
+
 </script>
 
 <template>
@@ -154,13 +177,26 @@ async function requestDownloadSelection(datasets) {
 		</div>
 		<div class="dataset-list">
 			<table>
-				<tr v-for="dataset in datasets" :key="dataset.id">
-					<td><input type="checkbox" v-model="selection" :value="dataset" :disabled="dataset.id in downloads || dataset.paths.length > 0"></td>
-					<td>{{ dataset.name }}</td>
-					<td>{{ dataset.group }}</td>
-					<td>{{ dataset.version }}</td>
-					<td>{{ dataset.langs.join(', ') }}</td>
-				</tr>
+				<thead>
+					<tr>
+						<th class="col-checkbox"></th>
+						<th class="col-name" title="Name of dataset">Name</th>
+						<th class="col-group" title="Group that publishes dataset">Group</th>
+						<th class="col-version" title="Version of dataset (only latest versions are shown)">Version</th>
+						<th class="col-languages" title="Languages in this particular download">Languages</th>
+						<th class="col-filesize" title="Estimated size of download or size currently on disk">Filesize</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr v-for="dataset in datasets" :key="dataset.id" :id="`did-${dataset.id}`">
+						<td class="col-checkbox" :title="dataset.url"><input type="checkbox" v-model="selection" :value="dataset" :disabled="dataset.id in downloads || 'paths' in dataset"></td>
+						<td class="col-name" :title="dataset.cite">{{ dataset.name }}</td>
+						<td class="col-group">{{ dataset.group }}</td>
+						<td class="col-version">{{ dataset.version }}</td>
+						<td class="col-languages">{{ dataset.langs.join(', ') }}</td>
+						<td class="col-filesize">{{ dataset.size ? formatSize(dataset.size) : '' }}</td>
+					</tr>
+				</tbody>
 			</table>
 		</div>
 		<div class="dataset-selection">
@@ -204,6 +240,18 @@ async function requestDownloadSelection(datasets) {
 .dataset-list {
 	flex: 1;
 	overflow: auto;
+}
+
+.dataset-list > table {
+	width: 100%;
+}
+
+.dataset-list .col-filesize {
+	text-align: right;
+}
+
+.dataset-list thead th {
+	text-align: left !important;
 }
 
 .dataset-selection {

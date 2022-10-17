@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
 """Various mtdata dataset downloading utilities"""
 import os
+import sys
+import asyncio
 from glob import iglob
 from itertools import chain
-from typing import Iterable, Dict, List, Optional, Set
+from typing import Iterable, Dict, List, Optional, Set, Union, Tuple
 from enum import Enum
 from queue import SimpleQueue
 from subprocess import Popen
 from threading import Thread
 from collections import defaultdict
+from urllib.request import Request, urlopen
+from pprint import pprint
 
 import mtdata.entry
-from mtdata.entry import lang_pair
+from mtdata.entry import lang_pair, DatasetId
 from mtdata.index import Index, get_entries
 from mtdata.iso.bcp47 import bcp47, BCP47Tag
 from pydantic import BaseModel
@@ -32,7 +36,17 @@ class Entry(EntryRef):
     name: str
     version: str
     langs: List[str]
+    cite: Optional[str]
+
+
+class LocalEntry(Entry):
     paths: Set[str]
+    size: Optional[int] # Size on disk
+
+
+class RemoteEntry(Entry):
+    url: str
+    size: Optional[int] # 'Content-Length' from a HTTP HEAD request
 
 
 class DownloadState(Enum):
@@ -132,15 +146,26 @@ def find_local_paths(entry: mtdata.entry.Entry) -> Set[str]:
     )
 
 
-def cast_entry(entry) -> Entry:
-    return Entry(
+def cast_entry(entry, **kwargs) -> Entry:
+    args = dict(
         id = str(entry.did),
         group = entry.did.group,
         name = entry.did.name,
         version = entry.did.version,
         langs = [lang.lang for lang in entry.did.langs],
-        paths = find_local_paths(entry)
-    )
+        cite = entry.cite,
+        **kwargs)
+
+    paths = find_local_paths(entry)
+    if paths:
+        return LocalEntry(
+            **args,
+            paths=paths,
+            size=sum(os.stat(path).st_size for path in paths))
+    else:
+        return RemoteEntry(
+            **args,
+            url=entry.url)
 
 
 @app.get("/languages/")
@@ -207,6 +232,39 @@ def cancel_download(dataset_id:str) -> EntryDownloadView:
         entry = download.entry,
         state = download.state
     )
+
+
+def http_request_head(url):
+    request = Request(url, method='HEAD')
+    with urlopen(request) as fh:
+        return fh.headers
+
+
+@app.get('/datasets/{dataset_id}')
+async def get_dataset_details(dataset_id:str) -> RemoteEntry:
+    key = DatasetId.parse(dataset_id)
+    dataset = Index.get_instance().entries[key]
+    headers = await asyncio.to_thread(http_request_head, dataset.url)
+    
+    # Some sites, like ELRC-share, don't return a proper response at all...
+    if headers.get('content-type', '').startswith('text/html') or 'content-length' not in headers:
+        size = None
+    else:
+        size = int(headers.get('content-length'))
+    
+    return cast_entry(dataset, size=size)
+
+
+@app.get('/dataset-headers/{dataset_id}')
+async def get_dataset_details(dataset_id:str):
+    key = DatasetId.parse(dataset_id)
+    dataset = Index.get_instance().entries[key]
+    return {
+        'request': {
+            'url': dataset.url,
+        },
+        'headers': await asyncio.to_thread(http_request_head, dataset.url)
+    }
 
 
 def dedupe_datasests(datasets: Iterable[Entry]) -> Iterable[Entry]:

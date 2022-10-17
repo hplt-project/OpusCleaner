@@ -145,6 +145,10 @@ export default {
 
 	computed: {
 		languages() {
+			// Unloaded state the dataset will have a name, but not all its details yet
+			if (!this.dataset?.columns)
+				return [];
+
 			const languages = Array.from(Object.keys(this.dataset.columns)).sort();
 			// First try non-alphabetical order. If no success, return alphabetical order
 			if (!this.dataset.name.includes(languages.reverse().join('-')))

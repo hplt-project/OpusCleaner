@@ -7,19 +7,8 @@ import {diff} from '../diff.js';
 import InlineDiff from './InlineDiff.vue';
 import LoadingIndicator from './LoadingIndicator.vue';
 import {stream} from '../stream.js';
-
-// Simple hash function for creating string hashes
-function cyrb53(str, seed = 0) {
-	let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
-	for (let i = 0, ch; i < str.length; i++) {
-		ch = str.charCodeAt(i);
-		h1 = Math.imul(h1 ^ ch, 2654435761);
-		h2 = Math.imul(h2 ^ ch, 1597334677);
-	}
-	h1 = Math.imul(h1 ^ (h1>>>16), 2246822507) ^ Math.imul(h2 ^ (h2>>>13), 3266489909);
-	h2 = Math.imul(h2 ^ (h2>>>16), 2246822507) ^ Math.imul(h1 ^ (h1>>>13), 3266489909);
-	return 4294967296 * (2097151 & h2) + (h1>>>0);
-}
+import { getFilters } from '../store/filters.js';
+import { getFilterSteps, saveFilterSteps, filterStepsModified } from '../store/filtersteps.js';
 
 const multiDragKey = navigator.platform.match(/^(Mac|iPhone$)/) ? 'Meta' : 'Control';
 
@@ -147,9 +136,8 @@ export default {
 			displayAsRows: false,
 			samples: [],
 			isFetchingSamples: false,
-			filters: [],
-			filterSteps: [],
-			filterStepsLastSave: null,
+			filters: getFilters(),
+			filterSteps: getFilterSteps(this.dataset),
 			selectedFilterStep: null,
 			comparingFilterStep: null,
 		});
@@ -164,11 +152,8 @@ export default {
 			
 			return languages;
 		},
-		filterStepsStateHash() {
-			return cyrb53(JSON.stringify(this.filterSteps));
-		},
 		filterStepsChangedSinceLastSave() {
-			return this.filterStepsLastSave !== this.filterStepsStateHash;
+			return filterStepsModified(this.dataset);
 		},
 		sampleIndex() {
 			const index = this.selectedFilterStep ? this.filterSteps.indexOf(this.selectedFilterStep) + 1 : -1;
@@ -207,6 +192,7 @@ export default {
 	},
 
 	watch: {
+		// When the filter steps change, we re-render our sample
 		filterSteps: {
 			deep: true,
 			handler() {
@@ -216,7 +202,7 @@ export default {
 		// TODO: I'd expected this one to be picked up by default since fetchFilterSteps accesses this.dataset.name
 		dataset: {
 			handler() {
-				this.fetchFilterSteps();
+				this.filterSteps = getFilterSteps(this.dataset).value;
 			}
 		}
 	},
@@ -226,10 +212,8 @@ export default {
 		this._serial = 0;
 	},
 
-	async mounted() {
-		await this.fetchFilters();
-		await this.fetchFilterSteps();
-		// ... that will then trigger fetchSample with the filter configuration applied.
+	mounted() {
+		this.fetchSample();
 	},
 
 	components: {
@@ -239,11 +223,6 @@ export default {
 	},
 
 	methods: {
-		async fetchFilters() {
-			const response = await fetch('/api/filters/');
-			// Turn the {name:Filter} map into a [Filter] list and fold the 'name' attribute into the Filter.name property.
-			this.filters = Array.from(Object.entries(await response.json()), ([name, value]) => Object.assign(value, {name}));
-		},
 		async fetchSample() {
 			this._sampleAbortController.abort();
 			this._sampleAbortController = new AbortController();
@@ -267,26 +246,9 @@ export default {
 
 			this.isFetchingSamples = false;
 		},
-		async fetchFilterSteps() {
-			const response = await fetch(`/api/datasets/${encodeURIComponent(this.dataset.name)}/configuration.json`)
-			this.filterSteps = await response.json();
-			this.filterStepsLastSave = this.filterStepsStateHash;
-		},
 		async saveFilterSteps() {
-			const hash = this.filterStepsStateHash;
-
-			const response = await fetch(`/api/datasets/${encodeURIComponent(this.dataset.name)}/configuration.json`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					'Accept': 'application/json'
-				},
-				body: JSON.stringify(this.filterSteps)
-			});
-
-			if (response.ok)
-				this.filterStepsLastSave = hash;
-			else
+			const response = await saveFilterSteps(this.dataset);
+			if (!response.ok)
 				alert(await response.text());
 		},
 		createFilterStep(filter) {
@@ -306,7 +268,7 @@ export default {
 			return this.filters.find(filter => filter.name === filterStep.filter);
 		},
 		filterRequiresLanguage(filterStep) {
-			return this.filterDefinition(filterStep).type == 'monolingual';
+			return this.filterDefinition(filterStep)?.type == 'monolingual';
 		},
 		getLoadingStage(index) {
 			if (this.samples.length === index + 1) // `+1` because first of samples is the raw sample)

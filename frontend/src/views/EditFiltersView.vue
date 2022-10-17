@@ -1,20 +1,14 @@
 <script setup>
 import { useRoute } from 'vue-router';
-import {ref, watch} from 'vue';
+import { computed } from 'vue';
+import { getDataset } from '../store/datasets.js';
 import FilterEditor from '../components/FilterEditor.vue';
-
-const dataset = ref(null);
 
 const route = useRoute();
 
-watch(route, fetchDataset, {immediate: true});
-
-async function fetchDataset() {
-	const response = await fetch('/api/datasets/');
-	const datasets = await response.json();
-	dataset.value = datasets.find(d => d.name === route.params.datasetName)
-	console.log('Fetched dataset', dataset.value);
-}
+const dataset = computed(() => {
+	return getDataset(route.params.datasetName)
+});
 
 </script>
 

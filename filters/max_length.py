@@ -24,7 +24,7 @@ def clean_parallel(max_length: float, min_length: float, debug: bool=True) -> No
             trg = fields[-1].strip()
 
         srctok = src.split()
-        srcpass: bool = (len(srctok) < max_length and len(srctok) > min_length)
+        srcpass: bool = (len(srctok) <= max_length and len(srctok) >= min_length)
 
         trgpass: bool
 
@@ -33,7 +33,7 @@ def clean_parallel(max_length: float, min_length: float, debug: bool=True) -> No
             trgpass = True
         else:
             trgtok = trg.split()
-            trgpass = (len(trgtok) < max_length and len(trgtok) > min_length)
+            trgpass = (len(trgtok) <= max_length and len(trgtok) >= min_length)
 
         # write
         if srcpass and trgpass:

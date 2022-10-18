@@ -22,6 +22,8 @@ import asyncio
 import json
 import subprocess
 import hashlib
+import importlib
+import opusfilter
 from glob import glob
 from tempfile import TemporaryFile
 from shutil import copyfileobj
@@ -70,7 +72,7 @@ class FilterParameterBase(BaseModel):
     type: str
     help: Optional[str]
 
-    def export(self, value: Any) -> str:
+    def export(self, value: Any) -> Any:
         return str(value)
 
 
@@ -80,6 +82,9 @@ class FilterParameterFloat(FilterParameterBase):
     max: Optional[float]
     default: Optional[float]
 
+    def export(self, value: Any) -> Any:
+        return float(value)
+
 
 class FilterParameterInt(FilterParameterBase):
     type: Literal["int"]
@@ -87,13 +92,16 @@ class FilterParameterInt(FilterParameterBase):
     max: Optional[int]
     default: Optional[int]
 
+    def export(self, value: Any) -> Any:
+        return int(value)
+
 
 class FilterParameterBool(FilterParameterBase):
     type: Literal["bool"]
     default: Optional[bool]
 
-    def export(self, value: Any) -> str:
-        return "1" if value else ""
+    def export(self, value: Any) -> Any:
+        return bool(value)
 
 
 class FilterParameterStr(FilterParameterBase):
@@ -101,14 +109,44 @@ class FilterParameterStr(FilterParameterBase):
     default: Optional[str]
     allowed_values: Optional[List[str]]
 
+    def export(self, value: Any) -> Any:
+        # TODO: validate against allowed_values?
+        return super().export(value)
+
+
+class FilterParameterList(FilterParameterBase):
+    type: Literal["list"]
+    parameter: "FilterParameter"
+
+    def export(self, value: Any) -> Any:
+        return [
+            self.parameter.export(item)
+            for item in value
+        ]
+
+
+class FilterParameterTuple(FilterParameterBase):
+    type: Literal["tuple"]
+    parameters: List["FilterParameter"]
+
+    def export(self, value: Any) -> Any:
+        return tuple(
+            parameter.export(val)
+            for parameter, val in zip(self.parameters, value)
+        )
+
 
 FilterParameter = Union[
     FilterParameterFloat,
     FilterParameterInt,
     FilterParameterBool,
-    FilterParameterStr
+    FilterParameterStr,
+    FilterParameterList,
+    FilterParameterTuple
 ]
 
+FilterParameterList.update_forward_refs()
+FilterParameterTuple.update_forward_refs()
 
 class Filter(BaseModel):
     type: FilterType
@@ -164,18 +202,292 @@ class FilterPipeline(BaseModel):
     filters: List[FilterStep]
 
 
-def list_filters(path) -> Iterable[Filter]:
-    for filename in glob(path, recursive=True):
-        try:
-            with open(filename) as fh:
-                defaults = {
-                    "name": os.path.splitext(os.path.basename(filename))[0],
-                    "basedir": os.path.dirname(filename)
-                }
-                yield parse_obj_as(Filter, {**defaults, **json.load(fh)})
-        except Exception as e:
-            print(f"Could not parse {filename}: {e}", file=sys.stderr)
+# def list_filters(path) -> Iterable[Filter]:
+#     for filename in glob(path, recursive=True):
+#         try:
+#             with open(filename) as fh:
+#                 defaults = {
+#                     "name": os.path.splitext(os.path.basename(filename))[0],
+#                     "basedir": os.path.dirname(filename)
+#                 }
+#                 yield parse_obj_as(Filter, {**defaults, **json.load(fh)})
+#         except Exception as e:
+#             print(f"Could not parse {filename}: {e}", file=sys.stderr)
 
+
+def list_filters(path) -> Iterable[Filter]:
+    filters = [
+        {
+            'type': 'bilingual',
+            'name': 'LengthFilter',
+            'command': 'opusfilter.filters.LengthFilter',
+            'description': 'Sentence length filter',
+            'parameters': {
+                'min_length': {
+                    'type': 'int',
+                    'default': 1
+                },
+                'max_lenght': {
+                    'type': 'int',
+                    'default': 100
+                },
+                'unit': {
+                    'type': 'str',
+                    'allowed_values': ['word', 'character']
+                },
+                'pass_empty': {
+                    'type': 'bool',
+                    'default': False
+                }
+            }
+        },
+        {
+            'type': 'bilingual',
+            'name': 'LengthRatioFilter',
+            'command': 'opusfilter.filters.LengthRatioFilter',
+            'description': 'Character length ratio',
+            'parameters': {
+                'threshold': {
+                    'type': 'int',
+                    'default': 3
+                },
+                'unit': {
+                    'type': 'str',
+                    'default': 'word',
+                    'allowed_values': ['word', 'character']
+                }
+            }
+        },
+        {
+            'type': 'bilingual',
+            'name': 'LongWordFilter',
+            'command': 'opusfilter.filters.LongWordFilter',
+            'description': 'Word length filter',
+            'parameters': {
+                'threshold': {
+                    'type': 'int',
+                    'default': 40
+                }
+            }
+        },
+        {
+            'type': 'bilingual',
+            'name': 'AverageWordLengthFilter',
+            'command': 'opusfilter.filters.AverageWordLengthFilter',
+            'description': 'Average word length filter. Returns zeros for empty segments. If pass_empty is true, pairs with only empty segments are accepted.',
+            'parameters': {
+                'min_length': {
+                    'type': 'int',
+                    'default': 1
+                },
+                'max_lenght': {
+                    'type': 'int',
+                    'default': 100
+                },
+                'pass_empty': {
+                    'type': 'bool',
+                    'default': False
+                }
+            }
+        },
+        {
+            'type': 'bilingual',
+            'name': 'HtmlTagFilter',
+            'command': 'opusfilter.filters.HtmlTagFilter',
+            'description': 'HTML tag filter',
+            'parameters': {}
+        },
+        {
+            'type': 'bilingual',
+            'name': 'RegExpFilter',
+            'command': 'opusfilter.filters.RegExpFilter',
+            'description': 'Filter out segments that match or do not match a regular expression',
+            'parameters': {
+                'regexps': {
+                    'type': 'tuple',
+                    'help': 'Regexp pattern for each language in the parallel data.',
+                    'parameters': [
+                        {
+                            'type': 'str',
+                            'help': 'Pattern matching first column'
+                        },
+                        {
+                            'type': 'str',
+                            'help': 'Pattern matching second column'
+                        }
+                    ]
+                },
+                'accept_match': {
+                    'type': 'bool',
+                    'default': False,
+                    'help': 'If accept_match is False, the pair is accepted only if none of the segment match the corresponding regexp. If accept_match is True, the pair is accepted only if all segments match the corresponding regexp.'
+                }
+            }
+        },
+        {
+            'type': 'bilingual',
+            'name': 'AlphabetRatioFilter',
+            'command': 'opusfilter.filters.AlphabetRatioFilter',
+            'description': 'Proportion of alphabetic characters in the segment',
+            'parameters': {
+                'threshold': {
+                    'type': 'float',
+                    'default': 0.75
+                },
+                'exclude_whitespace': {
+                    'type': 'bool',
+                    'default': False
+                }
+            }
+        },
+        {
+            'type': 'bilingual',
+            'name': 'CharacterScoreFilter',
+            'command': 'opusfilter.filters.CharacterScoreFilter',
+            'description': 'Proportion of alphabetic characters that are in the given script.',
+            'parameters': {
+                'scripts': {
+                    'type': 'tuple',
+                    'help': 'For a list of valid scripts, see https://www.regular-expressions.info/unicode.html',
+                    'parameters': [
+                        {
+                            'type': 'str'
+                        },
+                        {  
+                            'type': 'str'
+                        }
+                    ]
+                },
+                'thresholds': {
+                    'type': 'tuple',
+                    'parameters': [
+                        {
+                            'type': 'float',
+                            'default': 1
+                        },
+                        {  
+                            'type': 'float',
+                            'default': 1
+                        }
+                    ]
+                }
+            }
+        }
+    ]
+
+    filters += [
+        {
+            "type": "bilingual",
+            "name": "Tokenizer",
+            "description": "Tokenize text",
+            "command": "opusfilter.preprocessors.Tokenizer",
+            "parameters": {
+                "tokenizer": {
+                    "type": "tuple",
+                    "parameters": [
+                        {
+                            "type": "str",
+                            "allowed_values": ["moses", "jieba", "mecab"],
+                            "default": "moses"
+                        },
+                        {
+                            "type": "str",
+                            "allowed_values": ["moses", "jieba", "mecab"],
+                            "default": "moses"
+                        }
+                    ]
+                },
+                "languages": {
+                    "type": "tuple",
+                    "parameters": [
+                        {
+                            "type": "str"
+                        },
+                        {
+                            "type": "str"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "bilingual",
+            "name": "Detokenizer",
+            "description": "Detokenize text",
+            "command": "opusfilter.preprocessors.Detokenizer",
+            "parameters": {
+                "tokenizer": {
+                    "type": "tuple",
+                    "parameters": [
+                        {
+                            "type": "str",
+                            "allowed_values": ["moses", "jieba", "mecab"],
+                            "default": "moses"
+                        },
+                        {
+                            "type": "str",
+                            "allowed_values": ["moses", "jieba", "mecab"],
+                            "default": "moses"
+                        }
+                    ]
+                },
+                "languages": {
+                    "type": "tuple",
+                    "parameters": [
+                        {
+                            "type": "str"
+                        },
+                        {
+                            "type": "str"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "bilingual",
+            "name": "WhitespaceNormalizer",
+            "description": "Normalize whitespace characters. Replace any sequences of whitespace characters with a single space and remove leading and trailing whitespace.",
+            "command": "opusfilter.preprocessors.WhitespaceNormalizer",
+            "parameters": {}
+        },
+        {
+            "type": "bilingual",
+            "name": "RegExpSub",
+            "description": "Apply regular expression substitutions",
+            "command": "opusfilter.preprocessors.RegExpSub",
+            "parameters": {
+                "patterns": {
+                    "type": "list",
+                    "parameter": {
+                        "type": "tuple",
+                        "parameters": [
+                            {
+                                "type": "str",
+                                "help": "pattern"
+                            },
+                            {
+                                "type": "str",
+                                "help": "replacement"
+                            },
+                            {
+                                "type": "int",
+                                "help": "count (0 = substitute all)",
+                                "default": 0
+                            },
+                            {
+                                "type": "str",
+                                "help": "flags",
+                                "default": "I"
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+    ]
+
+    return parse_obj_as(List[Filter], filters)
 
 
 FILTERS: Dict[str,Filter] = {}
@@ -248,21 +560,10 @@ class FilterOutput(BaseModel):
     stdout: List[Dict[str,str]]
     stderr: Optional[str]
 
-    def __init__(self, langs:List[str], stdout:bytes, stderr:Optional[bytes] = None):
-        lines = []
-
-        for lineno, line in enumerate(stdout.split(b'\n'), start=1):
-            values = []
-            for colno, field in enumerate(line.split(b'\t'), start=1):
-                try:
-                    values.append(field.decode())
-                except UnicodeDecodeError as e:
-                    values.append(f'[Error: Cannot decode line {lineno} column {colno}: {e!s}]')
-            lines.append(dict(zip(langs, values)))
-
+    def __init__(self, langs:List[str], stdout:Iterable[List[str]], stderr:Optional[str] = None):
         super().__init__(
-            stdout=lines,
-            stderr=stderr.decode() if stderr is not None else None)
+            stdout=[dict(zip(langs, pairs)) for pairs in stdout],
+            stderr=stderr)
 
 
 async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[FilterOutput]:
@@ -274,46 +575,43 @@ async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[Filter
     if not os.path.exists(sample_path(name, langs)):
         await compute_sample(name, columns)
 
-    with open(sample_path(name, langs), 'rb') as fh:
-        sample = fh.read()
+    with open(sample_path(name, langs), 'rt') as fh:
+        sample = [
+            line.rstrip('\n').split('\t')
+            for line in fh.read()
+        ]
 
     yield FilterOutput(langs, sample)
 
     for i, filter_step in enumerate(filters):
         filter_definition = FILTERS[filter_step.filter]
 
-        if filter_definition.type == FilterType.BILINGUAL:
-            command = filter_definition.command
-        elif filter_definition.type == FilterType.MONOLINGUAL:
-            column = langs.index(none_throws(filter_step.language))
-            command = f'{COL_PY} {column} {filter_definition.command}'
-        else:
+        if filter_definition.type == FilterType.MONOLINGUAL:
             raise NotImplementedError()
 
-        params = {name: props.export(filter_step.parameters[name])
-                  for name, props in filter_definition.parameters.items()}
+        try:
+            params = {
+                name: props.export(filter_step.parameters[name])
+                for name, props in filter_definition.parameters.items()
+            }
 
-        if params:
-            vars_setter = '; '.join(f"{k}={quote(v)}" for k, v in params.items())
-            command = f'{vars_setter}; {command}'
+            module_name, class_name = filter_definition.command.rsplit('.', maxsplit=1)
+            module = importlib.import_module(module_name)
+            filter_cls = getattr(module, class_name)
 
-        p_filter = await asyncio.create_subprocess_shell(command,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=filter_definition.basedir)
+            filter_inst = filter_cls(**params)
 
-        # Check exit codes, testing most obvious problems first.
-        filter_output, filter_stderr = await p_filter.communicate(input=sample)
-        # if p_filter.returncode != 0:
-            # raise Exception(f"Step {i}: {filter_step.filter} failed:\n{filter_stderr!s}")
+            if isinstance(filter_inst, opusfilter.FilterABC):
+                sample = filter_inst.filter(sample)
+            elif isinstance(filter_inst, opusfilter.PreprocessorABC):
+                sample = filter_inst.process(sample)
+            else:
+                raise NotImplementedError()
 
-        yield FilterOutput(langs, filter_output, filter_stderr)
-
-        if p_filter.returncode != 0:
-            break
-
-        sample = filter_output
+            assert sample is not None
+            yield FilterOutput(langs, sample)
+        except Exception as err:
+            yield FilterOutput(langs, [], str(err))
 
 
 def stream_jsonl(iterable):

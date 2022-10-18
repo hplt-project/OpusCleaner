@@ -4,10 +4,13 @@ import { RouterLink } from 'vue-router';
 import { getDatasets } from '../store/datasets.js';
 import { getFilterSteps } from '../store/filtersteps.js';
 import { getCategoriesForDataset } from '../store/categories.js';
+import CategoryPicker from '../components/CategoryPicker.vue';
 
 function languages(dataset) {
 	return Object.keys(dataset?.columns || {});
 }
+
+const categoryPicker = ref(); // Element
 
 </script>
 
@@ -27,6 +30,7 @@ function languages(dataset) {
 					<td>{{ dataset.name }}</td>
 					<td>{{ languages(dataset).join(', ') }}</td>
 					<td>
+						<button @click="event => categoryPicker.showForDataset(dataset, event)">Edit</button>
 						<span class="category" v-for="category in getCategoriesForDataset(dataset)" :key="category.name">{{ category.name }}</span>
 					</td>
 					<td><router-link :to="{name: 'edit-filters', params: {datasetName: dataset.name}}">Filters ({{ getFilterSteps(dataset).length }})</router-link></td>
@@ -40,6 +44,7 @@ function languages(dataset) {
 				</tr>
 			</tfoot>
 		</table>
+		<CategoryPicker ref="categoryPicker"></CategoryPicker>
 	</div>
 </template>
 
@@ -55,5 +60,16 @@ function languages(dataset) {
 
 .dataset-list table tr:nth-child(2n) td {
 	background: #eef;
+}
+
+.category {
+	display: inline-block;
+	margin: 0 0.125em;
+	padding: 0.125em 0.25em;
+	background: #ccc;
+	border-radius: 2px;
+	font-size: 0.8em;
+	line-height: 1;
+	vertical-align: baseline;
 }
 </style>

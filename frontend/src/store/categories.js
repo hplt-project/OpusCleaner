@@ -10,17 +10,36 @@ async function fetchCategories() {
 	return await response.json();
 }
 
+async function pushCategories() {
+	const response = await fetch('/api/categories/', {
+		method: 'PUT',
+		headers: {
+			'Content-Type': 'application/json',
+			'Accept': 'application/json'
+		},
+		body: JSON.stringify(data)
+	});
+
+	// TODO: Handle `request.ok === false` somehow.
+
+	return response;
+}
+
 let request = null;
 
-export function getCategories() {
+function getData() {
 	if (!request)
 		request = fetchCategories().then(remote => Object.assign(data, remote));
 
 	return data
 }
 
+export function getCategories() {
+	return getData().categories;
+}
+
 export function getCategoriesForDataset(dataset) {
-	const data = getCategories();
+	const data = getData();
 
 	// Look through all mappings, and return the category objects if the dataset
 	// name is mentioned in the mapping section for it.
@@ -30,4 +49,27 @@ export function getCategoriesForDataset(dataset) {
 		else
 			return acc
 	}, []);
+}
+
+export function setCategoriesForDataset(categories, dataset) {
+	const names = new Set(categories.map(cat => cat.name));
+
+	// Overly complicated way of adding/removing the dataset name from each of
+	// the categories. I made a stupid server side API (but the file format is
+	// nicely human readable now at least. But I could have solved this in Python!)
+	getCategories().forEach(({name}) => {
+		if (names.has(name)) {
+			if (!(name in data.mapping))
+				data.mapping[name] = [dataset.name]
+			else
+				data.mapping[name].push(dataset.name)
+		} else {
+			if (name in data.mapping) {
+				const index = data.mapping[name].indexOf(dataset.name);
+				if (index !== -1)
+					data.mapping[name].splice(index, 1);
+			}
+		}
+	})
+	pushCategories();
 }

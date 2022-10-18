@@ -21,10 +21,7 @@ from mtdata.iso.bcp47 import bcp47, BCP47Tag
 from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException
 
-
-DATA_PATH = os.getenv('DATA_PATH', 'data/train-parts/*.*.gz')
-
-DOWNLOAD_PATH = 'data'
+from config import DATA_PATH, DOWNLOAD_PATH
 
 
 class EntryRef(BaseModel):

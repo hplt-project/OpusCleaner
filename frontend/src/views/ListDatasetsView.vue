@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { getDatasets } from '../store/datasets.js';
 import { getFilterSteps } from '../store/filtersteps.js';
+import { getCategoriesForDataset } from '../store/categories.js';
 
 function languages(dataset) {
 	return Object.keys(dataset?.columns || {});
@@ -13,11 +14,24 @@ function languages(dataset) {
 <template>
 	<div class="dataset-list">
 		<table>
-			<tr v-for="dataset in getDatasets()" :key="dataset.id">
-				<td>{{ dataset.name }}</td>
-				<td>{{ languages(dataset).join(', ') }}</td>
-				<td><router-link :to="{name: 'edit-filters', params: {datasetName: dataset.name}}">Filters ({{ getFilterSteps(dataset).length }})</router-link></td>
-			</tr>
+			<thead>
+				<tr>
+					<th>Name</th>
+					<th>Languages</th>
+					<th>Categories</th>
+					<th>Filter steps</th>
+				</tr>
+			</thead>
+			<tbody>
+				<tr v-for="dataset in getDatasets()" :key="dataset.id">
+					<td>{{ dataset.name }}</td>
+					<td>{{ languages(dataset).join(', ') }}</td>
+					<td>
+						<span class="category" v-for="category in getCategoriesForDataset(dataset)" :key="category.name">{{ category.name }}</span>
+					</td>
+					<td><router-link :to="{name: 'edit-filters', params: {datasetName: dataset.name}}">Filters ({{ getFilterSteps(dataset).length }})</router-link></td>
+				</tr>
+			</tbody>
 			<tfoot>
 				<tr>
 					<td colspan="3">

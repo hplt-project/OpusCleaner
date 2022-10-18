@@ -30,25 +30,12 @@ from pprint import pprint
 
 from datasets import list_datasets, Path
 from download import app as download_app
+from categories import app as categories_app
+from config import DATA_PATH, FILTER_PATH, COL_PY, SAMPLE_PY, SAMPLE_SIZE
 from sample import sample
 
 import mimetypes
 mimetypes.add_type('application/javascript', '.js')
-
-
-DATA_PATH = os.getenv('DATA_PATH', 'data/train-parts/*.*.gz')
-
-FILTER_PATH = 'filters/*.json'
-
-# col.py is used to apply a monolingual filter to a bilingual dataset. Needs
-# to be absolute since filters can run from different cwds.
-COL_PY = os.path.abspath('./col.py')
-
-SAMPLE_PY = os.path.abspath('./sample.py')
-
-# Size of each of the three sections (head, random sample of middle, tail) of
-# the dataset sample that we operate on.
-SAMPLE_SIZE = int(os.getenv('SAMPLE_SIZE', '1000'))
 
 
 class File(BaseModel):
@@ -406,6 +393,8 @@ def redirect_to_interface():
 app.mount('/frontend/', StaticFiles(directory='frontend/dist', html=True), name='static')
 
 app.mount('/api/download/', download_app)
+
+app.mount('/api/categories/', categories_app)
 
 def main_serve(args):
     import uvicorn

@@ -89,6 +89,7 @@ def main(argv):
     parser.add_argument('--input', '-i', type=argparse.FileType('rb'))
     parser.add_argument('--output', '-o', type=argparse.FileType('wb'), default=sys.stdout.buffer)
     parser.add_argument('--basedir', '-b', type=str, help='Directory to look for data files when -i is not used')
+    parser.add_argument('--tee', action='store_true', help='Write output after each step to a separate file')
     parser.add_argument('pipeline', metavar='PIPELINE', type=argparse.FileType('r'))
     parser.add_argument('languages', metavar='LANG', type=str, nargs='*')
 
@@ -133,6 +134,11 @@ def main(argv):
     # Queue filled by the babysitters with the return code of each of the
     # children. Used by the main thread to catch errors in the pipeline.
     ctrl_queue = SimpleQueue() # type: SimpleQueue[tuple[int, int]]
+
+    if args.input:
+        basepath = 'stdin'
+    else:
+        basepath = os.path.commonprefix(pipeline['files']).rstrip('.')
 
     # If we're not reading from stdin, read from files and paste them together
     if not args.input:
@@ -199,7 +205,7 @@ def main(argv):
 
         child = Popen(command_str,
             stdin=args.input if len(children) == 0 else children[-1].stdout,
-            stdout=args.output if is_last_step else PIPE,
+            stdout=args.output if is_last_step and not args.tee else PIPE,
             stderr=PIPE,
             cwd=filter_definition['basedir'],
             shell=True)
@@ -210,7 +216,19 @@ def main(argv):
 
         print_queue.put(f'[run.py] step {i}: Executing {command_str}\n'.encode())
 
-        babysit(child, f'step {i}')
+        babysit(child, f'step {i}') # also does children.append(child)
+
+        # If we are tee-ing for debug, shunt the output to a separate file
+        # TODO: uncompressed at the moment. Might be trouble.
+        if args.tee:
+            tee = Popen(['tee', f'{basepath}.step-{i}.tsv'],
+                stdin=child.stdout,
+                stdout=args.output if is_last_step else PIPE,
+                stderr=PIPE)
+
+            none_throws(children[-1].stdout).close()
+
+            babysit(tee, f'tee {i}')
 
     # Wait for the children to exit, and depending on their retval exit early
     running_children = len(children)

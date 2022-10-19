@@ -82,7 +82,7 @@ defineExpose({
 			<header>
 				Set categories
 			</header>
-			<ol>
+			<ol class="category-list">
 				<li v-for="category in getCategories()" :key="category.name">
 					<label>
 						<input type="checkbox" v-model="categories" :value="category">
@@ -105,5 +105,32 @@ defineExpose({
 	left: 0;
 	background: white;
 	border: 1px solid #ccc;
+	min-width: 200px;
+	box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.5);
 }
+
+.popup > *:not(:last-child) {
+	border-bottom: 1px solid #ccc;
+}
+
+footer {
+	text-align: right;
+}
+
+footer > *:not(:last-child) {
+	margin-right: 0.5em;
+}
+
+.category-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+header,
+footer,
+.category-list label {
+	padding: 0.5em;
+}
+
 </style>

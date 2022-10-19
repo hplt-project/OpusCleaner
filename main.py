@@ -6,7 +6,7 @@ import sys
 import re
 from typing import Optional, Iterable, TypeVar, Union, Literal, Any, AsyncIterator, cast, IO, List, Dict, Tuple
 from contextlib import ExitStack
-from itertools import chain
+from itertools import chain, zip_longest
 from pydantic import BaseModel, parse_obj_as, validator, ValidationError
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
@@ -238,14 +238,14 @@ class FilterOutput(BaseModel):
     def __init__(self, langs:List[str], stdout:bytes, stderr:Optional[bytes] = None):
         lines = []
 
-        for lineno, line in enumerate(stdout.split(b'\n'), start=1):
+        for lineno, line in enumerate(stdout.rstrip(b'\n').split(b'\n'), start=1):
             values = []
             for colno, field in enumerate(line.split(b'\t'), start=1):
                 try:
                     values.append(field.decode())
                 except UnicodeDecodeError as e:
                     values.append(f'[Error: Cannot decode line {lineno} column {colno}: {e!s}]')
-            lines.append(dict(zip(langs, values)))
+            lines.append(dict(zip_longest(langs, values, fillvalue='')))
 
         super().__init__(
             stdout=lines,

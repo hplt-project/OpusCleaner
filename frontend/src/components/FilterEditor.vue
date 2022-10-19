@@ -9,7 +9,10 @@ import LoadingIndicator from './LoadingIndicator.vue';
 import {stream} from '../stream.js';
 import { getFilters } from '../store/filters.js';
 import { getFilterSteps, saveFilterSteps, filterStepsModified } from '../store/filtersteps.js';
+import { getCategoriesForDataset } from '../store/categories.js';
 import { formatNumberSuffix } from '../format.js';
+import CategoryPicker from '../components/CategoryPicker.vue';
+
 
 const multiDragKey = navigator.platform.match(/^(Mac|iPhone$)/) ? 'Meta' : 'Control';
 
@@ -211,7 +214,8 @@ export default {
 	components: {
 		draggable,
 		InlineDiff,
-		LoadingIndicator
+		LoadingIndicator,
+		CategoryPicker
 	},
 
 	methods: {
@@ -274,6 +278,7 @@ export default {
 		},
 		stamp,
 		formatNumberSuffix,
+		getCategoriesForDataset,
 	}
 };
 </script>
@@ -288,6 +293,13 @@ export default {
 			<input type="checkbox" v-model="displayAsRows">
 			Display as rows
 		</label>
+
+		<button @click="$refs.categoryPicker.showForDataset(dataset, $event)">Edit categories</button>
+		<ul class="dataset-categories">
+			<li class="category" v-for="category in getCategoriesForDataset(dataset)" :key="category.name">{{ category.name }}</li>
+		</ul>
+
+		<CategoryPicker ref="categoryPicker"></CategoryPicker>
 
 		<button v-on:click="saveFilterSteps" v-bind:disabled="!filterStepsChangedSinceLastSave">Save filtering steps</button>
 
@@ -382,7 +394,7 @@ export default {
 								<option v-for="lang in languages">{{lang}}</option>
 							</select>
 						</div>
-						<div v-for="(parameter, name) in filterDefinition(filterStep).parameters">
+						<div v-for="(parameter, name) in filterDefinition(filterStep)?.parameters || {}">
 							<label v-bind:for="`step-${i}-${name}`">{{ name }}</label>
 							<select v-if="parameter.type == 'str' && parameter.allowed_values" v-model="filterStep.parameters[name]" v-bind:id="`step-${i}-${name}`">
 								<option v-for="value in parameter.allowed_values" v-bind:value="value">{{value}}</option>
@@ -414,6 +426,8 @@ export default {
 </template>
 
 <style scoped>
+@import '../css/categories.css';
+
 .filter-output {
 	display: flex;
 	flex-direction: column;
@@ -646,4 +660,15 @@ input[type=checkbox] {
 .property-list > * > input[type=checkbox] {
 	flex-basis: 1em;
 }
+
+.dataset-categories {
+	display: inline;
+	list-style: none;
+	padding: 0;
+}
+
+.dataset-categories li {
+	display: inline;
+}
+
 </style>

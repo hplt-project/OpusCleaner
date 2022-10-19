@@ -49,6 +49,8 @@ const categoryPicker = ref(); // Element
 </template>
 
 <style>
+@import '../css/categories.css';
+
 .dataset-list {
 	flex: 1;
 	overflow: auto;
@@ -62,14 +64,4 @@ const categoryPicker = ref(); // Element
 	background: #eef;
 }
 
-.category {
-	display: inline-block;
-	margin: 0 0.125em;
-	padding: 0.125em 0.25em;
-	background: #ccc;
-	border-radius: 2px;
-	font-size: 0.8em;
-	line-height: 1;
-	vertical-align: baseline;
-}
 </style>

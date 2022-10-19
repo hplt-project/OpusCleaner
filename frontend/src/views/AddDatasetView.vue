@@ -1,6 +1,7 @@
 <script setup>
 import {ref, reactive, computed, watch, onMounted} from 'vue';
 import { Interval } from '../interval.js';
+import { formatSize } from '../format.js';
 
 const loading = ref(0);
 
@@ -150,11 +151,6 @@ async function requestDownloadSelection(datasets) {
 		},
 		body: JSON.stringify(datasets.map(({id}) => ({id})))
 	});
-}
-
-function formatSize(size) {
-	const i = size == 0 ? 0 : Math.floor(Math.log(size) / Math.log(1024));
-	return (size / Math.pow(1024, i)).toFixed(2) + ' ' + ['B', 'kB', 'MB', 'GB', 'TB'][i];
 }
 
 </script>

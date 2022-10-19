@@ -58,18 +58,26 @@ export function setCategoriesForDataset(categories, dataset) {
 	// the categories. I made a stupid server side API (but the file format is
 	// nicely human readable now at least. But I could have solved this in Python!)
 	getCategories().forEach(({name}) => {
+		// If this category should have the dataset
 		if (names.has(name)) {
+			// … and there is no mapping for it yet
 			if (!(name in data.mapping))
 				data.mapping[name] = [dataset.name]
-			else
+			// … and there is a mapping for it, but this dataset is not in it
+			else if (!data.mapping[name].includes(dataset.name))
 				data.mapping[name].push(dataset.name)
-		} else {
+		} 
+		// else if this category should not have this dataset
+		else {
+			// … and there is a mapping for this category
 			if (name in data.mapping) {
 				const index = data.mapping[name].indexOf(dataset.name);
+				// … and this dataset is in that mapping, remove it.
 				if (index !== -1)
 					data.mapping[name].splice(index, 1);
 			}
 		}
 	})
+
 	pushCategories();
 }

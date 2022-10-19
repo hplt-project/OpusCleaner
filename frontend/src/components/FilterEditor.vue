@@ -276,6 +276,24 @@ export default {
 			else
 				return 'pending';
 		},
+		scrollToNextChange() {
+			const rows = this.$refs.output.querySelectorAll('tr.added, tr.removed, tr.changed');
+
+			let next = 0;
+
+			// Find first hidden change (i.e. the next one to scroll to if we're scrolling down)
+			for (; next < rows.length; ++next) {
+				if (rows[next].offsetTop > this.$refs.output.clientHeight + this.$refs.output.scrollTop) {
+					break;
+				}
+			}
+
+			const row = rows[(rows.length + next) % rows.length];
+			this.$refs.output.scrollTo({
+				top: (row.offsetTop + row.offsetHeight) - this.$refs.output.clientHeight,
+				behavior: 'smooth'
+			});
+		},
 		stamp,
 		formatNumberSuffix,
 		getCategoriesForDataset,
@@ -311,12 +329,15 @@ export default {
 			<div v-if="displayDiff" class="controls">
 				<span>Comparing intermediate output after {{ formatNumberSuffix(comparingSampleIndex) }} and {{ formatNumberSuffix(sampleIndex) }} filter steps: {{ diffStats.additions }} lines added, {{ diffStats.deletions }} lines removed, and {{ diffStats.changes }} lines changed.</span>
 				<button v-if="comparingFilterStep" v-on:click="comparingFilterStep=null">Stop comparing</button>
+				<template v-if="diffStats.additions || diffStats.deletions || diffStats.changes">
+					<button @click="scrollToNextChange()" title="Scroll to next difference">Next</button>
+				</template>
 			</div>
 			<div v-else-if="sampleIndex != samples.length - 1" class="controls">
 				<span>Showing intermediate output of {{ formatNumberSuffix(sampleIndex) }} filter step.</span>
 				<button v-if="comparingFilterStep" v-on:click="selectedFilterStep=null">Show final output</button>
 			</div>
-			<div v-bind:class="{'sample':true, 'display-as-rows': displayAsRows}">
+			<div ref="output" v-bind:class="{'sample':true, 'display-as-rows': displayAsRows}">
 				<table v-if="sample?.stdout">
 					<thead>
 						<tr>

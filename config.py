@@ -7,6 +7,12 @@ DATA_PATH = os.getenv('DATA_PATH', 'data/train-parts/*.*.gz')
 # which.
 CATEGORIES_PATH = os.path.join(os.path.dirname(DATA_PATH), 'categories.json')
 
+DEFAULT_CATEGORIES = [
+	{'name': 'clean'},
+	{'name': 'medium'},
+	{'name': 'dirty'}
+]
+
 # TODO: Derive this from DATA_PATH but in such a way that mtdata actually writes
 # the files to the correct folder?
 DOWNLOAD_PATH = 'data'

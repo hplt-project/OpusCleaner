@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel, parse_obj_as, validator
 from typing import List, Dict, TextIO, cast
 
-from config import CATEGORIES_PATH, DATA_PATH
+from config import CATEGORIES_PATH, DATA_PATH, DEFAULT_CATEGORIES
 
 
 class Category(BaseModel):
@@ -46,7 +46,7 @@ def get_mapping() -> CategoryMapping:
 		with open(CATEGORIES_PATH, 'r') as fh:
 			return read_categories(fh)
 	else:
-		return CategoryMapping(categories=[], mapping=dict())
+		return CategoryMapping(categories=DEFAULT_CATEGORIES, mapping=dict())
 
 @app.put('/')
 def update_categories(body: CategoryMapping):

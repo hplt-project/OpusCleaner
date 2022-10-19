@@ -9,6 +9,7 @@ import LoadingIndicator from './LoadingIndicator.vue';
 import {stream} from '../stream.js';
 import { getFilters } from '../store/filters.js';
 import { getFilterSteps, saveFilterSteps, filterStepsModified } from '../store/filtersteps.js';
+import { formatNumberSuffix } from '../format.js';
 
 const multiDragKey = navigator.platform.match(/^(Mac|iPhone$)/) ? 'Meta' : 'Control';
 
@@ -103,19 +104,6 @@ function stamp(obj) {
 	if (!stamps.has(obj))
 		stamps.set(obj, ++serial);
 	return stamps.get(obj);
-}
-
-function formatNumberSuffix(n) {
-	let suffix = 'th';
-
-	if (n % 10 === 1 && n % 100 !== 11)
-		suffix = 'st';
-	else if (n % 10 === 2 && n % 100 !== 12)
-		suffix = 'nd';
-	else if (n % 10 === 3 && n % 100 !== 13)
-		suffix = 'rd';
-
-	return `${n}${suffix}`;
 }
 
 const shared = {

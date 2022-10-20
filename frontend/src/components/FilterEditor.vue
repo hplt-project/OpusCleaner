@@ -445,6 +445,9 @@ const categoryPicker = ref();
 	flex: 0 0 auto;
 	overflow: hidden;
 	overflow-y: auto;
+	max-height: 100%;
+	height: 40%;
+	resize: vertical;
 }
 
 .filter-error pre {

@@ -34,10 +34,8 @@ function diffSample(languages, previous, sample) {
 	for (let i = 0; i < chunks.length; ++i) {
 		console.assert(chunks[i].count === chunks[i].value.length);
 
-		if (chunks[i].added) {
-			offset -= chunks[i].count;
+		if (chunks[i].added)
 			continue;
-		}
 
 		if (chunks[i].removed) {
 			offset += chunks[i].count;

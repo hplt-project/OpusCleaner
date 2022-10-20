@@ -1,0 +1,18 @@
+{
+    "type": "bilingual",
+    "description": "Compare numbers on both sides",
+    "parameters": {
+        "RATIO": {
+            "type": "float",
+            "required": true,
+            "default": 1.0,
+            "help": "Minimal ratio of overlap / differences"
+        },
+        "DEBUG": {
+            "type": "bool",
+            "default": false,
+            "help": "Print ratios for deleted lines"
+        }
+    },
+    "command": "./num_mismatch.py ${DEBUG:+--debug} --ratio $RATIO"
+}

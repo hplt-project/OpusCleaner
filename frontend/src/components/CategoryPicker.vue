@@ -103,14 +103,14 @@ defineExpose({
 	position: fixed;
 	top: 0;
 	left: 0;
-	background: white;
-	border: 1px solid #ccc;
+	background-color: var(--background-color);
+	border: 1px solid var(--border-color);
 	min-width: 200px;
 	box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.5);
 }
 
 .popup > *:not(:last-child) {
-	border-bottom: 1px solid #ccc;
+	border-bottom: 1px solid var(--border-color);
 }
 
 footer {

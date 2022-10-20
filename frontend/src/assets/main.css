@@ -1,3 +1,15 @@
+:root {
+	color-scheme: light dark;
+	--background-color: rgb(255, 255, 255);
+	--border-color: rgba(128,128,128,0.25);
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--background-color: rgb(28, 27, 33);
+	}
+}
+
 html, body {
 	margin: 0;
 	padding: 0;
@@ -7,6 +19,7 @@ html, body {
 
 body {
 	font: 16px/24px sans-serif;
+	background-color: var(--background-color);
 }
 
 #app {
@@ -23,7 +36,7 @@ body {
 
 .controls {
 	flex: 0;
-	border-bottom: 1px solid #ccc;
+	border-bottom: 1px solid var(--border-color);
 }
 
 .main {

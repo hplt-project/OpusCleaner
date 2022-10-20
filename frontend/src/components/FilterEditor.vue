@@ -462,7 +462,7 @@ export default {
 }
 
 .filter-error {
-	border-top: 1px solid #ccc;
+	border-top: 1px solid var(--border-color);
 	flex: 0 0 auto;
 	overflow: hidden;
 	overflow-y: auto;
@@ -491,29 +491,29 @@ export default {
 }
 
 .sample tr:nth-child(2n) td {
-	background: #eef;
+	background: rgba(128,128,128, 0.25);
 }
 
 .table-diff tr.added td {
-	background: #efe;
+	background: rgba(0, 255, 0, 0.25);
 	font-style: italic;
 }
 
 .table-diff tr.removed td {
-	background: #fee;
+	background: rgba(255, 0, 0, 0.25);
 	text-decoration: line-through;
 }
 
 .table-diff tr.changed td {
-	background: #ffe;
+	background: rgba(255, 255, 0, 0.25);
 }
 
 .inline-diff ins {
-	background: #cfc;
+	background: rgba(128, 255, 128, 0.25);
 }
 
 .inline-diff del {
-	background: #fcc;
+	background: rgba(255, 128, 128, 0.25);
 }
 
 .sample.display-as-rows table thead {
@@ -542,7 +542,7 @@ export default {
 	flex-direction: column;
 	flex: 0 0 300px;
 	overflow: auto;
-	border-left: 1px solid #ccc;
+	border-left: 1px solid var(--border-color);
 }
 
 .available-filters {
@@ -551,7 +551,7 @@ export default {
 
 .filter-steps {
 	flex: 1 0 auto;
-	border-top: 1px solid #ccc;
+	border-top: 1px solid var(--border-color);
 	overflow-y: auto;
 }
 
@@ -569,7 +569,7 @@ export default {
 	overflow-y: auto;
 	box-sizing: border-box;
 	border: 0;
-	border-left: 1px solid #ccc;
+	border-left: 1px solid var(--border-color);
 }
 
 .filter {
@@ -594,7 +594,7 @@ export default {
 .filter-steps li {
 	margin: 1em 0;
 	position: relative; /* for ::after arrow */
-	background: white; /* for draggable */
+	background: var(--background-color); /* for when it is being dragged */
 }
 
 .filter-steps li.selected {
@@ -605,7 +605,7 @@ export default {
 	content: '';
 	width: 0;
 	height: 0;
-	border-top: 1em solid #ccc;
+	border-top: 1em solid var(--border-color);
 	border-left: 1em solid transparent;
 	border-right: 1em solid transparent;
 	position: absolute;
@@ -627,16 +627,16 @@ input[type=checkbox] {
 }
 
 .property-list {
-	border: 1px solid #ccc;
+	border: 1px solid var(--border-color);
 	border-radius: 4px;
 }
 
 .property-list > *:not(:last-child) {
-	border-bottom: 1px solid #ccc;
+	border-bottom: 1px solid var(--border-color);
 }
 
 .property-list > header {
-	background: #ccc;
+	background: var(--border-color);
 }
 
 .property-list > * > *:first-child {

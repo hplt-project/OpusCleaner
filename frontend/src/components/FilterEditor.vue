@@ -111,11 +111,7 @@ const isFetchingSamples = ref(false);
 
 const filters = getFilters();
 
-let filterSteps = ref([]);
-
-watchEffect(() => {
-	filterSteps = ref(getFilterSteps(dataset));
-});
+let filterSteps = ref(getFilterSteps(dataset));
 
 const selectedFilterStep = ref(null);
 

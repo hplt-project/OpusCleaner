@@ -305,6 +305,14 @@ export default {
 				behavior: 'smooth'
 			});
 		},
+		showOutput(filterStepIndex) {
+			this.selectedFilterStep = filterStepIndex >= 0 ? this.filterSteps[filterStepIndex] : SampleStep;
+			this.comparingFilterStep = null;
+		},
+		showDiff(filterStepIndex) {
+			this.selectedFilterStep = this.filterSteps[filterStepIndex];
+			this.comparingFilterStep = filterStepIndex > 0 ? this.filterSteps[filterStepIndex - 1] : SampleStep;
+		},
 		stamp,
 		formatNumberSuffix,
 		getCategoriesForDataset,
@@ -338,14 +346,14 @@ export default {
 	<div class="main">
 		<div class="filter-output">
 			<div v-if="displayDiff" class="controls">
-				<span>Comparing intermediate output after {{ formatNumberSuffix(comparingSampleIndex) }} and {{ formatNumberSuffix(sampleIndex) }} filter steps: {{ diffStats.additions }} lines added, {{ diffStats.deletions }} lines removed, and {{ diffStats.changes }} lines changed.</span>
+				<span>Comparing intermediate output after {{ comparingSampleIndex > 0 ? formatNumberSuffix(comparingSampleIndex) : 'the unmodified sample' }} and {{ formatNumberSuffix(sampleIndex) }} filter step: {{ diffStats.additions }} lines added, {{ diffStats.deletions }} lines removed, and {{ diffStats.changes }} lines changed.</span>
 				<button v-if="comparingFilterStep" v-on:click="comparingFilterStep=null">Stop comparing</button>
 				<template v-if="diffStats.additions || diffStats.deletions || diffStats.changes">
 					<button @click="scrollToNextChange()" title="Scroll to next difference">Next</button>
 				</template>
 			</div>
 			<div v-else-if="sampleIndex != samples.length - 1" class="controls">
-				<span>Showing intermediate output of {{ formatNumberSuffix(sampleIndex) }} filter step.</span>
+				<span>Showing intermediate output of {{ sampleIndex > 0 ? formatNumberSuffix(sampleIndex) + ' filter step' : 'the unmodified sample' }}.</span>
 				<button v-if="comparingFilterStep" v-on:click="selectedFilterStep=null">Show final output</button>
 			</div>
 			<div ref="output" v-bind:class="{'sample':true, 'display-as-rows': displayAsRows}">
@@ -410,8 +418,8 @@ export default {
 							<span class="filter-name">Sample</span>
 						</header>
 						<footer>
-							<button v-on:click="selectedFilterStep=SampleStep">Show output</button>
-							<button v-on:click="comparingFilterStep=SampleStep" v-bind:disabled="comparingFilterStep===SampleStep">Diff</button>
+							<span class="line-count" title="Line count">{{ samples[0]?.stdout?.length }}</span>
+							<button v-on:click="showOutput(-1)">Show</button>
 						</footer>
 					</li>
 				</template>
@@ -447,11 +455,11 @@ export default {
 						</div>
 						<footer>
 							<span class="line-count" title="Line count">{{ samples[i+1]?.stdout?.length }}</span>
-							<button v-on:click="selectedFilterStep=filterStep">
+							<button v-on:click="showOutput(i)">
 								Show
 								<span v-if="samples[i+1]?.stderr" title="This step produced output on stderr.">⚠</span>
 							</button>
-							<button v-on:click="comparingFilterStep=filterStep">Diff</button>
+							<button v-on:click="showDiff(i)">Diff</button>
 						</footer>
 					</li>
 				</template>

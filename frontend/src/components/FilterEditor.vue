@@ -1,7 +1,7 @@
-<script>
+<script setup>
 // Docs for Vue@3: https://vuejs.org/guide/introduction.html
 // Docs for draggable@4: https://github.com/SortableJS/vue.draggable.next
-import {ref, computed, defineProps, watch, onMounted} from 'vue';
+import {ref, computed, watch, watchEffect, onMounted, readonly} from 'vue';
 import draggable from 'vuedraggable';
 import {diff} from '../diff.js';
 import InlineDiff from './InlineDiff.vue';
@@ -101,223 +101,192 @@ function diffSample(languages, previous, sample) {
 										// spliced in identical chunk we added.
 	}
 
-	return chunks;
+	return readonly(chunks);
 }
 
-let serial = 0;
+const {dataset} = defineProps({
+	dataset: Object
+});
 
-const stamps = new WeakMap();
+const displayAsRows = ref(false)
 
-function stamp(obj) {
-	if (!stamps.has(obj))
-		stamps.set(obj, ++serial);
-	return stamps.get(obj);
-}
+const samples = ref([]);
 
-const shared = {
-	// These are here just so they're available to the template
-	multiDragKey,
-	SampleStep 
-};
+const isFetchingSamples = ref(false);
 
-export default {
-	name: 'FilterEditor',
+const filters = getFilters();
 
-	props: {
-		dataset: Object
-	},
+const filterSteps = ref([]);
 
-	data() {
-		return Object.assign(Object.create(shared), {
-			displayAsRows: false,
-			samples: [],
-			isFetchingSamples: false,
-			filters: getFilters(),
-			filterSteps: getFilterSteps(this.dataset),
-			selectedFilterStep: null,
-			comparingFilterStep: null,
-		});
-	},
+watchEffect(() => {
+	filterSteps.value = getFilterSteps(dataset);
+});
 
-	computed: {
-		languages() {
-			// Unloaded state the dataset will have a name, but not all its details yet
-			if (!this.dataset?.columns)
-				return [];
+const selectedFilterStep = ref(null);
 
-			const languages = Array.from(Object.keys(this.dataset.columns)).sort();
-			// First try non-alphabetical order. If no success, return alphabetical order
-			if (!this.dataset.name.includes(languages.reverse().join('-')))
-				languages.reverse();
-			
-			return languages;
-		},
-		filterStepsChangedSinceLastSave() {
-			return filterStepsModified(this.dataset);
-		},
-		sampleIndex() {
-			const index = this.selectedFilterStep ? this.filterSteps.indexOf(this.selectedFilterStep) + 1 : -1;
-			return index >= 0 ? index : this.samples.length - 1;
-		},
-		comparingSampleIndex() {
-			// Trick: comparingFilterStep == SampleStep -> indexOf == -1 -> index == 0
-			return this.filterSteps.indexOf(this.comparingFilterStep) + 1;
-		},
-		sample() {
-			return this.samples.length > this.sampleIndex ? this.samples[this.sampleIndex] : null;
-		},
-		displayDiff() {
-			return this.comparingFilterStep !== null;
-		},
-		diff() {
-			return diffSample(
-				this.languages,
-				this.samples[this.comparingSampleIndex],
-				this.samples[this.sampleIndex]);
-		},
-		diffStats() {
-			let additions = 0, deletions = 0, changes = 0;
+const comparingFilterStep = ref(null);
 
-			this.diff.forEach(({added, removed, changed, count}) => {
-				if (added)
-					additions += count;
-				else if (removed)
-					deletions += count;
-				else if (changed)
-					changes += count;
-			});
+const languages = computed(() => {
+	// Unloaded state the dataset will have a name, but not all its details yet
+	if (!dataset?.columns)
+		return [];
 
-			return {additions, deletions, changes};
-		}
-	},
+	const languages = Array.from(Object.keys(dataset.columns)).sort();
+	// First try non-alphabetical order. If no success, return alphabetical order
+	if (!dataset.name.includes(languages.reverse().join('-')))
+		languages.reverse();
+	
+	return languages;
+});
 
-	watch: {
-		// When the filter steps change, we re-render our sample
-		filterSteps: {
-			deep: true,
-			handler() {
-				this.fetchSample()
-			}
-		},
-		// TODO: I'd expected this one to be picked up by default since fetchFilterSteps accesses this.dataset.name
-		dataset: {
-			handler() {
-				this.filterSteps = getFilterSteps(this.dataset).value;
-			}
-		}
-	},
+const filterStepsChangedSinceLastSave = computed(() => {
+	return filterStepsModified(dataset);
+});
 
-	created() {
-		this._sampleAbortController = new AbortController();
-		this._serial = 0;
-	},
+const sampleIndex = computed(() => {
+	const index = selectedFilterStep.value ? filterSteps.value.indexOf(selectedFilterStep.value) + 1 : -1;
+	return index >= 0 ? index : samples.value.length - 1;
+});
 
-	mounted() {
-		this.fetchSample();
-	},
+const comparingSampleIndex = computed(() => {
+	// Trick: comparingFilterStep == SampleStep -> indexOf == -1 -> index == 0
+	return filterSteps.value.indexOf(comparingFilterStep.value) + 1;
+});
 
-	components: {
-		draggable,
-		InlineDiff,
-		LoadingIndicator,
-		CategoryPicker
-	},
+const sample = computed(() => {
+	return samples.value.length > sampleIndex.value ? samples.value[sampleIndex.value] : null;
+});
 
-	methods: {
-		async fetchSample() {
-			this._sampleAbortController.abort();
-			this._sampleAbortController = new AbortController();
-			
-			this.isFetchingSamples = true;
-			this.samples.splice(0, this.samples.length);
+const isShowingDiff = computed(() => {
+	return comparingFilterStep.value !== null;
+});
 
-			const response = stream(`/api/datasets/${encodeURIComponent(this.dataset.name)}/sample`, {
-				method: 'POST',
-				signal: this._sampleAbortController.signal,
-				headers: {
-					'Content-Type': 'application/json',
-					'Accept': 'application/json',
-				},
-				body: JSON.stringify(this.filterSteps)
-			});
+const differences = computed(() => {
+	return diffSample(
+		languages.value,
+		samples.value[comparingSampleIndex.value],
+		samples.value[sampleIndex.value]);
+});
 
-			for await (let sample of response) {
-				this.samples.push(sample);
-			}
+const differencesStats = computed(() => {
+	let additions = 0, deletions = 0, changes = 0;
 
-			this.isFetchingSamples = false;
-		},
-		async saveFilterSteps() {
-			const response = await saveFilterSteps(this.dataset);
-			if (!response.ok)
-				alert(await response.text());
-		},
-		createFilterStep(filter) {
-			return {
-				filter: filter.name,
-				language: this.filterRequiresLanguage({filter:filter.name}) ? this.languages[0] : null,
-				parameters: Object.fromEntries(Object.entries(filter.parameters).map(([key, parameter]) => [key, parameter.default]))
-			}
-		},
-		addFilterStep(filter) {
-			this.filterSteps.push(this.createFilterStep(filter));
-		},
-		removeFilterStep(i) {
-			this.filterSteps.splice(i, 1);
-		},
-		filterDefinition(filterStep) {
-			return this.filters.find(filter => filter.name === filterStep.filter);
-		},
-		filterRequiresLanguage(filterStep) {
-			return this.filterDefinition(filterStep)?.type == 'monolingual';
-		},
-		setFilterData(dataTransfer, el) {
-			dataTransfer.setData('text/plain', JSON.stringify(this.createFilterStep(el.__draggable_context.element), null, 2));
-		},
-		setFilterStepData(dataTransfer, el) {
-			dataTransfer.setData('text/plain', JSON.stringify(el.__draggable_context.element, null, 2));
-		},
-		getLoadingStage(index) {
-			if (this.samples.length === index + 1) // `+1` because first of samples is the raw sample)
-				return 'loading';
-			else if (this.samples.length >= index + 1 && this.samples[index + 1].stderr)
-				return 'failed';
-			else if (this.samples.length >= index + 1)
-				return 'loaded';
-			else
-				return 'pending';
-		},
-		scrollToNextChange() {
-			const rows = this.$refs.output.querySelectorAll('tr.added, tr.removed, tr.changed');
+	differences.value.forEach(({added, removed, changed, count}) => {
+		if (added)
+			additions += count;
+		else if (removed)
+			deletions += count;
+		else if (changed)
+			changes += count;
+	});
 
-			let next = 0;
+	return {additions, deletions, changes};
+});
 
-			// Find first hidden change (i.e. the next one to scroll to if we're scrolling down)
-			for (; next < rows.length; ++next) {
-				if (rows[next].offsetTop > this.$refs.output.clientHeight + this.$refs.output.scrollTop) {
-					break;
-				}
-			}
+let _sampleAbortController = new AbortController();
 
-			const row = rows[(rows.length + next) % rows.length];
-			this.$refs.output.scrollTo({
-				top: (row.offsetTop + row.offsetHeight) - this.$refs.output.clientHeight,
-				behavior: 'smooth'
-			});
+async function fetchSample() {
+	_sampleAbortController.abort();
+	_sampleAbortController = new AbortController();
+	
+	isFetchingSamples.value = true;
+	samples.value = [];
+
+	const response = stream(`/api/datasets/${encodeURIComponent(dataset.name)}/sample`, {
+		method: 'POST',
+		signal: _sampleAbortController.signal,
+		headers: {
+			'Content-Type': 'application/json',
+			'Accept': 'application/json',
 		},
-		showOutput(filterStepIndex) {
-			this.selectedFilterStep = filterStepIndex >= 0 ? this.filterSteps[filterStepIndex] : SampleStep;
-			this.comparingFilterStep = null;
-		},
-		showDiff(filterStepIndex) {
-			this.selectedFilterStep = this.filterSteps[filterStepIndex];
-			this.comparingFilterStep = filterStepIndex > 0 ? this.filterSteps[filterStepIndex - 1] : SampleStep;
-		},
-		stamp,
-		formatNumberSuffix,
-		getCategoriesForDataset,
+		body: JSON.stringify(filterSteps.value, null, 2)
+	});
+
+	for await (let sample of response) {
+		samples.value.push(readonly(sample));
 	}
-};
+
+	isFetchingSamples.value = false;
+}
+
+watchEffect(fetchSample);
+
+function createFilterStep(filter) {
+	return {
+		filter: filter.name,
+		language: filterRequiresLanguage({filter:filter.name}) ? languages.value[0] : null,
+		parameters: Object.fromEntries(Object.entries(filter.parameters).map(([key, parameter]) => [key, parameter.default]))
+	}
+}
+
+function addFilterStep(filter) {
+	filterSteps.value.push(createFilterStep(filter));
+}
+
+function removeFilterStep(i) {
+	filterSteps.value.splice(i, 1);
+}
+
+function filterDefinition(filterStep) {
+	return filters.value.find(filter => filter.name === filterStep.filter);
+}
+
+function filterRequiresLanguage(filterStep) {
+	return filterDefinition(filterStep)?.type == 'monolingual';
+}
+
+function setFilterData(dataTransfer, el) {
+	dataTransfer.setData('text/plain', JSON.stringify(createFilterStep(el.__draggable_context.element), null, 2));
+}
+
+function setFilterStepData(dataTransfer, el) {
+	dataTransfer.setData('text/plain', JSON.stringify(el.__draggable_context.element, null, 2));
+}
+	
+function getLoadingStage(index) {
+	if (samples.value.length === index + 1) // `+1` because first of samples is the raw sample)
+		return 'loading';
+	else if (samples.value.length >= index + 1 && samples.value[index + 1].stderr)
+		return 'failed';
+	else if (samples.value.length >= index + 1)
+		return 'loaded';
+	else
+		return 'pending';
+}
+
+const outputElement = ref();
+
+function scrollToNextChange() {
+	const rows = outputElement.value.querySelectorAll('tr.added, tr.removed, tr.changed');
+
+	let next = 0;
+
+	// Find first hidden change (i.e. the next one to scroll to if we're scrolling down)
+	for (; next < rows.length; ++next) {
+		if (rows[next].offsetTop > outputElement.value.clientHeight + outputElement.value.scrollTop) {
+			break;
+		}
+	}
+
+	const row = rows[(rows.length + next) % rows.length];
+	outputElement.value.scrollTo({
+		top: (row.offsetTop + row.offsetHeight) - outputElement.value.clientHeight,
+		behavior: 'smooth'
+	});
+}
+
+function showOutput(filterStepIndex) {
+	selectedFilterStep.value = filterStepIndex >= 0 ? filterSteps.value[filterStepIndex] : SampleStep;
+	comparingFilterStep.value = null;
+}
+
+function showDiff(filterStepIndex) {
+	selectedFilterStep.value = filterSteps.value[filterStepIndex];
+	comparingFilterStep.value = filterStepIndex > 0 ? filterSteps.value[filterStepIndex - 1] : SampleStep;
+}
+
+const categoryPicker = ref();
+
 </script>
 
 <template>
@@ -331,24 +300,24 @@ export default {
 			Display as rows
 		</label>
 
-		<button @click="$refs.categoryPicker.showForDataset(dataset, $event)">Edit categories</button>
+		<button @click="categoryPicker.showForDataset(dataset, $event)">Edit categories</button>
 		<ul class="dataset-categories">
 			<li class="category" v-for="category in getCategoriesForDataset(dataset)" :key="category.name">{{ category.name }}</li>
 		</ul>
 
 		<CategoryPicker ref="categoryPicker"></CategoryPicker>
 
-		<button v-on:click="saveFilterSteps" v-bind:disabled="!filterStepsChangedSinceLastSave">Save filtering steps</button>
+		<button v-on:click="saveFilterSteps(dataset)" v-bind:disabled="!filterStepsChangedSinceLastSave">Save filtering steps</button>
 
 		<label v-if="isFetchingSamples">Loading sample…</label>
 	</div>
 
 	<div class="main">
 		<div class="filter-output">
-			<div v-if="displayDiff" class="controls">
-				<span>Comparing intermediate output after {{ comparingSampleIndex > 0 ? formatNumberSuffix(comparingSampleIndex) : 'the unmodified sample' }} and {{ formatNumberSuffix(sampleIndex) }} filter step: {{ diffStats.additions }} lines added, {{ diffStats.deletions }} lines removed, and {{ diffStats.changes }} lines changed.</span>
+			<div v-if="isShowingDiff" class="controls">
+				<span>Comparing intermediate output after {{ comparingSampleIndex > 0 ? formatNumberSuffix(comparingSampleIndex) : 'the unmodified sample' }} and {{ formatNumberSuffix(sampleIndex) }} filter step: {{ differencesStats.additions }} lines added, {{ differencesStats.deletions }} lines removed, and {{ differencesStats.changes }} lines changed.</span>
 				<button v-if="comparingFilterStep" v-on:click="comparingFilterStep=null">Stop comparing</button>
-				<template v-if="diffStats.additions || diffStats.deletions || diffStats.changes">
+				<template v-if="differencesStats.additions || differencesStats.deletions || differencesStats.changes">
 					<button @click="scrollToNextChange()" title="Scroll to next difference">Next</button>
 				</template>
 			</div>
@@ -356,15 +325,15 @@ export default {
 				<span>Showing intermediate output of {{ sampleIndex > 0 ? formatNumberSuffix(sampleIndex) + ' filter step' : 'the unmodified sample' }}.</span>
 				<button v-if="comparingFilterStep" v-on:click="selectedFilterStep=null">Show final output</button>
 			</div>
-			<div ref="output" v-bind:class="{'sample':true, 'display-as-rows': displayAsRows}">
+			<div ref="outputElement" v-bind:class="{'sample':true, 'display-as-rows': displayAsRows}">
 				<table v-if="sample?.stdout">
 					<thead>
 						<tr>
 							<th v-for="lang in languages">{{lang}}</th>
 						</tr>
 					</thead>
-					<tbody v-if="displayDiff" class="table-diff">
-						<template v-for="(chunk, i) in diff">
+					<tbody v-if="isShowingDiff" class="table-diff">
+						<template v-for="(chunk, i) in differences">
 							<tr v-for="(entry, j) in chunk.value" v-bind:key="`${i}:${j}`" v-bind:class="{added:chunk.added, removed:chunk.removed, changed:chunk.changed}">
 								<td v-for="lang in languages" v-bind:key="lang" v-bind:lang="lang">
 									<template v-if="chunk.changed">

@@ -13,6 +13,11 @@ import { getCategoriesForDataset } from '../store/categories.js';
 import { formatNumberSuffix } from '../format.js';
 import CategoryPicker from '../components/CategoryPicker.vue';
 
+function LOG(...args) {
+	console.log(...args);
+	return args[0];
+}
+
 
 const multiDragKey = navigator.platform.match(/^(Mac|iPhone$)/) ? 'Meta' : 'Control';
 
@@ -266,6 +271,12 @@ export default {
 		filterRequiresLanguage(filterStep) {
 			return this.filterDefinition(filterStep)?.type == 'monolingual';
 		},
+		setFilterData(dataTransfer, el) {
+			dataTransfer.setData('text/plain', JSON.stringify(this.createFilterStep(el.__draggable_context.element), null, 2));
+		},
+		setFilterStepData(dataTransfer, el) {
+			dataTransfer.setData('text/plain', JSON.stringify(el.__draggable_context.element, null, 2));
+		},
 		getLoadingStage(index) {
 			if (this.samples.length === index + 1) // `+1` because first of samples is the raw sample)
 				return 'loading';
@@ -375,6 +386,7 @@ export default {
 				v-model="filters" item-key="name"
 				v-bind:group="{name:'filters', pull:'clone', put:false}"
 				v-bind:sort="false"
+				v-bind:set-data="setFilterData"
 				v-bind:clone="createFilterStep">
 				<template v-slot:item="{element:filter}">
 					<li class="filter">
@@ -389,6 +401,7 @@ export default {
 				v-model="filterSteps" item-key="stamp" 
 				v-bind:group="{name:'filters'}"
 				v-bind:multi-drag="true"
+				v-bind:set-data="setFilterStepData"
 				v-bind:multi-drag-key="multiDragKey">
 				<template v-slot:header>
 					<li class="property-list">

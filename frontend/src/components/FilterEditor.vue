@@ -13,11 +13,6 @@ import { getCategoriesForDataset } from '../store/categories.js';
 import { formatNumberSuffix } from '../format.js';
 import CategoryPicker from '../components/CategoryPicker.vue';
 
-function LOG(...args) {
-	console.log(...args);
-	return args[0];
-}
-
 
 const multiDragKey = navigator.platform.match(/^(Mac|iPhone$)/) ? 'Meta' : 'Control';
 
@@ -116,10 +111,10 @@ const isFetchingSamples = ref(false);
 
 const filters = getFilters();
 
-const filterSteps = ref([]);
+let filterSteps = ref([]);
 
 watchEffect(() => {
-	filterSteps.value = getFilterSteps(dataset);
+	filterSteps = ref(getFilterSteps(dataset));
 });
 
 const selectedFilterStep = ref(null);

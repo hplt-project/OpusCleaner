@@ -1,4 +1,4 @@
-import { reactive } from 'vue';
+import { ref, toRaw, reactive } from 'vue';
 import { cyrb53 } from '../hash.js';
 
 // Configuration (steps) per dataset
@@ -28,7 +28,7 @@ export function getFilterSteps(dataset) {
 		});
 	}
 
-	return configurations.get(dataset.name).steps; // TODO: return the .value?
+	return configurations.get(dataset.name).steps;
 }
 
 export async function saveFilterSteps(dataset) {
@@ -44,7 +44,7 @@ export async function saveFilterSteps(dataset) {
 			'Content-Type': 'application/json',
 			'Accept': 'application/json'
 		},
-		body: JSON.stringify(steps)
+		body: JSON.stringify(steps, null, 2)
 	});
 
 	if (response.ok)
@@ -55,5 +55,6 @@ export async function saveFilterSteps(dataset) {
 
 export function filterStepsModified(dataset) {
 	const entry = configurations.get(dataset.name);
-	return entry.hash !== hashFilterSteps(entry.steps)
+	const modified = entry.hash !== hashFilterSteps(entry.steps);
+	return modified;
 }

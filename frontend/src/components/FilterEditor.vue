@@ -417,7 +417,7 @@ const categoryPicker = ref();
 								Show
 								<span v-if="samples[i+1]?.stderr" title="This step produced output on stderr.">⚠</span>
 							</button>
-							<button v-on:click="showDiff(i)">Diff</button>
+							<button v-on:click="showDiff(i)" title="Compare the input and output of this step to show the effects of the filter.">Diff</button>
 						</footer>
 					</li>
 				</template>

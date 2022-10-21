@@ -109,7 +109,7 @@ const isFetchingSamples = ref(false);
 
 const filters = getFilters();
 
-let filterSteps = ref(getFilterSteps(dataset));
+let filterSteps = getFilterSteps(dataset);
 
 const selectedFilterStep = ref(null);
 

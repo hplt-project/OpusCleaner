@@ -33,7 +33,7 @@ const categoryPicker = ref(); // Element
 						<button @click="event => categoryPicker.showForDataset(dataset, event)">Edit</button>
 						<span class="category" v-for="category in getCategoriesForDataset(dataset)" :key="category.name">{{ category.name }}</span>
 					</td>
-					<td><router-link :to="{name: 'edit-filters', params: {datasetName: dataset.name}}">Filters ({{ getFilterSteps(dataset).length }})</router-link></td>
+					<td><router-link :to="{name: 'edit-filters', params: {datasetName: dataset.name}}">Filters ({{ getFilterSteps(dataset).value.length }})</router-link></td>
 				</tr>
 			</tbody>
 			<tfoot>

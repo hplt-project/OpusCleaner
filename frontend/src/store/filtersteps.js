@@ -15,16 +15,16 @@ function hashFilterSteps(configuration) {
 
 export function getFilterSteps(dataset) {
 	if (!configurations.has(dataset.name)) {
-		const entry = reactive({
-			hash: null,
-			steps: []
-		});
+		const entry = {
+			hash: ref(null),
+			steps: ref([])
+		};
 
 		configurations.set(dataset.name, entry);
 
 		fetchFilterSteps(dataset).then(configuration => {
-			entry.steps.splice(0, entry.steps.length, ...configuration);
-			entry.hash = hashFilterSteps(configuration);
+			entry.steps.value = configuration;
+			entry.hash.value = hashFilterSteps(configuration);
 		});
 	}
 
@@ -33,7 +33,7 @@ export function getFilterSteps(dataset) {
 
 export async function saveFilterSteps(dataset) {
 	const entry = configurations.get(dataset.name);
-	const steps = entry.steps;
+	const steps = entry.steps.value;
 
 	// (Hashing before the `await fetch` to make sure we capture the submitted state)
 	const hash = hashFilterSteps(steps);
@@ -48,13 +48,13 @@ export async function saveFilterSteps(dataset) {
 	});
 
 	if (response.ok)
-		entry.hash = hash;
+		entry.hash.value = hash;
 
 	return response
 }
 
 export function filterStepsModified(dataset) {
 	const entry = configurations.get(dataset.name);
-	const modified = entry.hash !== hashFilterSteps(entry.steps);
+	const modified = entry.hash.value !== hashFilterSteps(entry.steps.value);
 	return modified;
 }

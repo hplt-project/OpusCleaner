@@ -23,17 +23,56 @@ def _argparse_parse_args(self: argparse.ArgumentParser, args=None, namespace=Non
 	# We need to skip [0], as this is the prepended `--help`
 	param_dict: Dict[str,Dict] = {}
 	for argument in self._actions[1:]:
+		# Skip --help and --version
+		if isinstance(argument, (argparse._HelpAction, argparse._VersionAction)):
+			continue
+
 		current_str = {
-			SWITCH: argument.option_strings[0], #TODO prefer long names?
-			SUBSTITUTE: argument.option_strings[0].replace('-','').upper(),
-			"type": cast(type, argument.type).__name__ if type(argument.type) == type else "bool",
-			"required": argument.required,
-			"default": argument.default,
-			"help": argument.help
+			"help": argument.help,
+			"required": argument.required
 		}
 
+		if isinstance(argument, argparse._StoreConstAction):
+			current_str |= {
+				"type": "bool",
+				"default": False
+			}
+		elif type(argument.type) == type:
+			current_str |= {
+				"type": cast(type, argument.type).__name__,
+				"default": argument.default
+			}
+		elif type(argument.type) == argparse.FileType:
+			current_str |= {
+				"type": "str",
+				"default": "-"
+			}
+		elif argument.default is not None:
+			current_str|= {
+				"type": type(argument.default).__name__,
+				"default": argument.default
+			}
+		else:
+			print(f"Unknown type for \"{argument.dest}\": skipped\n{argument!r}\n", file=sys.stderr)
+			continue
+		
+
+		# If it is an `--option` type argument
+		if argument.option_strings:
+			current_str |= {
+				SWITCH: argument.option_strings[0], #TODO prefer long names?
+				SUBSTITUTE: argument.option_strings[0].replace('-','').upper()
+			}
+		# or a positional one
+		else:
+			current_str |= {
+				SUBSTITUTE: argument.dest.upper()
+			}
+
 		if argument.choices is not None:
-				current_str["allowed_values"] = argument.choices
+			current_str |= {
+				"allowed_values": argument.choices
+			}
 
 		# Add to the parameter dict
 		param_dict[current_str[SUBSTITUTE]] = current_str
@@ -42,10 +81,10 @@ def _argparse_parse_args(self: argparse.ArgumentParser, args=None, namespace=Non
 
 	json_out["command"] = script_path
 	for _, value in param_dict.items():
-			if value["type"] == "bool":
-				json_out["command"] += " ${" + value[SUBSTITUTE] + ":+" + value[SWITCH] + "}"
-			else:
-				json_out["command"] += " " + value[SWITCH] + " $" + value[SUBSTITUTE]
+		if not value["required"]:
+			json_out["command"] += " ${" + value[SUBSTITUTE] + ":+" + value[SWITCH] + (" $" + value[SUBSTITUTE] if value["type"] != "bool" else "") + "}"
+		else:
+			json_out["command"] += (" " + value[SWITCH] if SWITCH in value else "") + " $" + value[SUBSTITUTE]
 
 	json.dump(json_out, sys.stdout, indent=4, skipkeys=True)
 	sys.exit(0)

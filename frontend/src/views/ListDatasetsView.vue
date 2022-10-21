@@ -61,7 +61,7 @@ const categoryPicker = ref(); // Element
 }
 
 .dataset-list table tr:nth-child(2n) td {
-	background: #eef;
+	background: rgba(128,128,128, 0.25);
 }
 
 </style>

@@ -2,7 +2,7 @@
 	display: inline-block;
 	margin: 0 0.125em;
 	padding: 0.125em 0.25em;
-	background: #ccc;
+	background: rgba(128,128,128, 0.5);
 	border-radius: 2px;
 	font-size: 0.8em;
 	line-height: 1;

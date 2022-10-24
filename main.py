@@ -26,6 +26,7 @@ from glob import glob
 from tempfile import TemporaryFile
 from shutil import copyfileobj
 from pprint import pprint
+from warnings import warn
 
 
 from datasets import list_datasets, Path
@@ -129,10 +130,24 @@ class FilterStep(BaseModel):
         if 'filter' in values:
             required = set(FILTERS[values['filter']].parameters.keys())
             provided = set(parameters.keys())
-            if len(required - provided) > 0:
-                raise ValueError(f"Missing filter parameters: {' '.join(required - provided)}")
-            if len(provided - required) > 0:
-                raise ValueError(f"Provided parameters not supported by the filter: {' '.join(provided - required)}")
+
+            missing_keys = required - provided
+            if missing_keys:
+                warn(f"Missing filter parameters: {' '.join(missing_keys)}")
+                # Just add their default values in that case.
+                parameters |= {
+                    key: parameter.default
+                    for key, parameter in FILTERS[values['filter']].parameters.items()
+                    if key in missing_keys
+                }
+            
+            superfluous_keys = provided - required
+            if superfluous_keys:
+                warn(f"Provided parameters not supported by the filter: {' '.join(superfluous_keys)}")
+                # Not doing anything though, might be that we have just loaded an
+                # old version of the filter definition and we don't want to lose
+                # any of these keys.
+
         return parameters
 
     @validator('language', always=True)

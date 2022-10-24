@@ -309,10 +309,7 @@ async def exec_filter_step(filter_step: FilterStep, langs: List[str], input: byt
         vars_setter = '; '.join(f"{k}={quote(v)}" for k, v in params.items())
         command = f'{vars_setter}; {command}'
 
-    pprint({
-        'command': command,
-        'params': params
-    }, stream=sys.stderr)
+    print(command, file=sys.stderr)
 
     p_filter = await asyncio.create_subprocess_shell(command,
         stdin=asyncio.subprocess.PIPE,
@@ -322,6 +319,12 @@ async def exec_filter_step(filter_step: FilterStep, langs: List[str], input: byt
 
     # Check exit codes, testing most obvious problems first.
     return await p_filter.communicate(input=input)
+
+
+def cancel_cached_tasks(name:str, offset:int):
+    for task in sample_cache[name][offset:]:
+        task.cancel()
+    del sample_cache[name][offset:]
 
 
 async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[FilterOutput]:
@@ -357,7 +360,7 @@ async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[Filter
         # If we do not have a cache entry for this point
         if len(sample_cache[name]) <= i or sample_cache[name][i].checksum != checksum:
             # Invalidate all the cache after this step
-            del sample_cache[name][i:]
+            cancel_cached_tasks(name, i)
 
             sample_cache[name].append(SampleCacheEntry(
                 checksum=checksum,
@@ -371,6 +374,10 @@ async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[Filter
         yield FilterOutput(langs, filter_output, filter_stderr)
 
         sample = filter_output
+
+    # if there are additional steps left in the cache, remove them
+    if len(sample_cache[name]) > len(filters) + 1:
+        cancel_cached_tasks(name, len(filters) + 1)
 
 
 def stream_jsonl(iterable):

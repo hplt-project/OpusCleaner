@@ -12,20 +12,24 @@ mapping = [
 	("\u008e", "é"),	# d<U+008E>claration
 	("\u008f", "è"),	# ci-apr<U+008F>s
 	("\u0090", "ê"),	# doivent <U+0090>tre exclus
-	("\u0091", "û"),	# lŐexercice ont d<U+009E> être
+	("\u0091", "ë"),	# lŐexercice ont d<U+009E> être
 	("\u0094", "î"),	# L'Agence reconna<U+0094>t
 	("\u0099", "ô"),	# xLes contr<U+0099>les
 	("\u009d", "ù"),	# dans la mesure o<U+009D> il
 	("\u009e", "û"),	# l'exercice ont d<U+009E> être reportés
-	("\u0092", "í"),  # V<U+0092>tor Manuel da SILVA CALDEIRA
-	("Ő", "'"),  # lŐexercice
+	("\u0092", "í"),    # V<U+0092>tor Manuel da SILVA CALDEIRA
+	("Ő", "'"),         # lŐexercice
+	("ă", "'"),         # ăAutoriteitÓ
+	("Ó", "'"),
+	("􏳕", "ë"),        # financi􏳕le
+	("¬ ", ""),
 ]
 
 
 class Translator:
 	def __init__(self, mapping):
 		self.mapping = {entry[0]: entry[1] for entry in mapping}
-		self.pattern = re.compile(''.join(['[', *self.mapping.keys(), ']']))
+		self.pattern = re.compile('(' + '|'.join(self.mapping.keys()) + ')')
 		self.callback = lambda match: self.mapping[match[0]]
 
 	def __call__(self, input):

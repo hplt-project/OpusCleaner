@@ -4,7 +4,7 @@ import gzip
 from shlex import quote
 import sys
 import re
-from typing import Optional, Iterable, TypeVar, Union, Literal, Any, AsyncIterator, cast, IO, List, Dict, Tuple
+from typing import NamedTuple, Optional, Iterable, TypeVar, Union, Literal, Any, AsyncIterator, Awaitable, cast, IO, List, Dict, Tuple
 from contextlib import ExitStack
 from itertools import chain, zip_longest
 from pydantic import BaseModel, parse_obj_as, validator, ValidationError
@@ -26,6 +26,7 @@ from glob import glob
 from tempfile import TemporaryFile
 from shutil import copyfileobj
 from pprint import pprint
+from collections import defaultdict
 
 
 from datasets import list_datasets, Path
@@ -210,7 +211,7 @@ def filter_configuration_path(name:str) -> str:
     return dataset_path(name, '{}.filters.json')
 
 
-async def compute_sample(name:str, columns:List[Tuple[str,File]]):
+async def compute_sample(name:str, columns:List[Tuple[str,Path]]):
     langs = [lang for lang, _ in columns]
     with TemporaryFile() as tempfile:  # type: ignore[name-defined]
         proc = await asyncio.subprocess.create_subprocess_exec(
@@ -229,6 +230,16 @@ async def compute_sample(name:str, columns:List[Tuple[str,File]]):
 
         with open(sample_path(name, langs), 'wb') as fdest:
             copyfileobj(tempfile, fdest)
+
+
+async def get_dataset_sample(name, columns) -> Tuple[bytes,bytes]:
+    langs = [lang for lang, _ in columns]
+
+    if not os.path.exists(sample_path(name, langs)):
+        await compute_sample(name, columns)
+
+    with open(sample_path(name, langs), 'rb') as fh:
+        return fh.read(), bytes()
 
 
 class FilterOutput(BaseModel):
@@ -252,53 +263,94 @@ class FilterOutput(BaseModel):
             stderr=stderr.decode() if stderr is not None else None)
 
 
+class SampleCacheEntry(NamedTuple):
+    checksum: bytes
+    future: asyncio.Task[Tuple[bytes, bytes]]
+
+
+sample_cache: Dict[str,List[SampleCacheEntry]] = defaultdict(list)
+
+
+def cache_hash(obj: Any, seed: bytes = bytes()) -> bytes:
+    impl = hashlib.sha256(seed)
+    impl.update(json.dumps(obj, sort_keys=True).encode())
+    return impl.digest()
+
+
+async def exec_filter_step(filter_step: FilterStep, langs: List[str], input: bytes) -> Tuple[bytes,bytes]:
+    filter_definition = FILTERS[filter_step.filter]
+
+    if filter_definition.type == FilterType.BILINGUAL:
+            command = filter_definition.command
+    elif filter_definition.type == FilterType.MONOLINGUAL:
+        column = langs.index(none_throws(filter_step.language))
+        command = f'{COL_PY} {column} {filter_definition.command}'
+    else:
+        raise NotImplementedError()
+
+    params = {name: props.export(filter_step.parameters[name])
+              for name, props in filter_definition.parameters.items()}
+
+    if params:
+        vars_setter = '; '.join(f"{k}={quote(v)}" for k, v in params.items())
+        command = f'{vars_setter}; {command}'
+
+    pprint({
+        'command': command,
+        'params': params
+    }, stream=sys.stderr)
+
+    p_filter = await asyncio.create_subprocess_shell(command,
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=filter_definition.basedir)
+
+    # Check exit codes, testing most obvious problems first.
+    return await p_filter.communicate(input=input)
+
+
 async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[FilterOutput]:
     columns: List[Tuple[str,Path]] = sorted(list_datasets(DATA_PATH)[name].items(), key=lambda pair: pair[0])
     langs = [lang for lang, _ in columns]
 
+    checksum = cache_hash([
+        (name, str(path), path.stat().st_mtime)
+        for name, path in columns
+    ])
+
     # If we don't have a sample stored, generate one. Doing it in bytes because
     # it might save us parsing utf-8 (also assumptions! It it utf-8?)
-    if not os.path.exists(sample_path(name, langs)):
-        await compute_sample(name, columns)
+    if not sample_cache[name] or sample_cache[name][0].checksum != checksum:
+        sample_cache[name].append(SampleCacheEntry(
+            checksum=checksum,
+            future=asyncio.create_task(get_dataset_sample(name, columns))
+        ))
 
-    with open(sample_path(name, langs), 'rb') as fh:
-        sample = fh.read()
+    sample, _ = await sample_cache[name][0].future
 
     yield FilterOutput(langs, sample)
 
-    for i, filter_step in enumerate(filters):
+    for i, filter_step in enumerate(filters, start=1):
         filter_definition = FILTERS[filter_step.filter]
 
-        if filter_definition.type == FilterType.BILINGUAL:
-            command = filter_definition.command
-        elif filter_definition.type == FilterType.MONOLINGUAL:
-            column = langs.index(none_throws(filter_step.language))
-            command = f'{COL_PY} {column} {filter_definition.command}'
-        else:
-            raise NotImplementedError()
+        checksum = cache_hash(jsonable_encoder(filter_step),
+            cache_hash(jsonable_encoder(filter_definition),
+                sample_cache[name][i-1].checksum))
 
-        params = {name: props.export(filter_step.parameters[name])
-                  for name, props in filter_definition.parameters.items()}
+        # If we do not have a cache entry for this point
+        if len(sample_cache[name]) <= i or sample_cache[name][i].checksum != checksum:
+            # Invalidate all the cache after this step
+            del sample_cache[name][i:]
 
-        if params:
-            vars_setter = '; '.join(f"{k}={quote(v)}" for k, v in params.items())
-            command = f'{vars_setter}; {command}'
-
-        p_filter = await asyncio.create_subprocess_shell(command,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=filter_definition.basedir)
-
-        # Check exit codes, testing most obvious problems first.
-        filter_output, filter_stderr = await p_filter.communicate(input=sample)
-        # if p_filter.returncode != 0:
-            # raise Exception(f"Step {i}: {filter_step.filter} failed:\n{filter_stderr!s}")
-
+            sample_cache[name].append(SampleCacheEntry(
+                checksum=checksum,
+                future=asyncio.create_task(exec_filter_step(filter_step, langs, sample))
+            ))
+        
+        filter_output, filter_stderr = await sample_cache[name][i].future    
+        
         yield FilterOutput(langs, filter_output, filter_stderr)
-
-        if p_filter.returncode != 0:
-            break
 
         sample = filter_output
 

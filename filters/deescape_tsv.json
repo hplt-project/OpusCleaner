@@ -1,0 +1,6 @@
+{
+    "description": "Removes the double quotes that are wrapped around tsv fields that contain quotes.",
+    "type": "bilingual",
+    "command": "./deescape_tsv.py",
+    "parameters": {}
+}

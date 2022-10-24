@@ -519,6 +519,8 @@ const categoryPicker = ref();
 .sample.display-as-rows td[lang]::before {
 	content: attr(lang) ': ';
 	display: inline-block;
+	width: 3em;
+	text-align: right;
 	margin: 0 0.5em 0 0;
 	opacity: 0.5;
 }

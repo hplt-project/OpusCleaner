@@ -64,14 +64,17 @@ function diffSample(languages, previous, sample) {
 				break;
 		}
 
+		console.assert(last <= chunks[i].value.length);
+
 		// If it's not the first line of the mutation, we need to split it
 		// in at least two (maybe three)
 		if (first > 0) {
-			chunks.splice(i, 0, {count: first, value: chunks[i].value.splice(0, first)})
+			chunks.splice(i, 0, {count: first, value: chunks[i].value.slice(0, first)})
 			++i; // We inserted it before the one we're handling right now,
 					 // so increase `i` accordingly
 		}
 
+		chunks[i].value = chunks[i].value.slice(first);
 		chunks[i].count = last - first;
 		chunks[i].changed = true;
 
@@ -80,7 +83,8 @@ function diffSample(languages, previous, sample) {
 		// evaluated next.
 		if (last - first < chunks[i].value.length) {
 			const count = chunks[i].value.length - (last - first);
-			chunks.splice(i+1, 0, {count, value: chunks[i].value.splice(last - first, count)});
+			chunks.splice(i+1, 0, {count, value: chunks[i].value.slice(last - first)});
+			chunks[i].value = chunks[i].value.slice(0, last - first)
 			// Do not increase i so next iteration looks at this newly added
 			// one, there might be more changes here!
 		}

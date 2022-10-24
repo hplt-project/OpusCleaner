@@ -96,5 +96,5 @@
             "type": "bool"
         }
     },
-    "command": "/usr/local/bin/bifixer - - $SRCLANG $TRGLANG --scol 1 --tcol 2 ${IGNORE_CHARACTERS:+--ignore_characters} ${IGNORE_NORMALIZATION:+--ignore_normalization} ${IGNORE_HTML:+--ignore_html} ${IGNORE_EMPTY:+--ignore_empty} ${IGNORE_LONG:+--ignore_long} ${IGNORE_ORTHOGRAPHY:+--ignore_orthography} ${IGNORE_DETOKENIZATION:+--ignore_detokenization} ${IGNORE_DUPLICATES:+--ignore_duplicates} ${AGGRESSIVE_DEDUP:+--aggressive_dedup} ${IGNORE_SEGMENTATION:+--ignore_segmentation} ${WORDS_BEFORE_SEGMENTING:+--words_before_segmenting $WORDS_BEFORE_SEGMENTING} ${SEGMENTER:+--segmenter $SEGMENTER} $(test -z \"$DEBUG\" && echo '-q' || echo '--debug')"
+    "command": "/usr/local/bin/bifixer - - $SRCLANG $TRGLANG --scol 1 --tcol 2 ${IGNORE_CHARACTERS:+--ignore_characters} ${IGNORE_NORMALIZATION:+--ignore_normalization} ${IGNORE_HTML:+--ignore_html} ${IGNORE_EMPTY:+--ignore_empty} ${IGNORE_LONG:+--ignore_long} ${IGNORE_ORTHOGRAPHY:+--ignore_orthography} ${IGNORE_DETOKENIZATION:+--ignore_detokenization} ${IGNORE_DUPLICATES:+--ignore_duplicates} ${AGGRESSIVE_DEDUP:+--aggressive_dedup} ${IGNORE_SEGMENTATION:+--ignore_segmentation} ${WORDS_BEFORE_SEGMENTING:+--words_before_segmenting $WORDS_BEFORE_SEGMENTING} ${SEGMENTER:+--segmenter $SEGMENTER} $(test -z \"$DEBUG\" && echo '-q' || echo '--debug') | ./bifixer_dedupe.py"
 }

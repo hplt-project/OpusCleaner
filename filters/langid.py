@@ -45,7 +45,7 @@ def clean_parallel(src_lang: str, trg_lang: str, debug: bool=True) -> None:
         if srcpass and trgpass:
             stdout.write(line)
         elif debug:
-            stderr.write(f'LANGUAGE\t{src}\t{trg}\n')
+            stderr.write(f'LANGUAGE\t{src}\t{trg}\t{src_detection}\t{trg_detection}\n')
 
 
 if __name__ == '__main__':

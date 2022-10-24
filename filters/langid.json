@@ -1,6 +1,6 @@
 {
     "description": "Detect language",
-    "command": "./langid.py --src_lang $SRC_LANG --trg_lang $TRG_LANG ${DEBUG:+--debug}",
+    "command": "./langid.py ${DEBUG:+--debug} ${ALLOW_UNKNOWN:+--allow-unknown} ${ALLOW_SIMILAR:+--allow-similar} $SRC_LANG $TRG_LANG",
     "parameters":
     {
         "SRC_LANG":
@@ -12,6 +12,16 @@
         {
             "type": "str",
             "default": ""
+        },
+        "ALLOW_SIMILAR":
+        {
+            "type": "bool",
+            "default": true
+        },
+        "ALLOW_UNKNOWN":
+        {
+            "type": "bool",
+            "default": true
         },
         "DEBUG":
         {

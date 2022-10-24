@@ -26,7 +26,6 @@ from glob import glob
 from tempfile import TemporaryFile
 from shutil import copyfileobj
 from pprint import pprint
-from collections import defaultdict
 
 
 from datasets import list_datasets, Path
@@ -268,7 +267,7 @@ class SampleCacheEntry(NamedTuple):
     future: asyncio.Task[Tuple[bytes, bytes]]
 
 
-sample_cache: Dict[str,List[SampleCacheEntry]] = defaultdict(list)
+sample_cache: Dict[str,List[SampleCacheEntry]] = {}
 
 
 def cache_hash(obj: Any, seed: bytes = bytes()) -> bytes:
@@ -321,11 +320,13 @@ async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[Filter
 
     # If we don't have a sample stored, generate one. Doing it in bytes because
     # it might save us parsing utf-8 (also assumptions! It it utf-8?)
-    if not sample_cache[name] or sample_cache[name][0].checksum != checksum:
-        sample_cache[name].append(SampleCacheEntry(
-            checksum=checksum,
-            future=asyncio.create_task(get_dataset_sample(name, columns))
-        ))
+    if not name in sample_cache or sample_cache[name][0].checksum != checksum:
+        sample_cache[name] = [
+            SampleCacheEntry(
+                checksum=checksum,
+                future=asyncio.create_task(get_dataset_sample(name, columns))
+            )
+        ]
 
     sample, _ = await sample_cache[name][0].future
 
@@ -347,6 +348,8 @@ async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[Filter
                 checksum=checksum,
                 future=asyncio.create_task(exec_filter_step(filter_step, langs, sample))
             ))
+
+            assert len(sample_cache[name]) == i + 1
         
         filter_output, filter_stderr = await sample_cache[name][i].future    
         

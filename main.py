@@ -322,8 +322,8 @@ async def exec_filter_step(filter_step: FilterStep, langs: List[str], input: byt
 
 
 def cancel_cached_tasks(name:str, offset:int):
-    for task in sample_cache[name][offset:]:
-        task.cancel()
+    for entry in sample_cache[name][offset:]:
+        entry.future.cancel()
     del sample_cache[name][offset:]
 
 

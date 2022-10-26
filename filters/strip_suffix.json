@@ -1,0 +1,25 @@
+{
+    "type": "monolingual",
+    "description": "Detect and strip common suffix from consecutive lines",
+    "parameters": {
+        "MINLEN": {
+            "help": "Minimum suffix length",
+            "required": false,
+            "type": "int",
+            "default": 4
+        },
+        "MINOCC": {
+            "help": "Minimum number of consecutive occurrences",
+            "required": false,
+            "type": "int",
+            "default": 10
+        },
+        "COUNT": {
+            "help": "Print removed suffixes and number of lines to stderr",
+            "required": false,
+            "type": "bool",
+            "default": false
+        }
+    },
+    "command": "./strip_suffix.py ${MINLEN:+--minlen $MINLEN} ${MINOCC:+--minocc $MINOCC} ${COUNT:+--count}"
+}

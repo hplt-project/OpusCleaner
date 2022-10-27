@@ -15,7 +15,7 @@ const isOpen = ref(false);
 
 const currentDataset = ref(null);
 
-let modifiedCategories = null;
+let modifiedCategories = ref(null);
 
 // Make categories default to the ones from the store, unless we've modified
 // them already through the UI.
@@ -24,20 +24,24 @@ const categories = computed({
 		if (currentDataset.value === null)
 			return null;
 
-		if (modifiedCategories !== null)
-			return modifiedCategories;
+		if (modifiedCategories.value !== null)
+			return modifiedCategories.value;
 
+		// (Additional problem is that getCategoriesForDataset is reactive. When
+		// called before the data is loaded from server, it will return an empty
+		// answer and will update once data is fetched. But because of that we can't
+		// rely on just calling getCategoriesForDataset() once on showForDataset.)
 		return getCategoriesForDataset(currentDataset.value);
 	},
 	set(value) {
-		modifiedCategories = value;
+		modifiedCategories.value = value.slice();
 	}
 });
 
 // When the dataset changes, also reset the changes to the categories we made.
 watch(currentDataset, function (current, old) {
 		if (current?.name !== old?.name)
-			modifiedCategories = null;
+			modifiedCategories.value = null;
 	},
 	{deep: true} // TODO: necessary?
 );
@@ -45,9 +49,9 @@ watch(currentDataset, function (current, old) {
 function apply() {
 	console.assert(currentDataset.value !== null);
 
-	if (modifiedCategories !== null) {
-		setCategoriesForDataset(modifiedCategories, currentDataset.value);
-		modifiedCategories = null;
+	if (modifiedCategories.value !== null) {
+		setCategoriesForDataset(modifiedCategories.value, currentDataset.value);
+		modifiedCategories.value = null;
 	}
 
 	hide();

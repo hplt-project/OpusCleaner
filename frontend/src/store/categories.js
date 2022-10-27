@@ -68,13 +68,12 @@ export function setCategoriesForDataset(categories, dataset) {
 				data.mapping[name].push(dataset.name)
 		} 
 		// else if this category should not have this dataset
-		else {
-			// … and there is a mapping for this category
-			if (name in data.mapping) {
-				const index = data.mapping[name].indexOf(dataset.name);
+		// … and there is a mapping for this category
+		else if (name in data.mapping) {
+			let index
+			while ((index = data.mapping[name].indexOf(dataset.name)) !== -1) {
 				// … and this dataset is in that mapping, remove it.
-				if (index !== -1)
-					data.mapping[name].splice(index, 1);
+				data.mapping[name].splice(index, 1);
 			}
 		}
 	})

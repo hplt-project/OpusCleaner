@@ -1,6 +1,6 @@
 {
 	"type": "monolingual",
-	"command": "perl -pe \"${PATTERN}\"",
+	"command": "perl -C -pe \"${PATTERN}\"",
 	"description": "Apply Perl RegExp",
 	"parameters": {
 		"PATTERN": {

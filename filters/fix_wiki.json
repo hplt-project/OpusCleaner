@@ -27,11 +27,16 @@
             "type": "bool",
             "default": true
         },
+        "HEADINGS": {
+            "help": "Remove ==headings==",
+            "type": "bool",
+            "default": true
+        },
         "REMOVEEMPTYLINES": {
             "help": "Remove sentence pairs when one side is empty after filtering",
             "type": "bool",
             "default": true
         }
     },
-    "command": "./fix_wiki.py ${ALWAYS:+--always} ${FOOTNOTES:+--footnotes} ${URLS:+--urls} ${WIKILINKS:+--wikilinks} ${CODE:+--code} ${REMOVEEMPTYLINES:+--remove-empty-lines}"
+    "command": "./fix_wiki.py ${ALWAYS:+--always} ${FOOTNOTES:+--footnotes} ${URLS:+--urls} ${WIKILINKS:+--wikilinks} ${CODE:+--code} ${HEADINGS:+--headings} ${REMOVEEMPTYLINES:+--remove-empty-lines}"
 }

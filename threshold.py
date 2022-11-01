@@ -88,7 +88,7 @@ class PersistentCache(Cache):
 	__slots__ = ['entries', 'db', '_backing']
 
 	def __init__(self, path: str):
-		self.db = dbm.open(path, 'cfu') # create, fast, unlocked (TODO unlocked?!)
+		self.db = dbm.open(path, 'c') # was 'cfu' create, fast, unlocked (TODO unlocked?!) but that only works if the gnu backend is used
 		self.entries: Dict[bytes,PersistentEntry] = {}
 
 	def __enter__(self):

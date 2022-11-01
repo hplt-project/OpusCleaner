@@ -9,12 +9,16 @@ import os
 import argparse
 import json
 import signal
+from shutil import copyfileobj
 from shlex import quote
 from glob import glob
-from queue import SimpleQueue
+from queue import Queue, SimpleQueue
 from threading import Thread
 from subprocess import Popen, PIPE
-from typing import List, Any, BinaryIO, Optional, TypeVar, Iterable, NamedTuple, Union
+from typing import Dict, List, Any, BinaryIO, Optional, TypeVar, Iterable, Tuple, NamedTuple, Union
+from pprint import pprint
+from tempfile import NamedTemporaryFile
+import traceback
 
 
 COL_PY = os.path.join(os.path.dirname(__file__), 'col.py')
@@ -83,10 +87,286 @@ def print_lines(queue: SimpleQueue, fout: BinaryIO):
         fout.flush()
 
 
+T = TypeVar('T')
+
+def mark_last(iterable: Iterable[T]) -> Iterable[Tuple[bool,T]]:
+    it = iter(iterable)
+    curr_el = next(it)
+    while True:
+        try:
+            next_el = next(it)
+            yield False, curr_el
+            curr_el = next_el
+        except StopIteration:
+            break
+    yield True, curr_el
+
+
+
 class Child(NamedTuple):
     name: str
     process: Popen
     babysitter: Thread
+
+
+class ProcessPipeline:
+    """Context manager for spawning and babysitting child processes that are
+    siblings connected by their pipes.
+    """
+    ctrl_queue: SimpleQueue
+
+    print_queue: SimpleQueue
+
+    children: List[Child]
+
+    def __init__(self, print_queue: SimpleQueue):
+        self.ctrl_queue = SimpleQueue()
+        self.print_queue = print_queue
+        self.children = []
+
+    def start(self, name:str, cmd: Union[str,List[str]], **kwargs) -> Popen:
+        child = Popen(cmd, **kwargs)
+        n = len(self.children)
+        thread = Thread(target=babysit_child, args=[n, child, name, self.print_queue, self.ctrl_queue])
+        thread.start()
+        self.children.append(Child(name, child, thread))
+        return child
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, err_type, err_inst, err_trace):
+        # Wait for the children to exit, and depending on their retval exit early
+        running_children = len(self.children)
+
+        print(f"Waiting for {running_children} subprocesses to finish...", file=sys.stderr)
+
+        if err_type:
+            for child in self.children:
+                child.process.terminate()
+
+        try:
+            while running_children > 0:
+                child_i, retval = self.ctrl_queue.get()
+                running_children -= 1
+
+                # Early exit when a process errored out. SIGPIPE is retuned by
+                # processes that can no longer write to the next one. E.g. when
+                # `head -n 10` stops reading because it has read its 10 lines.
+                if retval not in (0, -signal.SIGPIPE):
+                    break
+        except KeyboardInterrupt:
+            # TODO: Wait, how does the interrupt stop the children?
+            print('[run.py] KeyboardInterrupt', file=sys.stderr)
+            pass
+
+        # If supported, print usage for each child?
+        if False and os.path.isdir('/proc'):
+            for child in children:
+                with open(f'/proc/{child.process.pid}/stat', 'r') as fh:
+                    sys.stderr.write(child.name + "\t")
+                    sys.stderr.write(fh.readline())
+
+        # Wait for all the processes to prevent zombies
+        for child in self.children:
+            if child.process.returncode is None:
+                child.process.wait()
+
+        # Wait for the babysitters to exit, which happens when their process stops
+        for child in self.children:
+            child.babysitter.join()
+
+        # If we broke out of our ctrl_queue loop be clearly exited with an
+        # issue, so let's mark that occasion by throwing.
+        if running_children > 0 and not err_inst:
+            raise Exception(f"Child {(child_i + 1)} {self.children[child_i].name} exited with {retval}")
+
+
+
+class PipelineStep(NamedTuple):
+    command: str
+    basedir: str
+
+
+class Pipeline:
+    def __init__(self, filters: Dict[str,Dict], languages: List[str], pipeline: List[Dict]):
+        self.steps: List[PipelineStep] = []
+
+        # Assert we have all filters we need
+        assert set(step['filter'] for step in pipeline['filters']) - set(filters.keys()) == set()
+
+        for step in pipeline['filters']:
+            filter_definition = filters[step['filter']]
+            
+            if filter_definition['type'] == 'bilingual':
+                command = filter_definition['command']
+            elif filter_definition['type'] == 'monolingual':
+                column = languages.index(step['language'])
+                command = f'{COL_PY} {column} {filter_definition["command"]}'
+            else:
+                raise NotImplementedError()
+
+            # List of k=v shell variable definitions
+            filter_params = [
+                '{}={}'.format(name, quote(encode_env(props['type'], step['parameters'].get(name, props.get('default', None)))))
+                for name, props in filter_definition['parameters'].items()
+            ]
+
+            # Command, prefixed by variable definitions so they get expanded
+            # correctly in the command bit.
+            command_str = '; '.join(filter_params + [command])
+
+            self.steps.append(PipelineStep(command_str, filter_definition['basedir']))
+
+    def run(self, pool:ProcessPipeline, stdin:BinaryIO, stdout:BinaryIO, *, tee:bool=False, basename:str=""):
+        for i, (is_last_step, step) in enumerate(mark_last(self.steps)):
+        
+            child = pool.start(f'step {i}', step.command,
+                stdin=stdin,
+                stdout=stdout if is_last_step and not tee else PIPE,
+                stderr=PIPE,
+                cwd=step.basedir,
+                shell=True)
+
+            # Close our reference to the previous child, now taken over by the next child
+            stdin.close()
+            
+            # Set stdin for next step (unless there is none, then child.stdout is None)
+            if not is_last_step and not tee:
+                stdin = none_throws(child.stdout)
+
+            pool.print_queue.put(f'[run.py] step {i}: Started {step.command}\n'.encode())
+
+            # If we are tee-ing for debug, shunt the output to a separate file
+            # TODO: uncompressed at the moment. Might be trouble.
+            if tee:
+                tee_child = pool.start(f'tee {i}',
+                    ['tee', f'{basename}.step-{i}.tsv'],
+                    stdin=stdin,
+                    stdout=stdout if is_last_step else PIPE,
+                    stderr=PIPE)
+
+                stdin.close()
+                stdin = none_throws(tee_child.stdout)
+
+
+def split_input(print_queue:SimpleQueue, parallel: int, batch_queue: Queue, batch_size:int, stdin:BinaryIO):
+    more = True
+
+    batch_index = 0
+
+    while more:
+        fh = NamedTemporaryFile(delete=False)
+        more = False
+
+        for line_index in range(batch_size):
+            line = stdin.readline()
+            if line == b'':
+                break
+            fh.write(line)
+        else:
+            more = True
+
+        fh.close()
+
+        print_queue.put(f'[run.py] Wrote {line_index} lines to batch {batch_index}: {fh.name}\n'.encode())
+            
+        if line_index > 0:
+            batch_queue.put((batch_index, fh.name))
+        else:
+            os.unlink(fh.name)
+
+        batch_index += 1
+
+    for _ in range(parallel):
+        batch_queue.put(None)
+
+
+def run_pipeline(print_queue:SimpleQueue, batch_queue: Queue, merge_queue: SimpleQueue, pipeline: Pipeline):
+    while True:
+        entry = batch_queue.get()
+
+        if entry is None:
+            merge_queue.put(None)
+            break
+
+        batch_index, filename = entry
+
+        stdout = NamedTemporaryFile(delete=False)
+
+        print_queue.put(f'[run.py] Filtering chunk {filename} to {stdout.name}\n'.encode())
+
+        with open(filename, 'rb') as stdin, ProcessPipeline(print_queue) as pool:
+            pipeline.run(pool, stdin, stdout)
+
+        stdout.close()
+        merge_queue.put((batch_index, stdout.name))
+
+
+def merge_output(print_queue:SimpleQueue, parallel: int, merge_queue: SimpleQueue, stdout:BinaryIO):
+    next_batch_index = 0
+
+    pending_batches: Dict[int, str] = {}
+
+    while True:
+        # If we have the next batch, start processing it into the final output
+        if next_batch_index in pending_batches:
+            batch_index, filename = next_batch_index, pending_batches[next_batch_index]
+
+            print_queue.put(f'[run.py] Merging {filename} into output\n'.encode())
+            
+            with open(filename, 'rb') as fh:
+                copyfileobj(fh, stdout)
+
+            os.unlink(filename)
+
+            next_batch_index += 1
+        # If not yet, we wait on the queue to come through with (hopefully) the next batch
+        else:
+            entry = merge_queue.get()
+
+            if entry is None:
+                parallel -= 1
+
+                if parallel == 0:
+                    break
+                else:
+                    continue
+
+            batch_index, filename = entry
+
+            assert batch_index not in pending_batches
+            pending_batches[batch_index] = filename
+
+
+def run_parallel(pipeline:Pipeline, stdin:BinaryIO, stdout:BinaryIO, *, parallel:int, batch_size:int, print_queue: SimpleQueue):
+    batch_queue = Queue(parallel * 2)
+
+    merge_queue = SimpleQueue()
+
+    splitter = Thread(target=split_input, args=[print_queue, parallel, batch_queue, batch_size, stdin])
+    splitter.start();
+
+    runners = [
+        Thread(target=run_pipeline, args=[print_queue, batch_queue, merge_queue, pipeline])
+        for _ in range(parallel)
+    ]
+
+    merger = Thread(target=merge_output, args=[print_queue, parallel, merge_queue, stdout])
+    merger.start()
+
+    for runner in runners:
+        runner.start()
+
+    print_queue.put(f'[run.py] Waiting for splitter to finish\n'.encode())
+    splitter.join()
+
+    print_queue.put(f'[run.py] Waiting for pipelines to finish\n'.encode())
+    for runner in runners:
+        runner.join()
+
+    print_queue.put(f'[run.py] Waiting for merger to finish\n'.encode())
+    merger.join()
 
 
 def main(argv):
@@ -96,6 +376,8 @@ def main(argv):
     parser.add_argument('--output', '-o', type=argparse.FileType('wb'), default=sys.stdout.buffer)
     parser.add_argument('--basedir', '-b', type=str, help='Directory to look for data files when -i is not used')
     parser.add_argument('--tee', action='store_true', help='Write output after each step to a separate file')
+    parser.add_argument('--parallel', type=int, default=1)
+    parser.add_argument('--batch-size', type=int, default=1_000_000)
     parser.add_argument('pipeline', metavar='PIPELINE', type=argparse.FileType('r'))
     parser.add_argument('languages', metavar='LANG', type=str, nargs='*')
 
@@ -109,7 +391,7 @@ def main(argv):
     if args.input is not None and not args.languages:
         parser.error('When --input is specified, each colum\'s LANG has to be specified as well.')
 
-    pipeline = json.load(args.pipeline)
+    pipeline_config = json.load(args.pipeline)
 
     # load all filter definitions (we need to, to get their name)
     FILTERS = {
@@ -117,38 +399,22 @@ def main(argv):
         for definition in list_filters(os.path.join(args.filters, '*.json'))
     }
 
-    # Assert we have all filters we need
-    assert set(step['filter'] for step in pipeline['filters']) - set(FILTERS.keys()) == set()
-
-    # List of child processes used for extracting & filtering dataset
-    children: List[Child] = []
-
-    def start(name:str, cmd: Union[str,List[str]], **kwargs) -> Popen:
-        child = Popen(cmd, **kwargs)
-        n = len(children)
-        thread = Thread(target=babysit_child, args=[n, child, name, print_queue, ctrl_queue])
-        thread.start()
-        children.append(Child(name, child, thread))
-        return child
-
     # Queue filled by the babysitters with the stderr of the children, consumed
     # by `print_lines()` to prevent racing on stderr.
     print_queue = SimpleQueue() # type: SimpleQueue[Optional[bytes]]
-
-    # Queue filled by the babysitters with the return code of each of the
-    # children. Used by the main thread to catch errors in the pipeline.
-    ctrl_queue = SimpleQueue() # type: SimpleQueue[tuple[int, int]]
 
     # First start the print thread so that we get immediate feedback from the
     # children even if all of them haven't started yet.
     print_thread = Thread(target=print_lines, args=[print_queue, sys.stderr.buffer])
     print_thread.start()
 
-    # Order of columns
-    languages: List[str]
+    # Order of columns. Matches datasets.py:list_datasets(path)
+    languages: List[str] = args.languages if args.input else [filename.rsplit('.', 2)[1] for filename in pipeline_config['files']]
 
-    # Directory to write debug (`--tee`) files to
-    basepath: str
+    # Directory plus basename to write debug (`--tee`) files to
+    basename: str = 'stdin' if args.input else os.path.commonprefix(pipeline_config['files']).rstrip('.')
+
+    pipeline = Pipeline(FILTERS, languages, pipeline_config)
 
     # Input for next child
     stdin: BinaryIO
@@ -156,132 +422,51 @@ def main(argv):
     # Output of this program
     stdout:BinaryIO = args.output
 
-    # If we're not reading from stdin, read from files and paste them together
-    if args.input:
-        languages = args.languages
-        basepath = 'stdin'
-        stdin = sys.stdin.buffer
-    else:
-        # Matches datasets.py:list_datasets(path)
-        languages = [
-            filename.rsplit('.', 2)[1]
-            for filename in pipeline['files']
-        ]
-
-        basepath = os.path.commonprefix(pipeline['files']).rstrip('.')
-
-        # Open `gzunip` for each language file
-        gunzips = [
-            start(f'gunzip {filename}',
-                ['gzip', '-cd', filename],
-                stdout=PIPE,
-                stderr=PIPE,
-                cwd=args.basedir)
-            for filename in pipeline['files']
-        ]
-
-        fds = [none_throws(gunzip.stdout).fileno() for gunzip in gunzips]
-
-        # .. and a `paste` to combine them into columns
-        paste = start('paste',
-            ['paste'] + [f'/dev/fd/{fd}' for fd in fds],
-            stdout=PIPE,
-            stderr=PIPE,
-            pass_fds=fds)
-
-        # Now that `paste` has inherited all the children, close our connection to them
-        for gunzip in gunzips:
-            none_throws(gunzip.stdout).close()
-
-        stdin = none_throws(paste.stdout)
-
     # Start child processes, each reading the output from the previous sibling
-    for i, step in enumerate(pipeline['filters']):
-        filter_definition = FILTERS[step['filter']]
-        
-        if filter_definition['type'] == 'bilingual':
-            command = filter_definition['command']
-        elif filter_definition['type'] == 'monolingual':
-            column = languages.index(step['language'])
-            command = f'{COL_PY} {column} {filter_definition["command"]}'
-        else:
-            raise NotImplementedError()
-
-        # List of k=v shell variable definitions
-        filter_params = [
-            '{}={}'.format(name, quote(encode_env(props['type'], step['parameters'].get(name, props.get('default', None)))))
-            for name, props in filter_definition['parameters'].items()    
-        ]
-
-        # Command, prefixed by variable definitions so they get expanded
-        # correctly in the command bit.
-        command_str = '; '.join(filter_params + [command])
-
-        is_last_step = i + 1 == len(pipeline['filters'])
-
-        child = start(f'step {i}', command_str,
-            stdin=stdin,
-            stdout=stdout if is_last_step and not args.tee else PIPE,
-            stderr=PIPE,
-            cwd=filter_definition['basedir'],
-            shell=True)
-
-        # Close our reference to the previous child, now taken over by the next child
-        stdin.close()
-        
-        # Set stdin for next step (unless there is none, then child.stdout is None)
-        if not is_last_step and not args.tee:
-            stdin = none_throws(child.stdout)
-
-        print_queue.put(f'[run.py] step {i}: Started {command_str}\n'.encode())
-
-        # If we are tee-ing for debug, shunt the output to a separate file
-        # TODO: uncompressed at the moment. Might be trouble.
-        if args.tee:
-            tee = start(f'tee {i}',
-                ['tee', f'{basepath}.step-{i}.tsv'],
-                stdin=stdin,
-                stdout=stdout if is_last_step else PIPE,
-                stderr=PIPE)
-
-            stdin.close()
-            stdin = none_throws(tee.stdout)
-
-    # Wait for the children to exit, and depending on their retval exit early
-    running_children = len(children)
-
     try:
-        while running_children > 0:
-            child_i, retval = ctrl_queue.get()
-            running_children -= 1
+        with ProcessPipeline(print_queue) as pool:
+            # If we're not reading from stdin, read from files and paste them together
+            if args.input:
+                stdin = sys.stdin.buffer
+            else:
+                # Open `gzunip` for each language file
+                gunzips = [
+                    pool.start(f'gunzip {filename}',
+                        ['gzip', '-cd', filename],
+                        stdout=PIPE,
+                        stderr=PIPE,
+                        cwd=args.basedir)
+                    for filename in pipeline_config['files']
+                ]
 
-            # TODO: When Child N exits with exit code 0, kill all N-1 children
-            # as well and ignore their exit code. This happens with e.g.
-            # `head -n 10`.
+                fds = [none_throws(gunzip.stdout).fileno() for gunzip in gunzips]
 
-            # Early exit when a process errored out
-            if retval not in (0, -signal.SIGPIPE):
-                break
-    except KeyboardInterrupt:
-        print('[run.py] KeyboardInterrupt', file=sys.stderr)
-        pass
+                # .. and a `paste` to combine them into columns
+                paste = pool.start('paste',
+                    ['paste'] + [f'/dev/fd/{fd}' for fd in fds],
+                    stdout=PIPE,
+                    stderr=PIPE,
+                    pass_fds=fds)
 
-    # Wait for all the processes to prevent zombies
-    for child in children:
-        if child.process.returncode is None:
-            child.process.wait()
+                # Now that `paste` has inherited all the children, close our connection to them
+                for gunzip in gunzips:
+                    none_throws(gunzip.stdout).close()
 
-    # Wait for the babysitters to exit, which happens when their process stops
-    for child in children:
-        child.babysitter.join()
+                stdin = none_throws(paste.stdout)
 
-    # Tell print thread to stop (there are no more babysitters now to produce printable stuff)
-    print_queue.put(None)
-    print_thread.join()
-
-    # If we didn't cleanly exit all processes, we err as well
-    if running_children > 0:
+                if args.parallel > 1:
+                    run_parallel(pipeline, stdin, stdout, print_queue=print_queue, parallel=args.parallel, batch_size=args.batch_size)
+                else:
+                    pipeline.run(pool, stdin, stdout, tee=args.tee, basename=basename)
+    except:
+        # If we didn't cleanly exit all processes, we err as well
+        traceback.print_exc(file=sys.stderr)
         sys.exit(1)
+    finally:
+        # Tell print thread to stop (there are no more babysitters now to produce printable stuff)
+        print_queue.put(None)
+        print_thread.join()
+
 
 if __name__ == '__main__':
     main(sys.argv[1:])

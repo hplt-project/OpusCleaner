@@ -17,7 +17,7 @@ from threading import Thread
 from subprocess import Popen, PIPE
 from typing import Dict, List, Any, BinaryIO, Optional, TypeVar, Iterable, Tuple, NamedTuple, Union
 from pprint import pprint
-from tempfile import NamedTemporaryFile
+from tempfile import NamedTemporaryFile, TemporaryDirectory
 import traceback
 
 
@@ -117,15 +117,25 @@ class ProcessPipeline:
 
     print_queue: SimpleQueue
 
+    environ: Dict[str,str]
+
     children: List[Child]
 
-    def __init__(self, print_queue: SimpleQueue):
+    def __init__(self, print_queue: SimpleQueue, *, env:Dict[str,str]={}):
         self.ctrl_queue = SimpleQueue()
         self.print_queue = print_queue
+        self.environ = dict(env)
         self.children = []
 
     def start(self, name:str, cmd: Union[str,List[str]], **kwargs) -> Popen:
-        child = Popen(cmd, **kwargs)
+        child = Popen(cmd, **{
+            **kwargs,
+            'env': {
+                **os.environ,
+                **self.environ,
+                **kwargs.get('env', dict())
+            }
+        })
         n = len(self.children)
         thread = Thread(target=babysit_child, args=[n, child, name, self.print_queue, self.ctrl_queue])
         thread.start()
@@ -287,32 +297,33 @@ def split_input(print_queue:SimpleQueue, parallel: int, batch_queue: Queue, batc
 
 def run_pipeline(print_queue:SimpleQueue, batch_queue: Queue, merge_queue: SimpleQueue, pipeline: Pipeline):
     try:
-        while True:
-            entry = batch_queue.get()
+        with TemporaryDirectory() as tmpdir:
+            while True:
+                entry = batch_queue.get()
 
-            # If the batcher told us they're out of batches, stop.
-            if entry is None:
-                break
+                # If the batcher told us they're out of batches, stop.
+                if entry is None:
+                    break
 
-            batch_index, filename = entry
+                batch_index, filename = entry
 
-            try:
-                # Write pipeline output to tempfile that is then passed on to merger.
-                stdout = NamedTemporaryFile(delete=False)
+                try:
+                    # Write pipeline output to tempfile that is then passed on to merger.
+                    stdout = NamedTemporaryFile(delete=False)
 
-                print_queue.put(f'[run.py] Filtering chunk {filename} to {stdout.name}\n'.encode())
+                    print_queue.put(f'[run.py] Filtering chunk {filename} to {stdout.name}\n'.encode())
 
-                # Open chunk file and process pool and run the pipeline with it.
-                with open(filename, 'rb') as stdin, ProcessPipeline(print_queue) as pool:
-                    pipeline.run(pool, stdin, stdout)
+                    # Open chunk file and process pool and run the pipeline with it.
+                    with open(filename, 'rb') as stdin, ProcessPipeline(print_queue, env={'TMPDIR': tmpdir}) as pool:
+                        pipeline.run(pool, stdin, stdout)
 
-                stdout.close()
+                    stdout.close()
 
-                # Tell merger that they can process this batch when the time comes
-                merge_queue.put((batch_index, stdout.name))
-            finally:
-                # Delete the input file from disk.
-                os.unlink(filename)
+                    # Tell merger that they can process this batch when the time comes
+                    merge_queue.put((batch_index, stdout.name))
+                finally:
+                    # Delete the input file from disk.
+                    os.unlink(filename)
     finally:
         # In any case, tell the merger that they should not be expecting more
         # input from you.
@@ -373,6 +384,12 @@ def run_parallel(pipeline:Pipeline, stdin:BinaryIO, stdout:BinaryIO, *, parallel
 
     for runner in runners:
         runner.start()
+
+    # TODO: problem. Say the runners crash. The splitter is then stuck blocking
+    # on Queue.put (because of size limit) and doesn't know that it should stop.
+    # We then block on the splitter.join() call here. Maybe I should not be
+    # using a blocking size-limited Queue() to control the splitter's progress
+    # but a SimpleQueue() that sends messages.
 
     print_queue.put(f'[run.py] Waiting for splitter to finish\n'.encode())
     splitter.join()

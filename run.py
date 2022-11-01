@@ -14,7 +14,7 @@ from glob import glob
 from queue import SimpleQueue
 from threading import Thread
 from subprocess import Popen, PIPE
-from typing import List, Any, BinaryIO, Optional, TypeVar, Iterable
+from typing import List, Any, BinaryIO, Optional, TypeVar, Iterable, NamedTuple, Union
 
 
 COL_PY = os.path.join(os.path.dirname(__file__), 'col.py')
@@ -83,6 +83,12 @@ def print_lines(queue: SimpleQueue, fout: BinaryIO):
         fout.flush()
 
 
+class Child(NamedTuple):
+    name: str
+    process: Popen
+    babysitter: Thread
+
+
 def main(argv):
     parser = argparse.ArgumentParser()
     parser.add_argument('--filters', '-f', type=str, default='./filters')
@@ -115,17 +121,15 @@ def main(argv):
     assert set(step['filter'] for step in pipeline['filters']) - set(FILTERS.keys()) == set()
 
     # List of child processes used for extracting & filtering dataset
-    children: List[Popen] = []
+    children: List[Child] = []
 
-    # List of threads that watch each child process, one for each child
-    babysitters: List[Thread] = []
-
-    def babysit(child: Popen, name: str):
+    def start(name:str, cmd: Union[str,List[str]], **kwargs) -> Popen:
+        child = Popen(cmd, **kwargs)
         n = len(children)
         thread = Thread(target=babysit_child, args=[n, child, name, print_queue, ctrl_queue])
         thread.start()
-        babysitters.append(thread)
-        children.append(child)
+        children.append(Child(name, child, thread))
+        return child
 
     # Queue filled by the babysitters with the stderr of the children, consumed
     # by `print_lines()` to prevent racing on stderr.
@@ -135,49 +139,61 @@ def main(argv):
     # children. Used by the main thread to catch errors in the pipeline.
     ctrl_queue = SimpleQueue() # type: SimpleQueue[tuple[int, int]]
 
-    if args.input:
-        basepath = 'stdin'
-    else:
-        basepath = os.path.commonprefix(pipeline['files']).rstrip('.')
+    # First start the print thread so that we get immediate feedback from the
+    # children even if all of them haven't started yet.
+    print_thread = Thread(target=print_lines, args=[print_queue, sys.stderr.buffer])
+    print_thread.start()
+
+    # Order of columns
+    languages: List[str]
+
+    # Directory to write debug (`--tee`) files to
+    basepath: str
+
+    # Input for next child
+    stdin: BinaryIO
+
+    # Output of this program
+    stdout:BinaryIO = args.output
 
     # If we're not reading from stdin, read from files and paste them together
-    if not args.input:
+    if args.input:
+        languages = args.languages
+        basepath = 'stdin'
+        stdin = sys.stdin.buffer
+    else:
         # Matches datasets.py:list_datasets(path)
         languages = [
             filename.rsplit('.', 2)[1]
             for filename in pipeline['files']
         ]
 
+        basepath = os.path.commonprefix(pipeline['files']).rstrip('.')
+
         # Open `gzunip` for each language file
-        for filename in pipeline['files']:
-            child = Popen(
+        gunzips = [
+            start(f'gunzip {filename}',
                 ['gzip', '-cd', filename],
                 stdout=PIPE,
                 stderr=PIPE,
                 cwd=args.basedir)
+            for filename in pipeline['files']
+        ]
 
-            babysit(child, f'gunzip {filename}')
+        fds = [none_throws(gunzip.stdout).fileno() for gunzip in gunzips]
 
         # .. and a `paste` to combine them into columns
-        child = Popen(
-            ['paste'] + [f'/dev/fd/{none_throws(child.stdout).fileno()}' for child in children],
+        paste = start('paste',
+            ['paste'] + [f'/dev/fd/{fd}' for fd in fds],
             stdout=PIPE,
             stderr=PIPE,
-            pass_fds=[none_throws(child.stdout).fileno() for child in children])
-
-        babysit(child, 'paste')
+            pass_fds=fds)
 
         # Now that `paste` has inherited all the children, close our connection to them
-        for child in children[:-1]:
-            none_throws(child.stdout).close()
+        for gunzip in gunzips:
+            none_throws(gunzip.stdout).close()
 
-    else:
-        languages = args.languages
-
-    # First start the print thread so that we get immediate feedback from the
-    # children even if all of them haven't started yet.
-    print_thread = Thread(target=print_lines, args=[print_queue, sys.stderr.buffer])
-    print_thread.start()
+        stdin = none_throws(paste.stdout)
 
     # Start child processes, each reading the output from the previous sibling
     for i, step in enumerate(pipeline['filters']):
@@ -193,7 +209,7 @@ def main(argv):
 
         # List of k=v shell variable definitions
         filter_params = [
-            '{}={}'.format(name, quote(encode_env(props['type'], step['parameters'][name])))
+            '{}={}'.format(name, quote(encode_env(props['type'], step['parameters'].get(name, props.get('default', None)))))
             for name, props in filter_definition['parameters'].items()    
         ]
 
@@ -203,32 +219,33 @@ def main(argv):
 
         is_last_step = i + 1 == len(pipeline['filters'])
 
-        child = Popen(command_str,
-            stdin=args.input if len(children) == 0 else children[-1].stdout,
-            stdout=args.output if is_last_step and not args.tee else PIPE,
+        child = start(f'step {i}', command_str,
+            stdin=stdin,
+            stdout=stdout if is_last_step and not args.tee else PIPE,
             stderr=PIPE,
             cwd=filter_definition['basedir'],
             shell=True)
 
-        # Close our reference to the child, now taken over by the next child
-        if len(children) > 0:
-            none_throws(children[-1].stdout).close()
+        # Close our reference to the previous child, now taken over by the next child
+        stdin.close()
+        
+        # Set stdin for next step (unless there is none, then child.stdout is None)
+        if not is_last_step and not args.tee:
+            stdin = none_throws(child.stdout)
 
-        print_queue.put(f'[run.py] step {i}: Executing {command_str}\n'.encode())
-
-        babysit(child, f'step {i}') # also does children.append(child)
+        print_queue.put(f'[run.py] step {i}: Started {command_str}\n'.encode())
 
         # If we are tee-ing for debug, shunt the output to a separate file
         # TODO: uncompressed at the moment. Might be trouble.
         if args.tee:
-            tee = Popen(['tee', f'{basepath}.step-{i}.tsv'],
-                stdin=child.stdout,
-                stdout=args.output if is_last_step else PIPE,
+            tee = start(f'tee {i}',
+                ['tee', f'{basepath}.step-{i}.tsv'],
+                stdin=stdin,
+                stdout=stdout if is_last_step else PIPE,
                 stderr=PIPE)
 
-            none_throws(children[-1].stdout).close()
-
-            babysit(tee, f'tee {i}')
+            stdin.close()
+            stdin = none_throws(tee.stdout)
 
     # Wait for the children to exit, and depending on their retval exit early
     running_children = len(children)
@@ -251,12 +268,12 @@ def main(argv):
 
     # Wait for all the processes to prevent zombies
     for child in children:
-        if child.returncode is None:
-            child.wait()
+        if child.process.returncode is None:
+            child.process.wait()
 
     # Wait for the babysitters to exit, which happens when their process stops
-    for thread in babysitters:
-        thread.join()
+    for child in children:
+        child.babysitter.join()
 
     # Tell print thread to stop (there are no more babysitters now to produce printable stuff)
     print_queue.put(None)

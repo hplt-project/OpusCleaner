@@ -261,6 +261,10 @@ class Pipeline:
 
 
 def split_input(print_queue:SimpleQueue, parallel: int, batch_queue: Queue, batch_size:int, stdin:BinaryIO):
+    """Reads data from `stdin` and splits it into chunks of `batch_size` lines.
+    These chunks are stored in temporary files, whose filenames are put onto
+    `batch_queue`.
+    """
     more = True
 
     batch_index = 0
@@ -286,6 +290,8 @@ def split_input(print_queue:SimpleQueue, parallel: int, batch_queue: Queue, batc
             if lines > 0:
                 batch_queue.put((batch_index, fh.name))
             else:
+                # Empty chunk because `len(stdin) % batch_size == 0`. No need
+                # to process it further.
                 os.unlink(fh.name)
 
             batch_index += 1
@@ -296,6 +302,17 @@ def split_input(print_queue:SimpleQueue, parallel: int, batch_queue: Queue, batc
 
 
 def run_pipeline(print_queue:SimpleQueue, batch_queue: Queue, merge_queue: SimpleQueue, pipeline: Pipeline):
+    """Receives an input filename from `batch_queue`, and once that has been processed
+    with `pipeline`, it will post the output filename to `merge_queue`.
+
+    TODO: This could also instead run ./run.py on the input and output files
+    directly as opposed to using `ProcessPipeline` + `pipeline.run()`.
+
+    TODO: We can rewrite this to call `srun` on SLUM clusters so that the
+    actual filtering pipeline is executed on a different node. Since input
+    and output are just files on the same filesystem (depends on TMPDIR) this
+    should pretty much work out of the box :O
+    """
     try:
         with TemporaryDirectory() as tmpdir:
             while True:
@@ -331,6 +348,10 @@ def run_pipeline(print_queue:SimpleQueue, batch_queue: Queue, merge_queue: Simpl
 
 
 def merge_output(print_queue:SimpleQueue, parallel: int, merge_queue: SimpleQueue, stdout:BinaryIO):
+    """Takes batch filenames and numbers from `merge_queue` and will concatenate
+    files in the order of the batches. If batches arrive out of order, it will
+    wait for the next in order batch to arrive before continuing to concatenate.
+    """
     next_batch_index = 0
 
     pending_batches: Dict[int, str] = {}
@@ -371,19 +392,23 @@ def run_parallel(pipeline:Pipeline, stdin:BinaryIO, stdout:BinaryIO, *, parallel
 
     merge_queue = SimpleQueue()
 
+    # Splits stdin into files of `batch_size` lines, and puts those on `batch_queue`
     splitter = Thread(target=split_input, args=[print_queue, parallel, batch_queue, batch_size, stdin])
     splitter.start();
 
+    # Read `batch_queue` for batch filenames, and process them. Put output files
+    # on `merge_queue`.
     runners = [
         Thread(target=run_pipeline, args=[print_queue, batch_queue, merge_queue, pipeline])
         for _ in range(parallel)
     ]
 
-    merger = Thread(target=merge_output, args=[print_queue, parallel, merge_queue, stdout])
-    merger.start()
-
     for runner in runners:
         runner.start()
+
+    # Read from `merge_queue` and combine files in order.
+    merger = Thread(target=merge_output, args=[print_queue, parallel, merge_queue, stdout])
+    merger.start()
 
     # TODO: problem. Say the runners crash. The splitter is then stuck blocking
     # on Queue.put (because of size limit) and doesn't know that it should stop.

@@ -429,15 +429,16 @@ def run_parallel(pipeline:Pipeline, stdin:BinaryIO, stdout:BinaryIO, *, parallel
 
 def main(argv):
     parser = argparse.ArgumentParser()
-    parser.add_argument('--filters', '-f', type=str, default='./filters')
-    parser.add_argument('--input', '-i', type=argparse.FileType('rb'))
-    parser.add_argument('--output', '-o', type=argparse.FileType('wb'), default=sys.stdout.buffer)
-    parser.add_argument('--basedir', '-b', type=str, help='Directory to look for data files when -i is not used')
+    parser.add_argument('--filters', '-f', type=str, default='./filters', help='Path to directory with filter specifications')
+    parser.add_argument('--input', '-i', type=argparse.FileType('rb'), help='Input tsv. If unspecified input files are read from filter json; use - to read from stdin')
+    parser.add_argument('--output', '-o', type=argparse.FileType('wb'), default=sys.stdout.buffer, help='Output tsv (defaults to stdout)')
+    parser.add_argument('--basedir', '-b', type=str, help='Directory to look for data files when --input is not used (defaults to same as input pipeline file)')
     parser.add_argument('--tee', action='store_true', help='Write output after each step to a separate file')
-    parser.add_argument('--parallel', type=int, default=1)
-    parser.add_argument('--batch-size', type=int, default=1_000_000)
-    parser.add_argument('pipeline', metavar='PIPELINE', type=argparse.FileType('r'))
-    parser.add_argument('languages', metavar='LANG', type=str, nargs='*')
+    parser.add_argument('--parallel', type=int, default=1, help='Run N parallel copies of the pipeline processing batches')
+    parser.add_argument('--batch-size', type=int, default=1_000_000, help='Batch size in lines that each parallel copy processes (only if --parallel > 1)')
+    parser.add_argument('--first', type=int, default=0, help='Limit reading input to the N first lines')
+    parser.add_argument('pipeline', metavar='PIPELINE', type=argparse.FileType('r'), help='Pipeline steps specification file, e.g. *.filters.json')
+    parser.add_argument('languages', metavar='LANG', type=str, nargs='*', help='Language codes of the columns in the input TSV. Only used when --input is set')
 
     args = parser.parse_args(argv)
 
@@ -511,6 +512,17 @@ def main(argv):
                     none_throws(gunzip.stdout).close()
 
                 stdin = none_throws(paste.stdout)
+
+                # If we only want the first N lines processed, use `head` to chop those off.
+                if args.first > 0:
+                    head = pool.start('head',
+                        ['head', '-n', str(args.first)],
+                        stdin=stdin,
+                        stdout=PIPE,
+                        stderr=PIPE)
+
+                    stdin.close() # now taken over by `head`.
+                    stdin = none_throws(head.stdout)
 
                 if args.parallel > 1:
                     run_parallel(pipeline, stdin, stdout, print_queue=print_queue, parallel=args.parallel, batch_size=args.batch_size)

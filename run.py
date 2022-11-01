@@ -255,52 +255,68 @@ def split_input(print_queue:SimpleQueue, parallel: int, batch_queue: Queue, batc
 
     batch_index = 0
 
-    while more:
-        fh = NamedTemporaryFile(delete=False)
-        more = False
-
-        for line_index in range(batch_size):
-            line = stdin.readline()
-            if line == b'':
-                break
-            fh.write(line)
-        else:
-            more = True
-
-        fh.close()
-
-        print_queue.put(f'[run.py] Wrote {line_index} lines to batch {batch_index}: {fh.name}\n'.encode())
+    try:
+        while more:
+            fh = NamedTemporaryFile(delete=False)
             
-        if line_index > 0:
-            batch_queue.put((batch_index, fh.name))
-        else:
-            os.unlink(fh.name)
+            lines = 0
 
-        batch_index += 1
+            while lines < batch_size:
+                line = stdin.readline()
+                if line == b'':
+                    more = False
+                    break
+                fh.write(line)
+                lines += 1
+            
+            fh.close()
 
-    for _ in range(parallel):
-        batch_queue.put(None)
+            print_queue.put(f'[run.py] Wrote {lines} lines to batch {batch_index}: {fh.name}\n'.encode())
+                
+            if lines > 0:
+                batch_queue.put((batch_index, fh.name))
+            else:
+                os.unlink(fh.name)
+
+            batch_index += 1
+    finally:
+        # In any scenario, tell all the runners there will be no more batches coming.
+        for _ in range(parallel):
+            batch_queue.put(None)
 
 
 def run_pipeline(print_queue:SimpleQueue, batch_queue: Queue, merge_queue: SimpleQueue, pipeline: Pipeline):
-    while True:
-        entry = batch_queue.get()
+    try:
+        while True:
+            entry = batch_queue.get()
 
-        if entry is None:
-            merge_queue.put(None)
-            break
+            # If the batcher told us they're out of batches, stop.
+            if entry is None:
+                break
 
-        batch_index, filename = entry
+            batch_index, filename = entry
 
-        stdout = NamedTemporaryFile(delete=False)
+            try:
+                # Write pipeline output to tempfile that is then passed on to merger.
+                stdout = NamedTemporaryFile(delete=False)
 
-        print_queue.put(f'[run.py] Filtering chunk {filename} to {stdout.name}\n'.encode())
+                print_queue.put(f'[run.py] Filtering chunk {filename} to {stdout.name}\n'.encode())
 
-        with open(filename, 'rb') as stdin, ProcessPipeline(print_queue) as pool:
-            pipeline.run(pool, stdin, stdout)
+                # Open chunk file and process pool and run the pipeline with it.
+                with open(filename, 'rb') as stdin, ProcessPipeline(print_queue) as pool:
+                    pipeline.run(pool, stdin, stdout)
 
-        stdout.close()
-        merge_queue.put((batch_index, stdout.name))
+                stdout.close()
+
+                # Tell merger that they can process this batch when the time comes
+                merge_queue.put((batch_index, stdout.name))
+            finally:
+                # Delete the input file from disk.
+                os.unlink(filename)
+    finally:
+        # In any case, tell the merger that they should not be expecting more
+        # input from you.
+        merge_queue.put(None)
 
 
 def merge_output(print_queue:SimpleQueue, parallel: int, merge_queue: SimpleQueue, stdout:BinaryIO):

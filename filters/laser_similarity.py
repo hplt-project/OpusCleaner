@@ -24,7 +24,7 @@ def _cosine_sim(emb1: np.ndarray, emb2: np.ndarray) -> np.ndarray:
 
 
 def interpolate(sample: Iterable[Tuple[int, float]], target:float) -> int:
-    poly = Polynomial.fit([duration for size, duration in sample], [size for size, duration in sample], 2)
+    poly = Polynomial.fit([duration for size, duration in sample], [size for size, duration in sample], 1)
     return int(poly(target)), poly
 
 

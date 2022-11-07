@@ -25,9 +25,9 @@ def parse_user_args():
     parser.add_argument("--resume", '-r', default=True, type=bool, help='Resume from the previous training state')
     return parser.parse_args()
 
-Stage = namedtuple('Stage', ['datasets', 'until_dataset', 'until_epoch'])
+Stage = namedtuple('Stage', ['name', 'datasets', 'until_dataset', 'until_epoch'])
 
-DatasetState = namedtuple('DatasetState', ['seed', 'line', 'epoch'])
+DatasetState = namedtuple('DatasetState', ['name', 'seed', 'line', 'epoch'])
 
 @dataclass
 class StateTracker:
@@ -49,7 +49,7 @@ class StateTracker:
                     seed = int(seed)
                     line = int(line)
                     epoch = int(epoch)
-                    self.dataset_states[name] = DatasetState(seed, line, epoch)
+                    self.dataset_states[name] = DatasetState(name, seed, line, epoch)
                 # Restore random state
                 self.random_state = ymldata['random_state']
                 random.setstate(self.random_state)
@@ -86,7 +86,7 @@ class StateTracker:
         random.setstate(self.random_state)
         return self.stage
 
-    def get_dataset(self, name: str) -> str:
+    def get_dataset(self, name: str) -> DatasetState:
         '''Returns the state for a dataset'''
         return self.dataset_states[name]
 
@@ -105,19 +105,21 @@ class Executor:
         for path in self.dataset_paths:
             tmpdict[path.split('/')[-1]] = path
         self.dataset_paths = tmpdict
-        self.stage_names = ymldata['stages']
+        self.stage_names: List[str] = ymldata['stages']
         self.uppercase_ratio = float(ymldata['uppercase'])
         self.random_seed = int(ymldata['seed'])
         self.trainer = pexpect.spawn(ymldata['trainer'])
         self.trainer.delaybeforesend = None
         # Parse the individual training stages into convenient struct:
-        self.stages = {}
-        self.dataset_objects = {}
+        self.stages: Dict[str, Stage] = {}
+        self.dataset_objects: Dict[str, Dataset] = {}
 
         # Set random seed
         random.seed(self.random_seed)
-        # Keep track of the state
+        # Keep track of the state. The restore_datasets variable will keep track of whether to restore the datasets to
+        # a certain stage at the initial run before continueing forward.
         self.state_tracker = state_tracker
+        self.restore_datasets: bool = state_tracker.stage is not None
 
         for stage in self.stage_names:
             stageparse: List[str] = ymldata[stage]
@@ -129,7 +131,7 @@ class Executor:
                 stagesdict[stagename] = weight
 
             _, until_stagename, termination_epoch = stageparse[-1].split()
-            mystage = Stage(stagesdict, until_stagename, float(termination_epoch))
+            mystage = Stage(stage, stagesdict, until_stagename, float(termination_epoch))
             self.stages[stage] = mystage
 
         # Initialise the dataset filestreams. For now just do identity initialisation, do more later
@@ -146,11 +148,19 @@ class Executor:
         for stage in self.stage_names:
             print(stage)
             self._init_stage_(self.stages[stage])
+            # The first time we get here, if we are resuming training, we need to restore the dataset state
+            # Restore state and then don't do it again:
+            if self.restore_datasets:
+                for dataset in self.stages[stage].datasets.keys():
+                    mystate: DatasetState = self.state_tracker.get_dataset(dataset)
+                    self.dataset_objects[dataset].restore_state(mystate)
+                    print("Restoring dataset:", dataset, "to seed:", mystate.seed, "line:", mystate.line, "epoch:", mystate.epoch)
+                self.restore_datasets = False
             self.state_tracker.update_stage(stage)
             self.train_stage(self.stages[stage])
 
 
-    def _init_stage_(self, stage): #@TODO make the stupid stage a full object so i can have proper attributes
+    def _init_stage_(self, stage: Stage): #@TODO make the stupid stage a full object so i can have proper attributes
         '''Init a certain stage of the training'''
         for dataset in stage.datasets.keys():
             self.dataset_objects[dataset].set_weight(stage.datasets[dataset])
@@ -160,7 +170,9 @@ class Executor:
 
     def train_stage(self, stage):
         '''Trains up to a training stage'''
-        stop_training = False
+        # Make sure that we check the stopping criteria before starting to train so we don't continue
+        # training after we have finished everything else first.
+        stop_training: bool = self.dataset_objects[stage.until_dataset].epoch >= stage.until_epoch
         while not stop_training:
             batch = []
             for dataset in stage.datasets:
@@ -264,7 +276,7 @@ class Dataset:
                 self.linenum = 0
         # Send statistics to the state tracker
         name = self.filename
-        state = DatasetState(self.seed, self.linenum, self.epoch)
+        state = DatasetState(name, self.seed, self.linenum, self.epoch)
         self.state_tracker.update_dataset(name, state)
         return (myepoch, retlist)
 

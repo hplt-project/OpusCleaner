@@ -2,6 +2,7 @@
 '''A translation model trainer. It feeds marian different sets of datasets with different thresholds
 for different stages of the training. Data is uncompressed and TSV formatted src\ttrg'''
 import os
+import io
 import argparse
 import weakref
 import random
@@ -9,7 +10,7 @@ from sys import stderr
 from dataclasses import dataclass
 from subprocess import check_call, CalledProcessError
 from collections import namedtuple
-from typing import List, Tuple, Dict, Union
+from typing import List, Tuple, Dict, Union, Any
 from math import inf
 
 import yaml
@@ -81,10 +82,12 @@ class StateTracker:
         '''Updates the state of the current dataset'''
         self.dataset_states[dataset_name] = dataset_state
 
-    def get_stage(self) -> str:
-        '''Returns the current training stage. Also restores the random seed'''
-        random.setstate(self.random_state)
-        return self.stage
+    def restore_random_state(self) -> None:
+        '''Restores the random state'''
+        if self.random_state is not None:
+            random.setstate(self.random_state)
+        else:
+            print("Error! Random state restoration")
 
     def get_dataset(self, name: str) -> DatasetState:
         '''Returns the state for a dataset'''
@@ -95,31 +98,26 @@ class StateTracker:
 class Executor:
     '''This class takes in the config file and starts running training'''
     def __init__(self, ymlpath: str, tmpdir: str, state_tracker: StateTracker):
-        ymldata = None
+        # Perform configuration file parsing
         with open(ymlpath, 'rt', encoding="utf-8") as myfile:
-            ymldata = list(yaml.load_all(myfile, Loader=SafeLoader))[0]
-        self.dataset_paths = ymldata['datasets']
-        self.dataset_names = [x.split('/')[-1] for x in self.dataset_paths]
-        # Correlate dataset path with dataset name:
-        tmpdict = {}
-        for path in self.dataset_paths:
-            tmpdict[path.split('/')[-1]] = path
-        self.dataset_paths = tmpdict
+            ymldata: Dict[str, Any] = list(yaml.load_all(myfile, Loader=SafeLoader))[0]
+
+        # Get individual path names and correlate dataset path with dataset name:
+        self.dataset_paths: Dict[str, str] = {}
+        for path in ymldata['datasets']:
+            self.dataset_paths[path.split('/')[-1]] = path
         self.stage_names: List[str] = ymldata['stages']
         self.uppercase_ratio = float(ymldata['uppercase'])
         self.random_seed = int(ymldata['seed'])
+        random.seed(self.random_seed)
+
+        # Initialise the trainer, using pexpect.
         self.trainer = pexpect.spawn(ymldata['trainer'])
         self.trainer.delaybeforesend = None
+
         # Parse the individual training stages into convenient struct:
         self.stages: Dict[str, Stage] = {}
         self.dataset_objects: Dict[str, Dataset] = {}
-
-        # Set random seed
-        random.seed(self.random_seed)
-        # Keep track of the state. The restore_datasets variable will keep track of whether to restore the datasets to
-        # a certain stage at the initial run before continueing forward.
-        self.state_tracker = state_tracker
-        self.restore_datasets: bool = state_tracker.stage is not None
 
         for stage in self.stage_names:
             stageparse: List[str] = ymldata[stage]
@@ -135,14 +133,14 @@ class Executor:
             self.stages[stage] = mystage
 
         # Initialise the dataset filestreams. For now just do identity initialisation, do more later
-        for dataset in self.dataset_names:
-            self.dataset_objects[dataset] = Dataset(self.dataset_paths[dataset], tmpdir, self.random_seed, 0.1, inf, state_tracker)
+        for dataset, path in self.dataset_paths.items():
+            self.dataset_objects[dataset] = Dataset(path, tmpdir, self.random_seed, 0.1, inf, state_tracker)
 
-        # Skip training stages based on if we are resuming the training
-        if state_tracker.stage is not None:
-            resume_stage_idx = self.stage_names.index(state_tracker.stage)
-            print("Skipping training stages", self.stage_names[0:resume_stage_idx], "as we are resuming training")
-            self.stage_names = self.stage_names[resume_stage_idx:]
+        # Keep track of the state. The restore_datasets variable will keep track of whether to restore the datasets to
+        # a certain stage at the initial run before continueing forward.
+        self.state_tracker = state_tracker
+        self.restore_datasets: bool = state_tracker.stage is not None
+        self._restore_()
 
         # Start training
         for stage in self.stage_names:
@@ -168,6 +166,16 @@ class Executor:
             self.dataset_objects[dataset].reset_epoch()
         self.dataset_objects[stage.until_dataset].set_max_epoch(stage.until_epoch)
 
+    def _restore_(self) -> None:
+        """Restores the training state from a state tracker"""
+        # Skip training stages based on if we are resuming the training
+        if self.state_tracker.stage is not None:
+            resume_stage_idx = self.stage_names.index(self.state_tracker.stage)
+            print("Skipping training stages", self.stage_names[0:resume_stage_idx], "as we are resuming training")
+            self.stage_names = self.stage_names[resume_stage_idx:]
+            # Restore random state
+            self.state_tracker.restore_random_state()
+
     def train_stage(self, stage):
         '''Trains up to a training stage'''
         # Make sure that we check the stopping criteria before starting to train so we don't continue
@@ -176,17 +184,17 @@ class Executor:
         while not stop_training:
             batch = []
             for dataset in stage.datasets:
-                epoch, lines = self.dataset_objects[dataset].get()
+                _, lines = self.dataset_objects[dataset].get()
                 #print(epoch, dataset, stage.until_dataset, stage.until_epoch, len(lines))
                 batch.extend(lines)
-                if dataset == stage.until_dataset and epoch >= stage.until_epoch:
-                    stop_training = True
             # Shuffle the batch
             random.shuffle(batch)
             # Uppercase randomly
             batch = [x.upper() if random.random() < self.uppercase_ratio else x for x in batch]
             self.trainer.writelines(batch) # @TODO This seems to just hang when the child process dies
             self.state_tracker.update_seed()
+            # Termination condition, check if we finished training.
+            stop_training = self.dataset_objects[stage.until_dataset].epoch >= stage.until_epoch
 
 
 
@@ -208,7 +216,7 @@ class Dataset:
         self.shufffile = self.tmpdir + "/" + self.filename + ".shuf"
         self.weight = weight
         # filehandle
-        self.filehandle = None
+        self.filehandle: io.TextIOBase = None
         # dataset epoch
         self.epoch = 0
         self.max_epoch = max_epoch

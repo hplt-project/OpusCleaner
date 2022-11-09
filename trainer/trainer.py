@@ -23,7 +23,7 @@ def parse_user_args():
     parser = argparse.ArgumentParser(description="Feeds marian tsv data for training.")
     parser.add_argument("--config", '-c', required=True, type=str, help='YML configuration input.')
     parser.add_argument("--temporary-dir", '-t', default="./TMP", type=str, help='Temporary dir, used for shuffling and tracking state')
-    parser.add_argument("--resume", '-r', default=True, type=bool, help='Resume from the previous training state')
+    parser.add_argument("--do-not-resume", '-d', action="store_true", help='Do not resume from the previous training state')
     return parser.parse_args()
 
 Stage = namedtuple('Stage', ['name', 'datasets', 'until_dataset', 'until_epoch'])
@@ -316,7 +316,7 @@ if __name__ == '__main__':
     args = parse_user_args()
     config = args.config
     mytmpdir = args.temporary_dir
-    mystate_tracker = StateTracker(mytmpdir + '/state.yml', args.resume)
+    mystate_tracker = StateTracker(mytmpdir + '/state.yml', not args.do_not_resume)
 
     executor = Executor(config, mytmpdir, mystate_tracker)
     mystate_tracker.dump() # //@TODO execute this in a cleanup (eg child process dies/we receive a kill signal)

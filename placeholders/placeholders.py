@@ -15,6 +15,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-c', '--config', type=str, help='Path to yaml configuration file, required for encoding')
 parser.add_argument('-m', '--mappings_file', type=str, default="mappings.yml", help='Path to the mappings, one yaml entry per line.')
 parser.add_argument('-s', '--seed', type=int, default=None, help='Seed for random number generator.')
+parser.add_argument('-n', '--no-mapping', action="store_true", help='Do not dump a mapping file for decoding. Useful for training')
 mutex_group_1 = parser.add_mutually_exclusive_group(required=True)
 mutex_group_1.add_argument('--decode', action='store_true')
 mutex_group_1.add_argument('--encode', action='store_true')
@@ -115,20 +116,26 @@ class Encoder:
         return (inputline, dict((v, k) for k, v in replacements.items()))
 
 
-def encode(my_placeholders: List[str], my_sp: SentencePieceProcessor, my_rules: List[Rule], *, random: Random) -> None:
+def encode(my_placeholders: List[str], my_sp: SentencePieceProcessor, my_rules: List[Rule], *, random: Random, no_mapping: bool) -> None:
     '''Encodes everything form stdin, dumping it to stdout and dumping a file with
        all replacements'''
     encoder = Encoder(my_placeholders, my_sp, my_rules, random=random)
-    with open(args.mappings_file, 'w') as yamlout:
-        for counter, line in enumerate(sys.stdin):
-
-            encoded_line, mappings = encoder.make_placeholders(line)
+    if no_mapping: # Do not produce any mappings as we are going to just use it during training
+        for line in sys.stdin:
+            encoded_line, _ = encoder.make_placeholders(line)
             sys.stdout.write(encoded_line) # Write the encoded line to stdout
+    else:
+        with open(args.mappings_file, 'w') as yamlout:
+            for counter, line in enumerate(sys.stdin):
 
-            # Keep track of which sentence has what replacement mappings via a yaml config
-            sent_mapping = {counter: mappings}
-            yaml.dump(sent_mapping, yamlout, allow_unicode=True)
-            yamlout.flush()
+                encoded_line, mappings = encoder.make_placeholders(line)
+                sys.stdout.write(encoded_line) # Write the encoded line to stdout
+
+                # Keep track of which sentence has what replacement mappings via a yaml config
+                sent_mapping = {counter: mappings}
+                yaml.dump(sent_mapping, yamlout, allow_unicode=True)
+                yamlout.flush()
+
 
 
 def decode() -> None:
@@ -160,7 +167,7 @@ if __name__ == "__main__":
         print(" ".join(config.placeholders))
         sys.exit(0)
     elif args.encode:
-        encode(config.placeholders, config.sp, config.rules, random=random)
+        encode(config.placeholders, config.sp, config.rules, random=random, no_mapping=args.no_mapping)
     else:
         decode()
 

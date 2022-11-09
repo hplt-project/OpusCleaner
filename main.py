@@ -22,12 +22,12 @@ import asyncio
 import json
 import subprocess
 import hashlib
+import yaml
 from glob import glob
 from tempfile import TemporaryFile
 from shutil import copyfileobj
 from pprint import pprint
 from warnings import warn
-
 
 from datasets import list_datasets, Path
 from download import app as download_app
@@ -302,12 +302,16 @@ async def exec_filter_step(filter_step: FilterStep, langs: List[str], input: byt
     else:
         raise NotImplementedError()
 
-    params = {name: props.export(filter_step.parameters[name])
-              for name, props in filter_definition.parameters.items()}
-
-    if params:
-        vars_setter = '; '.join(f"{k}={quote(v)}" for k, v in params.items())
-        command = f'{vars_setter}; {command}'
+    if filter_definition.parameters:
+        if 'PARAMETERS_AS_YAML' in command:
+            params = {name: filter_step.parameters[name]
+                      for name, props in filter_definition.parameters.items()}
+            command = f'PARAMETERS_AS_YAML={quote(yaml.dump(params))}; {command}'
+        else:
+            params = {name: props.export(filter_step.parameters[name])
+                      for name, props in filter_definition.parameters.items()}
+            vars_setter = '; '.join(f"{k}={quote(v)}" for k, v in params.items())
+            command = f'{vars_setter}; {command}'
 
     print(command, file=sys.stderr)
 

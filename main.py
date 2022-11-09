@@ -173,7 +173,7 @@ class FilterStep(BaseModel):
                 warn(f"Missing filter parameters: {' '.join(missing_keys)}")
                 # Just add their default values in that case.
                 parameters |= {
-                    key: parameter.default
+                    key: parameter.default if hasattr(parameter, 'default') else None
                     for key, parameter in FILTERS[values['filter']].parameters.items()
                     if key in missing_keys
                 }
@@ -203,17 +203,18 @@ class FilterPipeline(BaseModel):
     filters: List[FilterStep]
 
 
-def list_filters(path) -> Iterable[Filter]:
-    for filename in glob(path, recursive=True):
-        try:
-            with open(filename) as fh:
-                defaults = {
-                    "name": os.path.splitext(os.path.basename(filename))[0],
-                    "basedir": os.path.dirname(filename)
-                }
-                yield parse_obj_as(Filter, {**defaults, **json.load(fh)})
-        except Exception as e:
-            print(f"Could not parse {filename}: {e}", file=sys.stderr)
+def list_filters(paths) -> Iterable[Filter]:
+    for path in paths.split(':'):
+        for filename in glob(path, recursive=True):
+            try:
+                with open(filename) as fh:
+                    defaults = {
+                        "name": os.path.splitext(os.path.basename(filename))[0],
+                        "basedir": os.path.dirname(filename)
+                    }
+                    yield parse_obj_as(Filter, {**defaults, **json.load(fh)})
+            except Exception as e:
+                print(f"Could not parse {filename}: {e}", file=sys.stderr)
 
 
 

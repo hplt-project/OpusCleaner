@@ -20,7 +20,7 @@ DOWNLOAD_PATH = 'data/train-parts'
 # glob expression that looks for the filter files. Unfortunately you can't use
 # commas and {} in this expression. TODO: fix that, you should be able to name
 # multiple paths.
-FILTER_PATH = 'filters/*.json'
+FILTER_PATH = 'filters/*.json:filters/*/*.json'
 
 # col.py is used to apply a monolingual filter to a bilingual dataset. Needs
 # to be absolute since filters can run from different cwds.

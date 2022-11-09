@@ -39,20 +39,21 @@ def encode_env(type_name: str, value: Any) -> str:
         return str(value)
 
 
-def list_filters(path: str) -> Iterable[dict]:
+def list_filters(paths: str) -> Iterable[dict]:
     """Scans all files matching the path pattern and attempts to parse them as
     filter json definitions.
     """
-    for filename in glob(path, recursive=True):
-        try:
-            with open(filename) as fh:
-                defaults = {
-                    "name": os.path.splitext(os.path.basename(filename))[0],
-                    "basedir": os.path.dirname(filename)
-                }
-                yield {**defaults, **json.load(fh)}
-        except Exception as e:
-            print(f"Could not parse {filename}: {e}", file=sys.stderr)
+    for path in paths.split(':'):
+        for filename in glob(path, recursive=True):
+            try:
+                with open(filename) as fh:
+                    defaults = {
+                        "name": os.path.splitext(os.path.basename(filename))[0],
+                        "basedir": os.path.dirname(filename)
+                    }
+                    yield {**defaults, **json.load(fh)}
+            except Exception as e:
+                print(f"Could not parse {filename}: {e}", file=sys.stderr)
 
 
 def babysit_child(n: int, child: Popen, name: str, print_queue: SimpleQueue, ctrl_queue: SimpleQueue):
@@ -429,7 +430,7 @@ def run_parallel(pipeline:Pipeline, stdin:BinaryIO, stdout:BinaryIO, *, parallel
 
 def main(argv):
     parser = argparse.ArgumentParser()
-    parser.add_argument('--filters', '-f', type=str, default='./filters', help='Path to directory with filter specifications')
+    parser.add_argument('--filters', '-f', type=str, default='filters/*.json:filters/*/*.json', help='Path to directory with filter specifications')
     parser.add_argument('--input', '-i', type=argparse.FileType('rb'), help='Input tsv. If unspecified input files are read from filter json; use - to read from stdin')
     parser.add_argument('--output', '-o', type=argparse.FileType('wb'), default=sys.stdout.buffer, help='Output tsv (defaults to stdout)')
     parser.add_argument('--basedir', '-b', type=str, help='Directory to look for data files when --input is not used (defaults to same as input pipeline file)')
@@ -455,7 +456,7 @@ def main(argv):
     # load all filter definitions (we need to, to get their name)
     FILTERS = {
         definition['name']: definition
-        for definition in list_filters(os.path.join(args.filters, '*.json'))
+        for definition in list_filters(args.filters)
     }
 
     # Queue filled by the babysitters with the stderr of the children, consumed

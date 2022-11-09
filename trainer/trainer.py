@@ -6,6 +6,8 @@ import io
 import argparse
 import weakref
 import random
+import subprocess
+
 from sys import stderr
 from dataclasses import dataclass
 from subprocess import check_call, CalledProcessError
@@ -16,7 +18,6 @@ from math import inf
 import yaml
 from yaml.loader import SafeLoader, Loader
 
-import pexpect
 
 def parse_user_args():
     """Parse the arguments necessary for this filter"""
@@ -111,9 +112,8 @@ class Executor:
         self.random_seed = int(ymldata['seed'])
         random.seed(self.random_seed)
 
-        # Initialise the trainer, using pexpect.
-        self.trainer = pexpect.spawn(ymldata['trainer'])
-        self.trainer.delaybeforesend = None
+        # Initialise the trainer, using Subprocess.Popen
+        self.trainer = subprocess.Popen(ymldata['trainer'], stdout=None, stderr=None, stdin=subprocess.PIPE, encoding="utf-8")
 
         # Parse the individual training stages into convenient struct:
         self.stages: Dict[str, Stage] = {}
@@ -191,7 +191,7 @@ class Executor:
             random.shuffle(batch)
             # Uppercase randomly
             batch = [x.upper() if random.random() < self.uppercase_ratio else x for x in batch]
-            self.trainer.writelines(batch) # @TODO This seems to just hang when the child process dies
+            self.trainer.stdin.writelines(batch)
             self.state_tracker.update_seed()
             # Termination condition, check if we finished training.
             stop_training = self.dataset_objects[stage.until_dataset].epoch >= stage.until_epoch

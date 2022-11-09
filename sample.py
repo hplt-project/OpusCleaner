@@ -16,6 +16,8 @@ def reservoir_sample(k:int, it:Iterable[T], *, rand: random.Random = random._ins
 
 	numbered_it = enumerate(it)
 
+	i = 0
+
 	for i, (_, line) in zip(range(k), numbered_it):
 		sample.append((i, line))
 
@@ -45,15 +47,19 @@ class Tailer(Iterable[T]):
 	you can read from `tail`."""
 
 	def __init__(self, k:int, it:Iterable[T]):
-		self.sample: List[T] = []
+		self.sample: List[T] = [] # ring buffer of (at maximum) length k
 		self.k = k
 		self.i = 0
 		self.it = iter(it)
 
 	def __iter__(self) -> Iterator[T]:
-		while self.i < self.k:
-			self.sample.append(next(self.it))
-			self.i += 1
+		try:
+			while self.i < self.k:
+				self.sample.append(next(self.it))
+				self.i += 1
+		except StopIteration:
+			# Oh less than k samples in iterable? :(
+			return
 
 		for line in self.it:
 			yield self.sample[self.i % len(self.sample)]
@@ -62,6 +68,11 @@ class Tailer(Iterable[T]):
 
 	@property
 	def tail(self) -> List[T]:
+		# In the scenario where we read less than our tail of data, we just return
+		# the entire buffer in one go.
+		if len(self.sample) < self.k:
+			return self.sample
+
 		return self.sample[(self.i % len(self.sample)):] + self.sample[0:(self.i % len(self.sample))]
 
 
@@ -71,7 +82,7 @@ def sample(k:int, iterable:Iterable[T], sort=False) -> Iterable[Iterable[T]]:
 	in."""
 	it = iter(iterable)
 
-	yield (next(it) for _ in range(k))
+	yield (val for _, val in zip(range(k), it))
 
 	tailer = Tailer(k, it)
 
@@ -82,16 +93,17 @@ def sample(k:int, iterable:Iterable[T], sort=False) -> Iterable[Iterable[T]]:
 
 if __name__ == '__main__':
 	import sys
-	import gzip
 	import argparse
-	from itertools import count, chain
+	from itertools import count
 	from contextlib import ExitStack, contextmanager
-	from typing import IO, cast, BinaryIO, Iterator
-	from io import BufferedReader
+	from typing import IO, Iterator
 
 	@contextmanager
 	def gunzip(path):
+		"""Like gzip.open(), but using external gzip process which for some reason
+		is a lot faster on macOS."""
 		with subprocess.Popen(['gzip', '-cd', path], stdout=subprocess.PIPE) as proc:
+			assert proc.stdout is not None
 			yield proc.stdout
 			if proc.wait() != 0:
 				raise RuntimeError(f'gzip returned error code {proc.returncode}')
@@ -115,12 +127,12 @@ if __name__ == '__main__':
 	args = parser.parse_args()
 
 	with ExitStack() as ctx:
-		files:List[Iterator[bytes]] = [magic_open_or_stdin(ctx, file) for file in args.files]
+		columns:List[Iterator[bytes]] = [magic_open_or_stdin(ctx, file) for file in args.files]
 
 		if args.line_numbers:
-			files = [(str(i).encode() for i in count()), *files]
+			columns.insert(0, (str(i).encode() for i in count()))
 
-		pairs = zip(*files)
+		pairs = zip(*columns)
 
 		delimiter = args.delimiter.replace("\\t", "\t").replace("\\n", "\n").encode()
 

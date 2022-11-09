@@ -1,0 +1,42 @@
+{
+    "type": "bilingual",
+    "description": "Remove common wiki patterns from sentence pair if they don't match on both sides",
+    "parameters": {
+        "ALWAYS": {
+            "help": "Always remove patterns",
+            "type": "bool",
+            "default": false
+        },
+        "FOOTNOTES": {
+            "help": "Remove footnotes, e.g. [1], [2]",
+            "type": "bool",
+            "default": true
+        },
+        "URLS": {
+            "help": "Remove url`s",
+            "type": "bool",
+            "default": true
+        },
+        "WIKILINKS": {
+            "help": "Remove [[wikilinks]]",
+            "type": "bool",
+            "default": true
+        },
+        "CODE": {
+            "help": "Remove lines that contain code",
+            "type": "bool",
+            "default": true
+        },
+        "HEADINGS": {
+            "help": "Remove ==headings==",
+            "type": "bool",
+            "default": true
+        },
+        "REMOVEEMPTYLINES": {
+            "help": "Remove sentence pairs when one side is empty after filtering",
+            "type": "bool",
+            "default": true
+        }
+    },
+    "command": "./fix_wiki.py ${ALWAYS:+--always} ${FOOTNOTES:+--footnotes} ${URLS:+--urls} ${WIKILINKS:+--wikilinks} ${CODE:+--code} ${HEADINGS:+--headings} ${REMOVEEMPTYLINES:+--remove-empty-lines}"
+}

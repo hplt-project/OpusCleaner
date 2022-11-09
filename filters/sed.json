@@ -1,0 +1,18 @@
+{
+    "description": "sed",
+    "command": "sed -E \"s/${PATTERN}/${REPLACEMENT}/g\"",
+    "parameters":
+    {
+        "PATTERN":
+        {
+            "type": "str",
+            "default": ""
+        },
+        "REPLACEMENT":
+        {
+            "type": "str",
+            "default": ""
+        }
+    },
+    "type": "monolingual"
+}

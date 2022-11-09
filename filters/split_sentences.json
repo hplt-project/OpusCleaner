@@ -1,0 +1,22 @@
+{
+    "type": "bilingual",
+    "description": "Split lines with multiple sentences into their own lines",
+    "command": "./split_sentences.py ${KEEPUNBALANCED:+--keep-unbalanced} $LANG1 $LANG2",
+    "parameters":
+    {
+        "LANG1":
+        {
+            "type": "str"
+        },
+        "LANG2":
+        {
+            "type": "str"
+        },
+        "KEEPUNBALANCED":
+        {
+            "type": "bool",
+            "default": false,
+            "help": "When splitting results in a different number of sentences on each side, keep the original pair"
+        }
+    }
+}

@@ -1,0 +1,12 @@
+{
+	"type": "monolingual",
+	"command": "perl -C -pe \"${PATTERN}\"",
+	"description": "Apply Perl RegExp",
+	"parameters": {
+		"PATTERN": {
+			"type": "str",
+			"required": true,
+			"help": "E.g. `s|xxx|yyy|g`"
+		}
+	}
+}

@@ -1,0 +1,13 @@
+hello firstname.secondname@domain.com,
+go to www.google.com/,
+then to https://www.google.com/,
+the same placeholder https://www.google.com/,
+no s http://www.google.com/
+⌚ this is not in the vocab and should use the same as placeholder as ⌚ here.
+What if I use the same https://google.com unknown https://google.com twice?
+What if I produce 😀😃😄 and then repeat it in a different order like 😃😄😀?
+What if I produce 😄 and then repeat in the middle of a sequence of unks 😃😄😀?
+How about I 😀 type 😃 like 😄 a 😁 teen 😆 that 🥹 wants 😅 to 😂 use 🤣 inifinte 🥲 emoji ☺️ in a 😊 sentence!
+This sentence contains a token 😍 and placeholder 11PLACEHOLDER11 like that.
+This one as well 🥳, but 11PLACEHOLDER1123 is directly followed by a number.
+This one as well 🥳, but now all other options: Muhaha 11PLACEHOLDER111 11PLACEHOLDER112 11PLACEHOLDER113 11PLACEHOLDER114 11PLACEHOLDER115 11PLACEHOLDER116 11PLACEHOLDER117 11PLACEHOLDER118 11PLACEHOLDER119 11PLACEHOLDER1120 this is expected to fail, don't be alarmed.

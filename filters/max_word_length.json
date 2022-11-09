@@ -1,0 +1,13 @@
+{
+    "type": "bilingual",
+    "description": "Filters a parallel dataset based on max word length",
+    "parameters": {
+        "MAXWORDLENGTH": {
+            "type": "int",
+            "required": false,
+            "default": 150,
+            "help": "Maximum length of words in characters. Pairs with a word longer than MAXWORDLENGTH will be filtered."
+        }
+    },
+    "command": "./max_word_length.py --max-word-length $MAXWORDLENGTH"
+}

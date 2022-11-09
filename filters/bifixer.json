@@ -1,0 +1,100 @@
+{
+    "type": "bilingual",
+    "description": null,
+    "parameters": {
+        "SRCLANG": {
+            "help": "Source language (SL) of the input",
+            "required": true,
+            "type": "str",
+            "default": null
+        },
+        "TRGLANG": {
+            "help": "Target language (TL) of the input",
+            "required": true,
+            "type": "str",
+            "default": null
+        },
+        "IGNORE_CHARACTERS": {
+            "help": "Don't fix mojibake or other character issues",
+            "required": false,
+            "type": "bool",
+            "default": false
+        },
+        "IGNORE_NORMALIZATION": {
+            "help": "Don't normalize punctuation and spaces.",
+            "required": false,
+            "type": "bool",
+            "default": false
+        },
+        "IGNORE_HTML": {
+            "help": "Don't remove HTML tags",
+            "required": false,
+            "type": "bool",
+            "default": false
+        },
+        "IGNORE_EMPTY": {
+            "help": "Don't remove sentences with empty source or target",
+            "required": false,
+            "type": "bool",
+            "default": false
+        },
+        "IGNORE_LONG": {
+            "help": "Don't ignore too long sentences",
+            "required": false,
+            "type": "bool",
+            "default": false
+        },
+        "IGNORE_ORTHOGRAPHY": {
+            "help": "Don't apply orthography fixing",
+            "required": false,
+            "type": "bool",
+            "default": false
+        },
+        "IGNORE_DETOKENIZATION": {
+            "help": "Don't fix common tokenization issues",
+            "required": false,
+            "type": "bool",
+            "default": false
+        },
+        "IGNORE_DUPLICATES": {
+            "help": "Don't obtain the hashes of parallel sentences",
+            "required": false,
+            "type": "bool",
+            "default": false
+        },
+        "AGGRESSIVE_DEDUP": {
+            "help": "Treats similar sentences as duplicates (marking them with the same hash)",
+            "required": false,
+            "type": "bool",
+            "default": false
+        },
+        "IGNORE_SEGMENTATION": {
+            "help": "Don't change segmentation of long sentences",
+            "required": false,
+            "type": "bool",
+            "default": false
+        },
+        "WORDS_BEFORE_SEGMENTING": {
+            "help": "Max words allowed in one side of a parallel sentence before trying to segmentate it. Set to 0 to applicate segmentation on everything.",
+            "required": false,
+            "type": "int",
+            "default": 15
+        },
+        "SEGMENTER": {
+            "help": "Segmenter module.",
+            "required": false,
+            "type": "str",
+            "default": "nltk",
+            "allowed_values": [
+                "nltk",
+                "loomchild"
+            ]
+        },
+        "DEBUG": {
+            "help": "Debug logging mode",
+            "required": false,
+            "type": "bool"
+        }
+    },
+    "command": "bifixer - - $SRCLANG $TRGLANG --scol 1 --tcol 2 ${IGNORE_CHARACTERS:+--ignore_characters} ${IGNORE_NORMALIZATION:+--ignore_normalization} ${IGNORE_HTML:+--ignore_html} ${IGNORE_EMPTY:+--ignore_empty} ${IGNORE_LONG:+--ignore_long} ${IGNORE_ORTHOGRAPHY:+--ignore_orthography} ${IGNORE_DETOKENIZATION:+--ignore_detokenization} ${IGNORE_DUPLICATES:+--ignore_duplicates} ${AGGRESSIVE_DEDUP:+--aggressive_dedup} ${IGNORE_SEGMENTATION:+--ignore_segmentation} ${WORDS_BEFORE_SEGMENTING:+--words_before_segmenting $WORDS_BEFORE_SEGMENTING} ${SEGMENTER:+--segmenter $SEGMENTER} $(test -z \"$DEBUG\" && echo '-q' || echo '--debug') | ./bifixer_dedupe.py"
+}

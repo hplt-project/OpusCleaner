@@ -8,12 +8,6 @@
             "default": 0.5,
             "help": "Minimum accepted LASER score."
         },
-        "BATCHSIZE": {
-            "type": "int",
-            "required": false,
-            "default": 32,
-            "help": "LASER batch size"
-        },
         "SRCLANG": {
             "type": "str",
             "required": true,
@@ -27,5 +21,5 @@
             "help": "Two-letter target language code (ISO 639-1)"
         }
     },
-    "command": "./laser_similarity.py --threshold $THRESHOLD --batch-size $BATCHSIZE --src-lang $SRCLANG --tgt-lang $TGTLANG"
+    "command": "../threshold.py --cache $TMPDIR/laser.$(echo \"$SRCLANG:$TGTLANG\" | cksum | cut -d' ' -f1).dbm $THRESHOLD ./laser_similarity.py --scores --src-lang $SRCLANG --tgt-lang $TGTLANG"
 }

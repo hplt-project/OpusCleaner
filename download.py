@@ -42,7 +42,7 @@ class LocalEntry(Entry):
 
 
 class RemoteEntry(Entry):
-    url: str
+    url: Union[str, Tuple[str,str]]
     size: Optional[int] # 'Content-Length' from a HTTP HEAD request
 
 
@@ -241,27 +241,22 @@ def http_request_head(url):
 async def get_dataset_details(dataset_id:str) -> RemoteEntry:
     key = DatasetId.parse(dataset_id)
     dataset = Index.get_instance().entries[key]
-    headers = await asyncio.to_thread(http_request_head, dataset.url)
     
-    # Some sites, like ELRC-share, don't return a proper response at all...
-    if headers.get('content-type', '').startswith('text/html') or 'content-length' not in headers:
-        size = None
+    if isinstance(dataset.url, str):
+        urls = [dataset.url]
     else:
-        size = int(headers.get('content-length'))
+        urls = list(dataset.url)
+
+    requests = await asyncio.gather(*(asyncio.to_thread(http_request_head, url) for url in urls))
+
+    # Some sites, like ELRC-share, don't return a proper response at all...
+    size = sum(
+        int(headers.get('content-length'))
+        for headers in requests
+        if 'content-length' in headers and not headers.get('content-type', '').startswith('text/html')
+    )
     
     return cast_entry(dataset, size=size)
-
-
-@app.get('/dataset-headers/{dataset_id}')
-async def get_dataset_details(dataset_id:str):
-    key = DatasetId.parse(dataset_id)
-    dataset = Index.get_instance().entries[key]
-    return {
-        'request': {
-            'url': dataset.url,
-        },
-        'headers': await asyncio.to_thread(http_request_head, dataset.url)
-    }
 
 
 def dedupe_datasests(datasets: Iterable[Entry]) -> Iterable[Entry]:

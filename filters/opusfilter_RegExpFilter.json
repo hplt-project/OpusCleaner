@@ -1,0 +1,27 @@
+{
+    "type": "bilingual",
+    "name": "opus.RegExpFilter",
+    "command": "./opusfilter-ersatz.py --quiet opusfilter.filters.RegExpFilter \"$PARAMETERS_AS_YAML\"",
+    "description": "Filter out segments that match or do not match a regular expression",
+    "parameters": {
+        "regexps": {
+            "type": "tuple",
+            "help": "Regexp pattern for each language in the parallel data.",
+            "parameters": [
+                {
+                    "type": "str",
+                    "help": "Pattern matching first column"
+                },
+                {
+                    "type": "str",
+                    "help": "Pattern matching second column"
+                }
+            ]
+        },
+        "accept_match": {
+            "type": "bool",
+            "default": false,
+            "help": "If accept_match is False, the pair is accepted only if none of the segment match the corresponding regexp. If accept_match is True, the pair is accepted only if all segments match the corresponding regexp."
+        }
+    }
+}

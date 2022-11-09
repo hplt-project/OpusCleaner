@@ -1,0 +1,20 @@
+{
+    "type": "bilingual",
+    "name": "opus.AverageWordLengthFilter",
+    "command": "./opusfilter-ersatz.py --quiet opusfilter.filters.AverageWordLengthFilter \"$PARAMETERS_AS_YAML\"",
+    "description": "Average word length filter. Returns zeros for empty segments. If pass_empty is true, pairs with only empty segments are accepted.",
+    "parameters": {
+        "min_length": {
+            "type": "int",
+            "default": 1
+        },
+        "max_length": {
+            "type": "int",
+            "default": 100
+        },
+        "pass_empty": {
+            "type": "bool",
+            "default": false
+        }
+    }
+}

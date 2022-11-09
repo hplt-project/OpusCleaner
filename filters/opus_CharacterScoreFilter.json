@@ -1,0 +1,33 @@
+{
+    "type": "bilingual",
+    "name": "opus.CharacterScoreFilter",
+    "command": "./opusfilter-ersatz.py --quiet opusfilter.filters.CharacterScoreFilter \"$PARAMETERS_AS_YAML\"",
+    "description": "Proportion of alphabetic characters that are in the given script.",
+    "parameters": {
+        "scripts": {
+            "type": "tuple",
+            "help": "For a list of valid scripts, see https://www.regular-expressions.info/unicode.html",
+            "parameters": [
+                {
+                    "type": "str"
+                },
+                {
+                    "type": "str"
+                }
+            ]
+        },
+        "thresholds": {
+            "type": "tuple",
+            "parameters": [
+                {
+                    "type": "float",
+                    "default": 1
+                },
+                {
+                    "type": "float",
+                    "default": 1
+                }
+            ]
+        }
+    }
+}

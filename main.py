@@ -58,7 +58,7 @@ class FilterParameterBase(BaseModel):
     type: str
     help: Optional[str]
 
-    def export(self, value: Any) -> str:
+    def export(self, value: Any) -> Any:
         return str(value)
 
 
@@ -68,6 +68,9 @@ class FilterParameterFloat(FilterParameterBase):
     max: Optional[float]
     default: Optional[float]
 
+    def export(self, value: Any) -> Any:
+        return float(value)
+
 
 class FilterParameterInt(FilterParameterBase):
     type: Literal["int"]
@@ -75,13 +78,16 @@ class FilterParameterInt(FilterParameterBase):
     max: Optional[int]
     default: Optional[int]
 
+    def export(self, value: Any) -> Any:
+        return int(value)
+
 
 class FilterParameterBool(FilterParameterBase):
     type: Literal["bool"]
     default: Optional[bool]
 
-    def export(self, value: Any) -> str:
-        return "1" if value else ""
+    def export(self, value: Any) -> Any:
+        return bool(value)
 
 
 class FilterParameterStr(FilterParameterBase):
@@ -89,13 +95,44 @@ class FilterParameterStr(FilterParameterBase):
     default: Optional[str]
     allowed_values: Optional[List[str]]
 
+    def export(self, value: Any) -> Any:
+        # TODO: validate against allowed_values?
+        return super().export(value)
+
+
+class FilterParameterList(FilterParameterBase):
+    type: Literal["list"]
+    parameter: "FilterParameter"
+
+    def export(self, value: Any) -> Any:
+        return [
+            self.parameter.export(item)
+            for item in value
+        ]
+
+
+class FilterParameterTuple(FilterParameterBase):
+    type: Literal["tuple"]
+    parameters: List["FilterParameter"]
+
+    def export(self, value: Any) -> Any:
+        return tuple(
+            parameter.export(val)
+            for parameter, val in zip(self.parameters, value)
+        )
+
 
 FilterParameter = Union[
     FilterParameterFloat,
     FilterParameterInt,
     FilterParameterBool,
-    FilterParameterStr
+    FilterParameterStr,
+    FilterParameterList,
+    FilterParameterTuple
 ]
+
+FilterParameterList.update_forward_refs()
+FilterParameterTuple.update_forward_refs()
 
 
 class Filter(BaseModel):
@@ -291,6 +328,17 @@ def cache_hash(obj: Any, seed: bytes = bytes()) -> bytes:
     return impl.digest()
 
 
+def format_shell(val: Any) -> str:
+    if isinstance(val, bool):
+        return '1' if val else ''
+    elif isinstance(val, tuple):
+        raise NotImplementedError()
+    elif isinstance(val, list):
+        raise NotImplementedError()
+    else:
+        return str(val)
+
+
 async def exec_filter_step(filter_step: FilterStep, langs: List[str], input: bytes) -> Tuple[bytes,bytes]:
     filter_definition = FILTERS[filter_step.filter]
 
@@ -303,14 +351,14 @@ async def exec_filter_step(filter_step: FilterStep, langs: List[str], input: byt
         raise NotImplementedError()
 
     if filter_definition.parameters:
+        params = {
+            name: props.export(filter_step.parameters[name])
+            for name, props in filter_definition.parameters.items()
+        }
         if 'PARAMETERS_AS_YAML' in command:
-            params = {name: filter_step.parameters[name]
-                      for name, props in filter_definition.parameters.items()}
             command = f'PARAMETERS_AS_YAML={quote(yaml.dump(params))}; {command}'
         else:
-            params = {name: props.export(filter_step.parameters[name])
-                      for name, props in filter_definition.parameters.items()}
-            vars_setter = '; '.join(f"{k}={quote(v)}" for k, v in params.items())
+            vars_setter = '; '.join(f"{k}={quote(format_shell(v))}" for k, v in params.items())
             command = f'{vars_setter}; {command}'
 
     print(command, file=sys.stderr)

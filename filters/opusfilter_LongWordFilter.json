@@ -1,0 +1,12 @@
+{
+    "type": "bilingual",
+    "name": "opus.LongWordFilter",
+    "command": "./opusfilter-ersatz.py --quiet opusfilter.filters.LongWordFilter \"$PARAMETERS_AS_YAML\"",
+    "description": "Word length filter",
+    "parameters": {
+        "threshold": {
+            "type": "int",
+            "default": 40
+        }
+    }
+}

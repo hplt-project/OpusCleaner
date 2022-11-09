@@ -1,0 +1,7 @@
+{
+    "type": "bilingual",
+    "name": "opus.WhitespaceNormalizer",
+    "description": "Normalize whitespace characters. Replace any sequences of whitespace characters with a single space and remove leading and trailing whitespace.",
+    "command": "./opusfilter-ersatz.py --quiet opusfilter.preprocessors.WhitespaceNormalizer \"$PARAMETERS_AS_YAML\"",
+    "parameters": {}
+}

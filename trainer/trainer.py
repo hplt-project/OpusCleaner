@@ -109,6 +109,7 @@ class Executor:
             self.dataset_paths[path.split('/')[-1]] = path
         self.stage_names: List[str] = ymldata['stages']
         self.uppercase_ratio = float(ymldata['uppercase'])
+        self.tittlecase_ratio = float(ymldata['tittlecase'])
         self.random_seed = int(ymldata['seed'])
         random.seed(self.random_seed)
 
@@ -159,9 +160,7 @@ class Executor:
                 self.train_stage(self.stages[stage])
         finally:
             # Finalise the trainer by cleanly closing any open subprocesses
-            self.trainer.stdin.close()
-            self.trainer.wait()
-
+            self.finaliser()
 
     def _init_stage_(self, stage: Stage): #@TODO make the stupid stage a full object so i can have proper attributes
         '''Init a certain stage of the training'''
@@ -194,12 +193,29 @@ class Executor:
                 batch.extend(lines)
             # Shuffle the batch
             random.shuffle(batch)
-            # Uppercase randomly
-            batch = [x.upper() if random.random() < self.uppercase_ratio else x for x in batch]
+            # apply modifications:
+            batch = self.modify_batch(batch)
             self.trainer.stdin.writelines(batch)
             self.state_tracker.update_seed()
             # Termination condition, check if we finished training.
             stop_training = self.dataset_objects[stage.until_dataset].epoch >= stage.until_epoch
+
+    def modify_batch(self, batch: List[str]) -> List[str]:
+        '''Modifies the batch to add uppercasing, tittle casing, placeholding'''
+        # Uppercase randomly
+        if self.uppercase_ratio > 0:
+            batch = [x.upper() if random.random() < self.uppercase_ratio else x for x in batch]
+        # Tittlecase randomly. We also add a new line to every string because calling split() removes it
+        if self.tittlecase_ratio > 0:
+            batch = [" ".join([i[0].upper() + i[1:] for i in x.split()]) + "\n" if random.random() < self.tittlecase_ratio else x for x in batch]
+
+        # Apply placeholders randomly
+        return batch
+
+    def finaliser(self) -> None:
+        '''Closes all the the open streams in the correct order after the training finishes'''
+        self.trainer.stdin.close()
+        self.trainer.wait()
 
 
 

@@ -28,5 +28,6 @@ end:
   - until dirty 5 # use `inf` to mean until forever
 
 uppercase: 0.05
+tittlecase: 0.05
 seed: 1111
 trainer: /home/dheart/uni_stuff/postdoc/empty-train/trainer/test.py

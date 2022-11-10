@@ -10,6 +10,7 @@ import yaml
 import itertools
 import argparse
 import logging
+import warnings
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--quiet', '-q', action='store_true')
@@ -19,7 +20,13 @@ parser.add_argument('config', type=str)
 args = parser.parse_args()
 
 if args.quiet:
+	# Filter out warnings from opusfilter about missing env variables for like
+	# word alignment.
 	logging.getLogger().setLevel(logging.ERROR)
+
+	# Filter warnings (especially MarkupResemblesLocatorWarning) from
+	# BeautifulSoup (the HtmlTagFilter)
+	warnings.filterwarnings('ignore', module='bs4')
 
 # Delayed loading opusfilter to install warning filter
 import opusfilter

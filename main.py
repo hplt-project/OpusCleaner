@@ -28,6 +28,7 @@ from tempfile import TemporaryFile
 from shutil import copyfileobj
 from pprint import pprint
 from warnings import warn
+from copy import deepcopy
 
 from datasets import list_datasets, Path
 from download import app as download_app
@@ -60,6 +61,9 @@ class FilterParameterBase(BaseModel):
 
     def export(self, value: Any) -> Any:
         return str(value)
+
+    def default_factory(self) -> Any:
+        return None
 
 
 class FilterParameterFloat(FilterParameterBase):
@@ -103,6 +107,7 @@ class FilterParameterStr(FilterParameterBase):
 class FilterParameterList(FilterParameterBase):
     type: Literal["list"]
     parameter: "FilterParameter"
+    default: Optional[List]
 
     def export(self, value: Any) -> Any:
         return [
@@ -110,16 +115,28 @@ class FilterParameterList(FilterParameterBase):
             for item in value
         ]
 
+    def default_factory(self) -> Any:
+        return []
+
 
 class FilterParameterTuple(FilterParameterBase):
     type: Literal["tuple"]
     parameters: List["FilterParameter"]
+    default: Optional[List]
+
+    # TODO: Add validator that checks if len(default) == len(parameters)
 
     def export(self, value: Any) -> Any:
         return tuple(
             parameter.export(val)
             for parameter, val in zip(self.parameters, value)
         )
+
+    def default_factory(self) -> Any:
+        return [
+            parameter.default_factory()
+            for parameter in self.parameters
+        ]
 
 
 FilterParameter = Union[
@@ -173,7 +190,7 @@ class FilterStep(BaseModel):
                 warn(f"Missing filter parameters: {' '.join(missing_keys)}")
                 # Just add their default values in that case.
                 parameters |= {
-                    key: parameter.default if hasattr(parameter, 'default') else None
+                    key: parameter.default if hasattr(parameter, 'default') and parameter.default is not None else parameter.default_factory()
                     for key, parameter in FILTERS[values['filter']].parameters.items()
                     if key in missing_keys
                 }

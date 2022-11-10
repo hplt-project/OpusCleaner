@@ -28,6 +28,12 @@ module_path, class_name = args.filter.rsplit('.', maxsplit=1)
 
 config = yaml.safe_load(args.config)
 
+if not isinstance(config, dict):
+	if config:
+		raise ValueError('config has to be a mapping')
+
+	config = dict()
+
 mod = importlib.import_module(module_path)
 filter_cls = getattr(mod, class_name)
 filter_obj = filter_cls(**config)

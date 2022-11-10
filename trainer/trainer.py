@@ -142,20 +142,25 @@ class Executor:
         self.restore_datasets: bool = state_tracker.stage is not None
         self._restore_()
 
-        # Start training
-        for stage in self.stage_names:
-            print(stage)
-            self._init_stage_(self.stages[stage])
-            # The first time we get here, if we are resuming training, we need to restore the dataset state
-            # Restore state and then don't do it again:
-            if self.restore_datasets:
-                for dataset in self.stages[stage].datasets.keys():
-                    mystate: DatasetState = self.state_tracker.get_dataset(dataset)
-                    self.dataset_objects[dataset].restore_state(mystate)
-                    print("Restoring dataset:", dataset, "to seed:", mystate.seed, "line:", mystate.line, "epoch:", mystate.epoch)
-                self.restore_datasets = False
-            self.state_tracker.update_stage(stage)
-            self.train_stage(self.stages[stage])
+        # Main training loop.
+        try:
+            for stage in self.stage_names:
+                print(stage)
+                self._init_stage_(self.stages[stage])
+                # The first time we get here, if we are resuming training, we need to restore the dataset state
+                # Restore state and then don't do it again:
+                if self.restore_datasets:
+                    for dataset in self.stages[stage].datasets.keys():
+                        mystate: DatasetState = self.state_tracker.get_dataset(dataset)
+                        self.dataset_objects[dataset].restore_state(mystate)
+                        print("Restoring dataset:", dataset, "to seed:", mystate.seed, "line:", mystate.line, "epoch:", mystate.epoch)
+                    self.restore_datasets = False
+                self.state_tracker.update_stage(stage)
+                self.train_stage(self.stages[stage])
+        finally:
+            # Finalise the trainer by cleanly closing any open subprocesses
+            self.trainer.stdin.close()
+            self.trainer.wait()
 
 
     def _init_stage_(self, stage: Stage): #@TODO make the stupid stage a full object so i can have proper attributes

@@ -43,7 +43,7 @@ if isinstance(filter_obj, opusfilter.FilterABC):
 				yield line
 elif isinstance(filter_obj, opusfilter.PreprocessorABC):
 	def apply_filter(pairs):
-		return filter_obj.preprocess(pairs)
+		return filter_obj.process(pairs)
 else:
 	raise ValueError('filter class does not implement FilterABC or PreprocessorABC')
 

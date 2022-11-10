@@ -103,6 +103,9 @@ class FilterParameterStr(FilterParameterBase):
         # TODO: validate against allowed_values?
         return super().export(value)
 
+    def default_factory(self) -> Any:
+        return ''
+
 
 class FilterParameterList(FilterParameterBase):
     type: Literal["list"]
@@ -374,7 +377,7 @@ async def exec_filter_step(filter_step: FilterStep, langs: List[str], input: byt
             for name, props in filter_definition.parameters.items()
         }
         if 'PARAMETERS_AS_YAML' in command:
-            command = f'PARAMETERS_AS_YAML={quote(yaml.dump(params))}; {command}'
+            command = f'PARAMETERS_AS_YAML={quote(yaml.safe_dump(params))}; {command}'
         else:
             vars_setter = '; '.join(f"{k}={quote(format_shell(v))}" for k, v in params.items())
             command = f'{vars_setter}; {command}'

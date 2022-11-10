@@ -115,7 +115,7 @@ function createFilterStep(filter) {
 		id: getUniqueId(),
 		filter: filter.name,
 		language: filterRequiresLanguage({filter:filter.name}) ? languages.value[0] : null,
-		parameters: Object.fromEntries(Object.entries(filter.parameters).map(([key, parameter]) => [key, parameter.default]))
+		parameters: Object.fromEntries(Object.entries(filter.parameters).map(([key, parameter]) => [key, defaultValue(parameter)]))
 	}
 }
 

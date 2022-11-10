@@ -102,3 +102,14 @@ export function getFilterSteps(dataset) {
 
 	return configurations.get(dataset.name);
 }
+
+export function defaultValue(parameter) {
+	switch (parameter.type) {
+		case 'tuple':
+			return parameter.parameters.map(parameter => defaultValue(parameter));
+		case 'list':
+			return [];
+		default:
+			return parameter.default
+	}
+}

@@ -5,12 +5,16 @@ import IntParameter from '../components/parameters/IntParameter.vue';
 import FloatParameter from '../components/parameters/FloatParameter.vue';
 import StringParameter from '../components/parameters/StringParameter.vue';
 import BoolParameter from '../components/parameters/BoolParameter.vue';
+import ListParameter from '../components/parameters/ListParameter.vue';
+import TupleParameter from '../components/parameters/TupleParameter.vue';
 
 const ParameterComponents = {
 	'int': IntParameter,
 	'float': FloatParameter,
 	'str': StringParameter,
 	'bool': BoolParameter,
+	'list': ListParameter,
+	'tuple': TupleParameter,
 };
 
 const {open, languages, modelValue} = defineProps({

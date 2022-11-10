@@ -379,6 +379,13 @@ const filterIsOpen = new class {
 	overflow-y: auto;
 }
 
+/* Bit of space for dragging & dropping */
+.filter-steps::after {
+	content: '';
+	display: block;
+	height: 4em;
+}
+
 .filters.display-separately {
 	flex-direction: row-reverse;
 	flex: 0 0 600px;

@@ -12,7 +12,8 @@ const ParameterComponents = {
 	'float': FloatParameter,
 	'str': StringParameter,
 	'bool': BoolParameter,
-	'tuple': TupleParameter
+	'tuple': TupleParameter,
+	'list': undefined // TODO: Is there no better way to do this?
 };
 
 defineProps(['parameter', 'modelValue']);
@@ -24,16 +25,14 @@ defineEmits(['update:modelValue']);
 <template>
 	<ol>
 		<li v-for="item, index in modelValue" :key="index">
-			<div>
-				<component
-					:is="ParameterComponents[parameter.type]"
-					:parameter="parameter.parameter"
-					:modelValue="item"
-					@update:modelValue="$emit('update:modelValue', [...modelValue.slice(0, index), $event.target.value, ...modelValue.slice(index+1)])"
-				></component>
-			</div>
+			<component
+				:is="ParameterComponents[parameter.parameter.type]"
+				:parameter="parameter.parameter"
+				:modelValue="item"
+				@update:modelValue="$emit('update:modelValue', [...modelValue.slice(0, index), $event, ...modelValue.slice(index+1)])"
+			></component>
 			<button @click="$emit('update:modelValue', [...modelValue.slice(0, index), ...modelValue.slice(index+1)])">🗑️</button>
 		</li>
 	</ol>
-	<button @click="$emit('update:modelValue', [...modelValue, defaultValue(parameter)])">➕</button>
+	<button @click="$emit('update:modelValue', [...modelValue, defaultValue(parameter.parameter)])">➕</button>
 </template>

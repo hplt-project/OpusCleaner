@@ -16,7 +16,6 @@ import { getUniqueId } from '../hacks.js';
 import VueSelect from 'vue-select';
 import 'vue-select/dist/vue-select.css';
 
-
 const multiDragKey = navigator.platform.match(/^(Mac|iPhone$)/) ? 'Meta' : 'Control';
 
 const SampleStep = Symbol('SampleStep');

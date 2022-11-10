@@ -1,6 +1,17 @@
 <script setup>
 import {filterRequiresLanguage, filterDefinition} from '../store/filters.js';
 import {getUniqueId} from '../hacks.js';
+import IntParameter from '../components/parameters/IntParameter.vue';
+import FloatParameter from '../components/parameters/FloatParameter.vue';
+import StringParameter from '../components/parameters/StringParameter.vue';
+import BoolParameter from '../components/parameters/BoolParameter.vue';
+
+const ParameterComponents = {
+	'int': IntParameter,
+	'float': FloatParameter,
+	'str': StringParameter,
+	'bool': BoolParameter,
+};
 
 const {open, languages, modelValue} = defineProps({
 	open: Boolean,
@@ -32,61 +43,18 @@ const uid = getUniqueId();
 			</div>
 			<div v-for="(parameter, name) in filterDefinition(modelValue)?.parameters || {}" v-bind:key="name">
 				<label :for="`step-${uid}-${name}`">{{ name }}</label>
-				<select
-					v-if="parameter.type == 'str' && parameter.allowed_values"
+				<component
+					:is="ParameterComponents[parameter.type]"
 					v-bind:id="`step-${uid}-${name}`"
-					v-bind:value="modelValue.parameters[name]"
-					v-on:input="$emit('update:modelValue', {
+					:parameter="parameter"
+					v-bind:modelValue="modelValue.parameters[name]"
+					v-on:update:modelValue="$emit('update:modelValue', {
 						...modelValue,
 						parameters: {
 							...modelValue.parameters,
-							[name]:$event.target.value
+							[name]: $event
 						}
-					})">
-					<option
-						v-for="value in parameter.allowed_values"
-						v-bind:key="value"
-						v-bind:value="value">{{value}}</option>
-				</select>
-				<input
-					v-else-if="parameter.type == 'bool'"
-					type="checkbox"
-					v-bind:id="`step-${uid}-${name}`"
-					v-bind:checked="modelValue.parameters[name]"
-					v-on:input="$emit('update:modelValue', {
-						...modelValue,
-						parameters: {
-							...modelValue.parameters,
-							[name]:$event.target.checked
-						}
-					})">
-				<input
-					v-else-if="parameter.type == 'int' || parameter.type == 'float'"
-					type="number"
-					v-bind:id="`step-${uid}-${name}`"
-					v-bind:min="parameter.min"
-					v-bind:max="parameter.max"
-					v-bind:step="parameter.type == 'int' ? 1 : 0.1"
-					v-bind:value="modelValue.parameters[name]"
-					v-on:input="$emit('update:modelValue', {
-						...modelValue,
-						parameters: {
-							...modelValue.parameters,
-							[name]:$event.target.value
-						}
-					})">
-				<input
-					v-else
-					type="text"
-					v-bind:id="`step-${uid}-${name}`"
-					v-bind:value="modelValue.parameters[name]"
-					v-on:input="$emit('update:modelValue', {
-						...modelValue,
-						parameters: {
-							...modelValue.parameters,
-							[name]:$event.target.value
-						}
-					})">
+					})"/>
 				<small v-if="parameter.help" class="property-list-description">{{parameter.help}}</small>
 			</div>
 			<footer>

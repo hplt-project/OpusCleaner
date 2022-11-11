@@ -16,6 +16,7 @@ parser.add_argument('-c', '--config', type=str, help='Path to yaml configuration
 parser.add_argument('-m', '--mappings_file', type=str, default="mappings.yml", help='Path to the mappings, one yaml entry per line.')
 parser.add_argument('-s', '--seed', type=int, default=None, help='Seed for random number generator.')
 parser.add_argument('-n', '--no-mapping', action="store_true", help='Do not dump a mapping file for decoding. Useful for training')
+parser.add_argument('-t', '--strict', action="store_true", help="Only generate a placeholder if there's equal number on the source and target side of each (assumes TSV input).")
 mutex_group_1 = parser.add_mutually_exclusive_group(required=True)
 mutex_group_1.add_argument('--decode', action='store_true')
 mutex_group_1.add_argument('--encode', action='store_true')
@@ -65,12 +66,13 @@ class Configuration:
 
 class Encoder:
     '''Encodes spm strings'''
-    def __init__(self, placeholders: List[str], spm_vocab: SentencePieceProcessor, rules: List[Rule], *, random: Random = Random()):
+    def __init__(self, placeholders: List[str], spm_vocab: SentencePieceProcessor, rules: List[Rule], strict: bool, *, random: Random = Random()):
         self.placeholders = placeholders
         self.sp = spm_vocab
         self.rules = rules
         self.unk_id  = self.sp.unk_id()
         self.random = random
+        self.strict = strict # Use strict mode, only making replacements when the same amount of tokens are on the source and the target side
 
         # Compile rules into one mega-pattern
         self.rule_pattern = re.compile('|'.join('(?:{})'.format(rule.pattern) for rule in self.rules))
@@ -113,13 +115,21 @@ class Encoder:
             inputline += token
         inputline += '\n'
 
+        # Check if strict rules apply
+        if self.strict:
+            src, trg = inputline.split('\t')
+            for mytoken, myreplacement in replacements.items():
+                if src.count(myreplacement) != trg.count(myreplacement):
+                    # We have a mismatch placeholder on source and target
+                    inputline = inputline.replace(myreplacement, mytoken)
+
         return (inputline, dict((v, k) for k, v in replacements.items()))
 
 
-def encode(my_placeholders: List[str], my_sp: SentencePieceProcessor, my_rules: List[Rule], *, random: Random, no_mapping: bool) -> None:
+def encode(my_placeholders: List[str], my_sp: SentencePieceProcessor, my_rules: List[Rule], strict: bool, *, random: Random, no_mapping: bool) -> None:
     '''Encodes everything form stdin, dumping it to stdout and dumping a file with
        all replacements'''
-    encoder = Encoder(my_placeholders, my_sp, my_rules, random=random)
+    encoder = Encoder(my_placeholders, my_sp, my_rules, strict, random=random)
     if no_mapping: # Do not produce any mappings as we are going to just use it during training
         for line in sys.stdin:
             encoded_line, _ = encoder.make_placeholders(line)
@@ -167,7 +177,7 @@ if __name__ == "__main__":
         print(" ".join(config.placeholders))
         sys.exit(0)
     elif args.encode:
-        encode(config.placeholders, config.sp, config.rules, random=random, no_mapping=args.no_mapping)
+        encode(config.placeholders, config.sp, config.rules, args.strict, random=random, no_mapping=args.no_mapping)
     else:
         decode()
 

@@ -109,7 +109,7 @@ class Executor:
             self.dataset_paths[path.split('/')[-1]] = path
         self.stage_names: List[str] = ymldata['stages']
         self.uppercase_ratio = float(ymldata['uppercase'])
-        self.tittlecase_ratio = float(ymldata['tittlecase'])
+        self.titlecase_ratio = float(ymldata['titlecase'])
         self.random_seed = int(ymldata['seed'])
         random.seed(self.random_seed)
 
@@ -205,9 +205,9 @@ class Executor:
         # Uppercase randomly
         if self.uppercase_ratio > 0:
             batch = [x.upper() if random.random() < self.uppercase_ratio else x for x in batch]
-        # Tittlecase randomly. We also add a new line to every string because calling split() removes it
-        if self.tittlecase_ratio > 0:
-            batch = [" ".join([i[0].upper() + i[1:] for i in x.split()]) + "\n" if random.random() < self.tittlecase_ratio else x for x in batch]
+        # titlecase randomly. We also add a new line to every string because calling split() removes it
+        if self.titlecase_ratio > 0:
+            batch = [" ".join([i[0].upper() + i[1:] for i in x.split()]) + "\n" if random.random() < self.titlecase_ratio else x for x in batch]
 
         # Apply placeholders randomly
         return batch

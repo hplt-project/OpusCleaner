@@ -62,8 +62,38 @@ You can check resulting mixed file in `/tmp/test`. If your neural network traine
 
 At the start of the training all datasets are shuffled. Each time a dataset's end is reached, it is re-shuffled. Shuffling happens inside the training directory (by default `./TMP`) where the training state is also kept. If training is interrupted, re-running the trainer should resume from where it was (ALMOST, in case the buffer wasn't consumed by the neural network trainer, it will be skipped, but this is usually only a few hundred sentence pairs, no more).
 
+## Generating vocabulary and placeholders before training
+To use the placeholder code augment your training data with placeholders before training, look at this example script:
+```bash
+#!/usr/bin/env bash
+# Get the placeholders
+../placeholders/placeholders.py -c train_config_bgen.yml --dump_placeholders > my_placeholders
+# train vocabulary
+spm_train --bos_id=-1 --eos_id=0 --unk_id=1 --user_defined_symbols_file my_placeholders \
+  --model_prefix="test/vocab.bgen" --vocab_size=12000 \
+  --input="/home/dheart/uni_stuff/postdoc/empty-train/trainer/test/data/clean.bgen" \
+  --shuffle_input_sentence=true --character_coverage 1
+
+# Move vocabulary to the new location
+mv test/vocab.bgen.model test/vocab.bgen.spm
+
+# Make all datasets placeholded
+for myfile in test/data/*.bgen; do
+	../placeholders/placeholders.py -n --strict --encode -c train_config_bgen.yml < ${myfile} > ${myfile}.pls
+done
+```
+You need to augment the training configuration with additional placeholder configuration setting:
+```yml
+vocab: /home/dheart/uni_stuff/postdoc/empty-train/trainer/test/vocab.bgen.spm
+placeholder-symbol: "<PLACEHOLDER>"
+num-placeholders: 4
+regexes:
+    - (https?:\/\/www\.\w{1,63}\.\w{1,63}(?:\/\w{0,63}){0,})
+    - (www\.\w{1,63}\.\w{1,63}(?:\/\w{0,63}){0,})
+    - ([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)
+```
+After vocabulary is trained and data is preprocessed, proceed with a normal training run.
 ## Future work
 
-- The data should be augmented with placeholders. We have placeholders generation script that will be added soon.
 - Terminology support (using a dictionary). We should augment the training data with terminology (possibly stemmed on the source side) so that we can use it real world models
 - A one click run training

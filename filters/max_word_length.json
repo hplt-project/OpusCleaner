@@ -5,7 +5,8 @@
         "MAXWORDLENGTH": {
             "type": "int",
             "required": false,
-            "default": 150,
+            "default": 75,
+            "max": 100,
             "help": "Maximum length of words in characters. Pairs with a word longer than MAXWORDLENGTH will be filtered."
         }
     },

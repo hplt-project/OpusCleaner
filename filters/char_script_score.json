@@ -1,0 +1,19 @@
+{
+    "description": "Removes lines with average word lengths between specified min and max values",
+    "command": "./char_script_score.py $SCRIPT --threshold $THRESHOLD",
+    "type": "bilingual",
+    "parameters":
+    {
+        "SCRIPT":
+        {
+            "type": "str",
+            "default": "",
+            "help": "Insert scripts separated by space here. Valid script examples: www.regular-expressions.info/unicode.html"
+        },
+        "THRESHOLD":
+        {
+            "type": "float",
+            "default": 1
+        }
+    }
+}

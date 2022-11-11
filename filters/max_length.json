@@ -1,6 +1,6 @@
 {
-    "description": "Filters a parallel or mono dataset based on line lengths",
-    "command": "./max_length.py --max-length $MAXLENGTH --min-length $MINLENGTH",
+    "description": "Filters a parallel or mono dataset based on line lengths by counting type",
+    "command": "./max_length.py --max-length $MAXLENGTH --min-length $MINLENGTH --count-type $COUNT_TYPE",
     "parameters":
     {
         "MAXLENGTH":
@@ -14,6 +14,18 @@
             "type": "int",
             "default": 1,
             "min": 0
+        },
+        "COUNT_TYPE":
+        {
+            "type": "str",
+            "default": "words",
+            "allowed_values":
+            [
+                "chars",
+                "words",
+                "bytes"
+            ],
+            "help": "Element count done by amount of characters, words or bytes"
         }
     },
     "type": "bilingual"

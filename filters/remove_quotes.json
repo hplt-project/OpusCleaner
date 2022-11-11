@@ -2,5 +2,5 @@
     "type": "bilingual",
     "description": "Fix quotes",
     "parameters": {},
-    "command": "./fix_quotes.py"
+    "command": "./remove_quotes.py"
 }

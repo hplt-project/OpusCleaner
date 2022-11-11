@@ -10,6 +10,8 @@ def parse_user_args():
     parser = argparse.ArgumentParser(description="Filters the lines based on the ratio between num_src_tokens and num_trg_tokens")
     parser.add_argument("--ratio-length", default=0.6, type=float)
     parser.add_argument("--filter-identical", action="store_true")
+    parser.add_argument("--min-length", default=10, type=float)
+    parser.add_argument("--ratio-type", default='words', type=str)
     parser.add_argument("--log", action="store_true")
     parser.add_argument("--debug", action='store_true')
     return parser.parse_args()
@@ -39,7 +41,8 @@ def compare_lin(src: List[str], trg: List[str], ratio: float) -> bool:
 Comparator = Callable[[List[str], List[str], float], bool]
 
 
-def clean_parallel(ratio: float, filter_identical: bool, *, debug: bool=False, compare: Comparator=compare_lin) -> None:
+def clean_parallel(ratio: float, filter_identical: bool, min_length: float, 
+                   ratio_type: str, *, debug: bool=False, compare: Comparator=compare_lin) -> None:
     """Cleans the parallel dataset based on the ratio of source to target tokens and vice versa"""
     for line in stdin:
         fields = line.strip().split('\t')
@@ -55,11 +58,19 @@ def clean_parallel(ratio: float, filter_identical: bool, *, debug: bool=False, c
             if debug:
                 stderr.write(f'IDENTICAL\t{src}\t{trg}\n')
             continue
+        
+        # Get List of words or chars
+        if ratio_type == 'words':
+            src_toks = src.split()
+            trg_toks = trg.split()
+        elif ratio_type == 'chars':
+            src_toks = list(src)
+            trg_toks = list(trg)
+            
+        # Ignore lines if any line is small
+        any_small: bool = (len(src_toks) < min_length or len(trg_toks) < min_length)
 
-        src_toks = src.split()
-        trg_toks = trg.split()
-
-        if not compare(src_toks, trg_toks, ratio):
+        if not any_small and not compare(src_toks, trg_toks, ratio):
             if debug:
                 stderr.write(f'RATIO_LENGTH: {src}\t{trg}\n')
         else:
@@ -68,6 +79,6 @@ def clean_parallel(ratio: float, filter_identical: bool, *, debug: bool=False, c
 
 if __name__ == '__main__':
     args = parse_user_args()
-    clean_parallel(args.ratio_length, args.filter_identical,
-        debug=args.debug,
-        compare=compare_log if args.log else compare_lin)
+    clean_parallel(args.ratio_length, args.filter_identical, 
+                   args.min_length, args.ratio_type, debug=args.debug,
+                   compare=compare_log if args.log else compare_lin)

@@ -34,7 +34,7 @@ end:
   - until dirty 5 # use `inf` to mean until forever
 
 uppercase: 0.05 # Apply uppercase randomly to 0.05% of sentences. Use 0 to disable
-tittlecase: 0.05 # Apply uppercase randomly to 0.05% of sentences. Use 0 to disable
+titlecase: 0.05 # Apply titlecase randomly to 0.05% of sentences. Use 0 to disable
 seed: 1111
 trainer: /path/to/trainer/run.py
 ```

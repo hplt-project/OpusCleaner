@@ -213,8 +213,8 @@ class Executor:
         return batch
 
     def finaliser(self) -> None:
-        '''Closes all the the open streams in the correct order after the training finishes'''
-        self.trainer.stdin.close()
+        '''Terminates the child process and waits for it to exit cleanly.'''
+        self.trainer.terminate()
         self.trainer.wait()
 
 

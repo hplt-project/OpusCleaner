@@ -3,6 +3,7 @@
 for different stages of the training. Data is uncompressed and TSV formatted src\ttrg'''
 import os
 import io
+import signal
 import argparse
 import weakref
 import random
@@ -18,6 +19,8 @@ from math import inf
 import yaml
 from yaml.loader import SafeLoader, Loader
 
+def ignore_sigint():
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 def parse_user_args():
     """Parse the arguments necessary for this filter"""
@@ -114,7 +117,7 @@ class Executor:
         random.seed(self.random_seed)
 
         # Initialise the trainer, using Subprocess.Popen
-        self.trainer = subprocess.Popen(ymldata['trainer'], stdout=None, stderr=None, stdin=subprocess.PIPE, encoding="utf-8")
+        self.trainer = subprocess.Popen(ymldata['trainer'], stdout=None, stderr=None, stdin=subprocess.PIPE, encoding="utf-8", preexec_fn=ignore_sigint)
 
         # Parse the individual training stages into convenient struct:
         self.stages: Dict[str, Stage] = {}
@@ -214,7 +217,7 @@ class Executor:
 
     def finaliser(self) -> None:
         '''Terminates the child process and waits for it to exit cleanly.'''
-        self.trainer.terminate()
+        self.trainer.stdin.close()
         self.trainer.wait()
 
 

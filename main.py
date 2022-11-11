@@ -512,6 +512,70 @@ def api_get_dataset_filters(name:str) -> List[FilterStep]:
             return parse_obj_as(List[FilterStep], data)
 
 
+def select_filter_steps(pattern: str, pipeline: FilterPipeline) -> List[Dict[str,Dict]]:
+    return [
+        {str(re.search(pattern, FILTERS[step.filter].command).group(1)): step.parameters}
+        for step in pipeline.filters
+        if re.search(pattern, FILTERS[step.filter].command) is not None
+    ]
+
+
+@app.get('/api/datasets/{name:path}/configuration-for-opusfilter.yaml')
+def api_get_dataset_filters_as_openfilter(name:str) -> List[FilterStep]:
+    if not os.path.exists(filter_configuration_path(name)):
+        return []
+
+    with open(filter_configuration_path(name), 'r') as fh:
+        data = json.load(fh)
+
+    pipeline = parse_obj_as(FilterPipeline, data)
+
+    opusfilter_config = {
+        'steps': []
+    }
+
+    input_files = pipeline.files
+    
+    preprocess_steps = select_filter_steps(r'\bopusfilter\.preprocessors\.(\w+)\b', pipeline)
+
+    if preprocess_steps:
+        output_files = [
+            os.path.join(os.path.dirname(file), 'preprocessed.' + os.path.basename(file))
+            for file in pipeline.files
+        ]
+
+        opusfilter_config['steps'].append({
+            'type': 'filter',
+            'parameters': {
+                'inputs': input_files,
+                'outputs': output_files,
+                'preprocessors': preprocess_steps
+            }
+        })
+
+        input_files = output_files
+
+    filter_steps = select_filter_steps(r'\bopusfilter\.filters\.(\w+)\b', pipeline)
+
+    if filter_steps:
+        output_files = [
+            os.path.join(os.path.dirname(file), 'filtered.' + os.path.basename(file))
+            for file in pipeline.files
+        ]
+
+        opusfilter_config['steps'].append({
+            'type': 'filter',
+            'parameters': {
+                'inputs': input_files,
+                'outputs': output_files,
+                'filters': filter_steps
+            }
+        })
+
+        input_files = output_files
+
+    return Response(yaml.safe_dump(opusfilter_config, sort_keys=False), media_type='application/yaml')
+
 @app.post('/api/datasets/{name:path}/configuration.json')
 def api_update_dataset_filters(name:str, filters:List[FilterStep]):
     columns = list_datasets(DATA_PATH)[name]

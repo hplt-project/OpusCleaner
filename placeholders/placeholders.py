@@ -29,7 +29,7 @@ class Rule:
 @dataclass
 class Configuration:
     """Object holding the yaml config"""
-    def __init__(self, config_file):
+    def __init__(self, config_file, dump_placeholders: bool):
         with open(config_file, 'r') as config_handle:
             my_config = yaml.safe_load(config_handle)
 
@@ -37,7 +37,7 @@ class Configuration:
         self.rules = [Rule(regex) for regex in my_config['regexes']]
         self.placeholder_symbol = my_config.get('placeholder-symbol', '@')
         self.num_placeholders = my_config.get('num-placeholders', 20)
-        self.placeholders = [self.placeholder_symbol + str(i) for i in range(self.num_placeholders)]
+        self.placeholders = [self.placeholder_symbol[:-1] + str(i) + self.placeholder_symbol[-1] for i in range(self.num_placeholders)]
 
         # Add a rule that escapes patterns that look like a placeholder already
         # TODO: this will match placeholders we can't reach because `num_placeholders` might be smaller
@@ -48,7 +48,7 @@ class Configuration:
         self.rules.append(Rule(pattern=re.escape(self.placeholder_symbol) + r'\d+'))
 
         # During encoding assert that we have vocab
-        if 'vocab' in my_config:
+        if not dump_placeholders and 'vocab' in my_config:
             vocab = my_config['vocab']
             self.sp = SentencePieceProcessor(vocab)
 
@@ -161,7 +161,7 @@ if __name__ == "__main__":
     random = Random(args.seed)
 
     if args.encode or args.dump_placeholders:
-        config = Configuration(args.config)
+        config = Configuration(args.config, args.dump_placeholders)
 
     if args.dump_placeholders:
         print(" ".join(config.placeholders))

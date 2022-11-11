@@ -161,11 +161,7 @@ class Executor:
                     self.restore_datasets = False
                 self.state_tracker.update_stage(stage)
                 self.train_stage(self.stages[stage])
-        except KeyboardInterrupt:
-            # Finalise marian if user interrupts
-            self.trainer.stdin.close()
-            self.trainer.wait()
-        except:
+        finally:
             # Finalise the trainer by cleanly closing any open subprocesses
             self.finaliser()
 
@@ -221,7 +217,8 @@ class Executor:
 
     def finaliser(self) -> None:
         '''Terminates the child process and waits for it to exit cleanly.'''
-        self.trainer.terminate()
+        self.trainer.stdin.close()
+        self.trainer.wait()
 
 
 

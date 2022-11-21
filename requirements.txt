@@ -44,3 +44,5 @@ sacremoses
 fastspell
 regex
 toolwrapper
+lm
+kenlm

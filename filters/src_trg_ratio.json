@@ -16,7 +16,7 @@
         },
         "MIN_LENGTH":
         {
-            "type": "float",
+            "type": "int",
             "default": 10,
             "help": "Ratio will be calculated only for lines with a specified minimum length (calculated by same RATIO_TYPE element)"
         },

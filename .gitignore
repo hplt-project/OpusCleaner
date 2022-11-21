@@ -31,3 +31,4 @@ coverage
 *__pycache__*
 .env
 placeholders/mappings.yml
+filters/models/

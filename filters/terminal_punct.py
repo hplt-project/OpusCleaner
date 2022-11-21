@@ -20,8 +20,8 @@ def filter_terminal_punct(threshold: float, debug: bool=True) -> None:
         src = fields[-2].strip()
         trg = fields[-1].strip()
         
-        src_punct = len([c for c in src if c in ['.', '?', '!', '…']])
-        trg_punct = len([c for c in trg if c in ['.', '?', '!', '…']])
+        src_punct = len([c for c in src if c in {'.', '?', '!', '…'}])
+        trg_punct = len([c for c in trg if c in {'.', '?', '!', '…'}])
         
         score = abs(src_punct - trg_punct)
         

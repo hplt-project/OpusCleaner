@@ -20,8 +20,8 @@ def filter_avg_word_length(min_avg_length: int, max_avg_length: int, debug: bool
         src = fields[-2].strip().split()
         trg = fields[-1].strip().split()
     
-        src_avg = sum([len(x) for x in src]) / len(src)
-        trg_avg = sum([len(x) for x in trg]) / len(trg)
+        src_avg = sum(len(x) for x in src) / len(src)
+        trg_avg = sum(len(x) for x in trg) / len(trg)
         
         src_avg_pass = (src_avg >= min_avg_length and src_avg <= max_avg_length)
         trg_avg_pass = (trg_avg >= min_avg_length and trg_avg <= max_avg_length)

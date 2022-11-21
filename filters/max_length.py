@@ -8,7 +8,7 @@ def parse_user_args():
     parser = argparse.ArgumentParser(description="Filters a parallel or mono dataset based on line lengths")
     parser.add_argument("--max-length", default=150, type=float)
     parser.add_argument("--min-length", default=1, type=float)
-    parser.add_argument("--count-type", default='words', type=str)
+    parser.add_argument("--count-type", default='words', choices=['chars', 'words', 'bytes'], type=str)
     parser.add_argument("--debug", action='store_true')
     return parser.parse_args()
 

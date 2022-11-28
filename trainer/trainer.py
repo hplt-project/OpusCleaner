@@ -308,10 +308,28 @@ class CurriculumLoader:
         return impl.load(ymldata)
 
 
+class EpochTracker:
+    """Utility to track how many epochs the reader has progressed."""
+    def __init__(self, reader:DatasetReader):
+        self.reader = reader
+        self.epoch_offset = reader.epoch
+        self.line_offset = reader.line
+
+    @property
+    def epoch(self):
+        epoch = self.reader.epoch - self.epoch_offset
+
+        # ... but if the reader is behind on where it was, it hasn't completed
+        # a full epoch yet.
+        if self.reader.line < self.line_offset:
+            epoch -= 1
+        return epoch
+
+
 class Trainer:
     curriculum: Curriculum
-    stage: Optional[Stage]
     readers: Dict[str, DatasetReader]
+    stage: Optional[Stage]
     trainer: subprocess.Popen
 
     # Theoretical batch size if all dataset weights in a step add up to 1.0.
@@ -331,7 +349,7 @@ class Trainer:
             random_state=random.getstate(),
             datasets={
                 dataset.name: DatasetState(seed=curriculum.seed, line=0, epoch=0)
-                for dataset, _ in first_stage.datasets
+                for dataset in curriculum.datasets.values()
             }
         ))
 
@@ -339,14 +357,8 @@ class Trainer:
         random.setstate(state.random_state)
         self.stage = self.curriculum.stages[state.stage]
         self.readers = {
-            dataset_name: reader.restore(state.datasets[dataset_name])
-            for dataset_name, reader in self._create_readers(self.stage).items()
-        }
-
-    def _create_readers(self, stage:Stage) -> Dict[str,DatasetReader]:
-        return {
-            dataset.name: DatasetReader(dataset, self.curriculum.seed)
-            for dataset, _ in stage.datasets
+            dataset.name: DatasetReader(dataset, self.curriculum.seed).restore(state.datasets[dataset.name])
+            for dataset in self.curriculum.datasets.values()
         }
 
     def state(self) -> TrainerState:
@@ -375,9 +387,9 @@ class Trainer:
                 # Quick access to the reader that determines whether we have
                 # read it enough times for this stage to finish and move onto
                 # the next.
-                until_reader = self.readers[self.stage.until_dataset]
+                epoch_tracker = EpochTracker(self.readers[self.stage.until_dataset])
 
-                while self.stage.until_epoch is not None and until_reader.epoch < self.stage.until_epoch:
+                while self.stage.until_epoch is not None and epoch_tracker.epoch < self.stage.until_epoch:
                     batch: List[str] = []
 
                     # Read from each dataset according to its weight in this stage
@@ -405,7 +417,6 @@ class Trainer:
 
                 # Move onto next stage. May be `None`, which would end this generator 🎉
                 self.stage = self.curriculum.next_stage(self.stage)
-                self.readers = self._create_readers(self.stage) if self.stage is not None else {}
         finally:
             # Whatever you do, clean up the trainer.
             self.trainer.stdin.close()

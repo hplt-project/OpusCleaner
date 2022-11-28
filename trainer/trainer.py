@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-'''A translation model trainer. It feeds marian different sets of datasets with different thresholds
-for different stages of the training. Data is uncompressed and TSV formatted src\ttrg'''
+"""A translation model trainer. It feeds marian different sets of datasets with different thresholds
+for different stages of the training. Data is uncompressed and TSV formatted src\ttrg
+"""
 import os
 import sys
 import signal
@@ -100,6 +101,7 @@ class DatasetReader:
         self.dataset = dataset
         self.seed = seed
         self.epoch = 0
+        self.line = 0
 
     def state(self) -> DatasetState:
         return DatasetState(self.seed, self.line, self.epoch)
@@ -126,10 +128,11 @@ class DatasetReader:
         fh = TemporaryFile(mode='w+', encoding='utf-8')
 
         # Shuffle data to the temporary file
-        subprocess.check_call([PATH_TO_SHUFFLE, str(self.seed), str(fh.fileno()), *self.dataset.files], pass_fds=(fh,))
+        subprocess.check_call([PATH_TO_SHUFFLE, str(self.seed), f'/dev/fd/{fh.fileno()}', *self.dataset.files], pass_fds=(fh.fileno(),))
 
         # Replace open file handle with this new file
         self._fh = cast(TextIO, fh) # TODO: Not sure why TemporaryFile is an IO[str]
+        self._fh.seek(0)
         self.line = 0
 
     def __iter__(self):
@@ -137,16 +140,18 @@ class DatasetReader:
 
     def __next__(self):
         just_opened = False
-        if not self._fh:
-            just_opened = True
+        if not self._fh or self._fh.closed:
             self._open() # TODO: do we want to do this lazy? Yes, restore()
                          # might be called twice right now and shuffling is
                          # expensive.
+            just_opened = True
 
         assert self._fh is not None
         try:
             # Try to read the next line from our shuffled file
-            line = next(self._fh)
+            line = self._fh.readline()
+            if line == '':
+                raise StopIteration
             self.line += 1
             return line
         except StopIteration:
@@ -165,7 +170,9 @@ class DatasetReader:
 
 class StateLoader:
     def load(self, fh:TextIO) -> TrainerState:
-        ymldata = yaml.safe_load(fh)
+        ymldata = yaml.load(fh, Loader=yaml.Loader)
+        if not isinstance(ymldata, dict):
+            raise ValueError(f'Empty state file: {fh.name}')
         return TrainerState(
             stage=ymldata['stage'],
             random_state=ymldata['random_state'],
@@ -176,7 +183,7 @@ class StateLoader:
         )
 
     def dump(self, state:TrainerState, fh:TextIO) -> None:
-        yaml.safe_dump({
+        yaml.dump({
             'stage': state.stage,
             'random_state': state.random_state,
             'datasets': {
@@ -230,7 +237,7 @@ class CurriculumLoader:
             name=stage_name,
             datasets=datasets,
             until_dataset=dataset_name,
-            until_epoch=int(max_epochs) if max_epochs is not 'inf' else None
+            until_epoch=int(max_epochs) if max_epochs != 'inf' else None
         )
 
     def _load_modifier(self, line:str) -> Modifier:
@@ -245,7 +252,8 @@ class Trainer:
     readers: Dict[str, DatasetReader]
     trainer: subprocess.Popen
 
-    _slice_size = 100
+    # Theoretical batch size if all dataset weights in a step add up to 1.0.
+    _batch_size = 100
 
     '''This class takes in the config file and starts running training'''
     def __init__(self, curriculum:Curriculum):
@@ -313,14 +321,14 @@ class Trainer:
                     # Read from each dataset according to its weight in this stage
                     # (They will reshuffle and repeat if necessary)
                     for dataset, weight in self.stage.datasets:
-                        batch.extend(islice(self.readers[dataset.name], 0, int(self._slice_size * weight)))
+                        batch.extend(islice(self.readers[dataset.name], 0, int(self._batch_size * weight)))
 
                     # Apply any modifiers to random lines in the batch
                     # (Multiple modifiers could be applied to the same line!)
                     # TODO: maybe make this self.stage.modifiers? Would that make sense?
                     for modifier in self.curriculum.modifiers:
                         modifier_fun = MODIFIERS[modifier.name]
-                        batch = [modifier_fun(line) for line in batch if modifier.frequency > random.random()]
+                        batch = [modifier_fun(line) if modifier.frequency > random.random() else line for line in batch]
 
                     random.shuffle(batch)
 

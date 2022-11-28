@@ -10,7 +10,7 @@ import random
 import subprocess
 
 from dataclasses import dataclass
-from typing import List, Tuple, Dict, Any, Optional, Union, TextIO, cast
+from typing import List, Tuple, Dict, Any, Optional, Union, Type, TextIO, cast
 from tempfile import TemporaryFile
 from itertools import islice
 
@@ -22,15 +22,6 @@ def ignore_sigint():
     stopping the trainer.
     """
     signal.signal(signal.SIGINT, signal.SIG_IGN)
-
-def parse_user_args():
-    """Parse the arguments necessary for this filter"""
-    parser = argparse.ArgumentParser(description="Feeds marian tsv data for training.")
-    parser.add_argument("--config", '-c', required=True, type=str, help='YML configuration input.')
-    parser.add_argument("--state", '-s', type=str, help='YML state file, defaults to ${CONFIG}.state.')
-    # parser.add_argument("--temporary-dir", '-t', default="./TMP", type=str, help='Temporary dir, used for shuffling and tracking state')
-    parser.add_argument("--do-not-resume", '-d', action="store_true", help='Do not resume from the previous training state')
-    return parser.parse_args()
 
 # Path to something that can shuffle data. Called with seed, output-path, input-files
 # Ideally this also deduplicates the src side of the sentence pairs it shuffles ;)
@@ -182,7 +173,47 @@ class DatasetReader:
 
             # Now try again (will trigger the lazy open + just_opened protection)
             return next(self)
-                
+
+
+@dataclass(frozen=True)
+class ShuffledFile:
+    seed: int
+    proc: subprocess.Popen
+    file: TextIO
+
+
+class AsyncDatasetReader(DatasetReader):
+    _pending: Optional[ShuffledFile]
+
+    def __init__(self, dataset:Dataset, seed:int):
+        self._pending = None
+        super().__init__(dataset, seed)
+
+    def _open_async(self, seed:int):
+        # Open temporary file which will contain shuffled version of `cat self.files`
+        fh = TemporaryFile(mode='w+', encoding='utf-8')
+
+        self._pending = ShuffledFile(
+            seed=seed,
+            file=cast(TextIO, fh),
+            proc=subprocess.Popen([PATH_TO_SHUFFLE, str(seed), f'/dev/fd/{fh.fileno()}', *self.dataset.files], pass_fds=(fh.fileno(),))
+        )
+
+    def _open(self):
+        # First shuffle
+        if self._pending is None:
+            self._open_async(self.seed)
+
+        assert self._pending is not None
+        assert self._pending.seed == self.seed
+        self._pending.proc.wait()
+        assert self._pending.proc.returncode == 0
+        self._fh = self._pending.file
+        self._fh.seek(0)
+        self.line = 0
+
+        # Start shuffling next
+        self._open_async(self.seed + 1)
 
 
 class StateLoader:
@@ -380,9 +411,12 @@ class Trainer:
     # Theoretical batch size if all dataset weights in a step add up to 1.0.
     _batch_size = 100
 
-    '''This class takes in the config file and starts running training'''
-    def __init__(self, curriculum:Curriculum):
+    # Reader class to use (I.e. DatasetReader or AsyncDatasetReader)
+    _reader_impl: Type[DatasetReader]
+
+    def __init__(self, curriculum:Curriculum, *, reader: Type[DatasetReader] = DatasetReader):
         self.curriculum = curriculum
+        self._reader_impl = reader
         random.seed(self.curriculum.seed)
         first_stage_name = self.curriculum.stages_order[0]
         first_stage = self.curriculum.stages[first_stage_name]
@@ -402,7 +436,7 @@ class Trainer:
         random.setstate(state.random_state)
         self.stage = self.curriculum.stages[state.stage]
         self.readers = {
-            dataset.name: DatasetReader(dataset, self.curriculum.seed).restore(state.datasets[dataset.name])
+            dataset.name: self._reader_impl(dataset, self.curriculum.seed).restore(state.datasets[dataset.name])
             for dataset in self.curriculum.datasets.values()
         }
 
@@ -498,14 +532,21 @@ class StateTracker:
 
 
 if __name__ == '__main__':
-    args = parse_user_args()
+    parser = argparse.ArgumentParser(description="Feeds marian tsv data for training.")
+    parser.add_argument("--config", '-c', required=True, type=str, help='YML configuration input.')
+    parser.add_argument("--state", '-s', type=str, help='YML state file, defaults to ${CONFIG}.state.')
+    parser.add_argument("--sync", action="store_true", help="Do not shuffle async")
+    # parser.add_argument("--temporary-dir", '-t', default="./TMP", type=str, help='Temporary dir, used for shuffling and tracking state')
+    parser.add_argument("--do-not-resume", '-d', action="store_true", help='Do not resume from the previous training state')
+
+    args = parser.parse_args()
 
     with open(args.config, 'r', encoding='utf-8') as fh:
         config = yaml.safe_load(fh)
 
     curriculum = CurriculumLoader().load(config)
 
-    trainer = Trainer(curriculum)
+    trainer = Trainer(curriculum, reader=DatasetReader if args.sync else AsyncDatasetReader)
 
     state_harness = StateTracker(args.state or f'{args.config}.state')
 

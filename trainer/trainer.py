@@ -199,6 +199,12 @@ class AsyncDatasetReader(DatasetReader):
             proc=subprocess.Popen([PATH_TO_SHUFFLE, str(seed), f'/dev/fd/{fh.fileno()}', *self.dataset.files], pass_fds=(fh.fileno(),))
         )
 
+    def _kill_async(self):
+        if self._pending is not None:
+            self._pending.proc.kill()
+            self._pending.proc.wait()
+            self._pending.file.close()
+
     def _open(self):
         # First shuffle
         if self._pending is None:
@@ -217,10 +223,12 @@ class AsyncDatasetReader(DatasetReader):
 
     def restore(self, state:DatasetState) -> 'AsyncDatasetReader':
         # Kill any advance work we did because it is likely wrong.
-        if self._pending:
-            self._pending.proc.kill()
-            self._pending = None
+        self._kill_async()
         return cast('AsyncDatasetReader', super().restore(state))
+
+    def close(self):
+        self._kill_async()
+        super().close()
 
 
 class StateLoader:

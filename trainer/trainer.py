@@ -193,35 +193,39 @@ class StateLoader:
         }, fh, allow_unicode=True, sort_keys=False) #TODO: is safe_dump not sufficient?
 
 
-class CurriculumLoader:
-    def load(self, fh:Union[TextIO,str,dict]) -> Curriculum:
-        if isinstance(fh, dict):
-            ymldata = fh
-        else:
-            ymldata = yaml.safe_load(fh)
-
-        seed = int(ymldata['random_seed'])
-
-        datasets = {
-            name: Dataset(name, files)
-            for name, files in ymldata['datasets']
-        }
-
-        stages_order = list(ymldata['stages'])
-
+class CurriculumV1Loader:
+    def load(self, ymldata:dict) -> Curriculum:
+        datasets = self._load_datasets(ymldata)
+        stages_order = self._load_stage_order(ymldata)
         return Curriculum(
-            seed=seed,
+            seed=int(ymldata['seed']),
             datasets=datasets,
             stages_order=stages_order,
-            stages={
-                stage_name: self._load_stage(ymldata, stage_name, datasets, seed)
-                for stage_name in stages_order
-            },
-            modifiers=[
-                self._load_modifier(modifier_line)
-                for modifier_line in ymldata.get('modifiers', [])
-            ]
+            stages=self._load_stages(ymldata, stages_order, datasets),
+            modifiers=self._load_modifiers(ymldata)
         )
+
+    def _load_datasets(self, ymldata:dict) -> Dict[str,Dataset]:
+        """Reads
+        ```yml
+        datasets:
+          - path/to/clean
+          - path/to/dirty
+        ```
+        """
+        return {
+            os.path.basename(filepath): Dataset(os.path.basename(filepath), [filepath])
+            for filepath in ymldata['datasets']
+        }
+
+    def _load_stage_order(self, ymldata:dict) -> List[str]:
+        return list(ymldata['stages'])
+
+    def _load_stages(self, ymldata:dict, stages_order:List[str], datasets:Dict[str,Dataset]) -> Dict[str,Stage]:
+        return {
+            stage_name: self._load_stage(ymldata, stage_name, datasets, int(ymldata['seed']))
+            for stage_name in stages_order
+        }
 
     def _load_stage(self, ymldata:dict, stage_name:str, available_datasets:Dict[str,Dataset], seed:int) -> Stage:
         datasets: List[Tuple[Dataset, float]] = []
@@ -240,10 +244,68 @@ class CurriculumLoader:
             until_epoch=int(max_epochs) if max_epochs != 'inf' else None
         )
 
+    def _load_modifiers(self, ymldata:dict) -> List[Modifier]:
+        """Reads
+        ```yml
+        uppercase: 0.05
+        titlecase: 0.05
+        ```
+        """
+        return [
+            Modifier(name, float(ymldata[name]))
+            for name in ['uppercase', 'titlecase']    
+            if name in ymldata
+        ]
+
+
+class CurriculumV2Loader(CurriculumV1Loader):
+    def _load_datasets(self, ymldata:dict) -> Dict[str,Dataset]:
+        """Reads
+        ```yml
+        datasets:
+          clean:
+            - a.gz
+            - b.gz
+        ```
+        """
+        return {
+            name: Dataset(name, files)
+            for name, files in ymldata['datasets']
+        }
+
+    def _load_modifiers(self, ymldata:dict) -> List[Modifier]:
+        """Reads
+        ```yml
+        modifiers:
+          - uppercase 0.05
+          - titlecase 0.05
+        ```
+        """
+        return [
+            self._load_modifier(modifier_line)
+            for modifier_line in ymldata.get('modifiers', [])
+        ]
+
     def _load_modifier(self, line:str) -> Modifier:
         name, frequency = line.split()
         assert name in MODIFIERS, f"unknown modifier named '{name}'"
         return Modifier(name, float(frequency))
+
+
+class CurriculumLoader:
+    IMPLEMENTATIONS={
+        '1': CurriculumV1Loader,
+        '2': CurriculumV2Loader,
+    }
+
+    def load(self, fh:Union[TextIO,str,dict]) -> Curriculum:
+        if isinstance(fh, dict):
+            ymldata = fh
+        else:
+            ymldata = yaml.safe_load(fh)
+
+        impl = self.IMPLEMENTATIONS[str(ymldata.get('version', '1'))]()
+        return impl.load(ymldata)
 
 
 class Trainer:

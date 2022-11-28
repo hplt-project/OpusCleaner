@@ -215,6 +215,13 @@ class AsyncDatasetReader(DatasetReader):
         # Start shuffling next
         self._open_async(self.seed + 1)
 
+    def restore(self, state:DatasetState) -> 'AsyncDatasetReader':
+        # Kill any advance work we did because it is likely wrong.
+        if self._pending:
+            self._pending.proc.kill()
+            self._pending = None
+        return cast('AsyncDatasetReader', super().restore(state))
+
 
 class StateLoader:
     """Tool to read and write TrainerState objects to yaml. Uses unsafe yaml

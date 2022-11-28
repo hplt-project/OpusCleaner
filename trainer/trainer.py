@@ -445,7 +445,6 @@ class StateTracker:
 
         try:
             for batch in trainer.run(*args, **kwargs):
-                self._dump(trainer)
                 yield batch
         finally:
             # Dump on clean exit as well as exception.

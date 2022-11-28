@@ -90,9 +90,16 @@ class Curriculum:
 
 
 @dataclass(frozen=True)
+class EpochTrackerState:
+    epoch: int
+    line: int
+
+
+@dataclass(frozen=True)
 class TrainerState:
     stage: str
     random_state: Any # whatever the type is returned by random.getstate(), which I think is implementation specific.
+    epoch_tracker_state: EpochTrackerState
     datasets: Dict[str,DatasetState]
 
 
@@ -244,6 +251,7 @@ class StateLoader:
         return TrainerState(
             stage=ymldata['stage'],
             random_state=ymldata['random_state'],
+            epoch_tracker_state=ymldata['epoch_tracker_state'],
             datasets={
                 dataset_name: DatasetState(int(seed), int(line), int(epoch))
                 for dataset_name, [seed, line, epoch] in ymldata['datasets'].items()
@@ -254,6 +262,7 @@ class StateLoader:
         yaml.dump({
             'stage': state.stage,
             'random_state': state.random_state,
+            'epoch_tracker_state': state.epoch_tracker_state,
             'datasets': {
                 dataset_name: [state.seed, state.line, state.epoch] #TODO: why a tuple, why not a dict? Isn't a dict more forward compatible?
                 for dataset_name, state in state.datasets.items()
@@ -415,16 +424,21 @@ class EpochTracker:
             epoch -= 1
         return epoch
 
+    def restore(self, state:EpochTrackerState) -> 'EpochTracker':
+        self.epoch_offset = state.epoch
+        self.line_offset = state.line
+        return self
+
+    def state(self) -> EpochTrackerState:
+        return EpochTrackerState(self.epoch_offset, self.line_offset)
+
 
 class Trainer:
     """Writes lines to a trainer program according to the curriculum."""
     curriculum: Curriculum
     readers: Dict[str, DatasetReader]
     stage: Optional[Stage]
-    trainer: subprocess.Popen
-
-    # Theoretical batch size if all dataset weights in a step add up to 1.0.
-    _batch_size = 100
+    epoch_tracker: EpochTracker
 
     # Reader class to use (I.e. DatasetReader or AsyncDatasetReader)
     _reader_impl: Type[DatasetReader]
@@ -441,6 +455,7 @@ class Trainer:
         self.restore(TrainerState(
             stage=first_stage_name,
             random_state=random.getstate(),
+            epoch_tracker_state=EpochTrackerState(0, 0),
             datasets={
                 dataset.name: DatasetState(seed=curriculum.seed, line=0, epoch=0)
                 for dataset in curriculum.datasets.values()
@@ -454,68 +469,51 @@ class Trainer:
             dataset.name: self._reader_impl(dataset, self.curriculum.seed).restore(state.datasets[dataset.name])
             for dataset in self.curriculum.datasets.values()
         }
+        self.epoch_tracker = EpochTracker(self.readers[self.stage.until_dataset]).restore(state.epoch_tracker_state)
 
     def state(self) -> TrainerState:
         return TrainerState(
             stage=self.stage.name if self.stage is not None else '',
             random_state=random.getstate(),
+            epoch_tracker_state=self.epoch_tracker.state(),
             datasets={
                 name: reader.state()
                 for name, reader in self.readers.items()
             }
         )
 
-    def run(self, config:Dict[str,Any]):
-        # Initialise the trainer, using Subprocess.Popen
-        self.trainer = subprocess.Popen(
-            config['trainer'],
-            stdin=subprocess.PIPE,
-            encoding="utf-8",
-            preexec_fn=ignore_sigint) # ignore_sigint makes marian ignore Ctrl-C. We'll stop it from here.
+    def close(self):
+        for reader in self.readers.values():
+            reader.close()
+        self.readers = {}
 
-        # Stop type checker from complaining that stdin may be None anyway
-        assert self.trainer.stdin is not None
+    def run(self, *, batch_size=100):
+        while self.stage is not None:
+            while self.stage.until_epoch is not None and self.epoch_tracker.epoch < self.stage.until_epoch:
+                batch: List[str] = []
 
-        try:
-            while self.stage is not None:
-                # Quick access to the reader that determines whether we have
-                # read it enough times for this stage to finish and move onto
-                # the next.
-                epoch_tracker = EpochTracker(self.readers[self.stage.until_dataset])
+                # Read from each dataset according to its weight in this stage
+                # (They will reshuffle and repeat if necessary)
+                for dataset, weight in self.stage.datasets:
+                    batch.extend(islice(self.readers[dataset.name], 0, int(batch_size * weight)))
 
-                while self.stage.until_epoch is not None and epoch_tracker.epoch < self.stage.until_epoch:
-                    batch: List[str] = []
+                # Apply any modifiers to random lines in the batch
+                # (Multiple modifiers could be applied to the same line!)
+                # TODO: maybe make this self.stage.modifiers? Would that make sense?
+                for modifier in self.curriculum.modifiers:
+                    modifier_fun = MODIFIERS[modifier.name]
+                    batch = [modifier_fun(line) if modifier.frequency > random.random() else line for line in batch]
 
-                    # Read from each dataset according to its weight in this stage
-                    # (They will reshuffle and repeat if necessary)
-                    for dataset, weight in self.stage.datasets:
-                        batch.extend(islice(self.readers[dataset.name], 0, int(self._batch_size * weight)))
+                random.shuffle(batch)
 
-                    # Apply any modifiers to random lines in the batch
-                    # (Multiple modifiers could be applied to the same line!)
-                    # TODO: maybe make this self.stage.modifiers? Would that make sense?
-                    for modifier in self.curriculum.modifiers:
-                        modifier_fun = MODIFIERS[modifier.name]
-                        batch = [modifier_fun(line) if modifier.frequency > random.random() else line for line in batch]
+                # Tell anyone whose listening that something interesting happened
+                # TODO: Yield something useful, e.g. progress.
+                yield batch
 
-                    random.shuffle(batch)
-
-                    # Pass batch to trainer. Might block on writing it. Uses default
-                    # buffer size, and most likely the trainer will read it async
-                    # from training anyway.
-                    self.trainer.stdin.writelines(batch)
-
-                    # Tell anyone whose listening that something interesting happend
-                    # TODO: Yield something useful, e.g. progress.
-                    yield None
-
-                # Move onto next stage. May be `None`, which would end this generator 🎉
-                self.stage = self.curriculum.next_stage(self.stage)
-        finally:
-            # Whatever you do, clean up the trainer.
-            self.trainer.stdin.close()
-            self.trainer.wait()
-
+            # Move onto next stage. May be `None`, which would end this generator 🎉
+            self.stage = self.curriculum.next_stage(self.stage)
+            if self.stage:
+                self.epoch_tracker = EpochTracker(self.readers[self.stage.until_dataset])
 
 class StateTracker:
     """Wraps around the trainer.run() call to restore and dump state its."""
@@ -569,8 +567,17 @@ if __name__ == '__main__':
     if args.do_not_resume:
         state_harness._restore = lambda trainer: None
 
-    # Run trainer as a generator. Ideally we get some stats back about
-    # the batch we just pushed to it, but since marian is probably reading and
-    # training in separate threads, I'm doubtful about how useful this is.
-    for _ in state_harness.run(trainer, config):
-        pass
+    model = subprocess.Popen(
+        config['trainer'],
+        stdin=subprocess.PIPE,
+        encoding="utf-8",
+        preexec_fn=ignore_sigint) # ignore_sigint makes marian ignore Ctrl-C. We'll stop it from here.
+    
+    assert model.stdin is not None
+
+    try:
+        for batch in state_harness.run(trainer):
+            model.stdin.writelines(batch)
+    finally:
+        model.stdin.close()
+        model.wait()

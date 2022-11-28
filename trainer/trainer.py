@@ -17,6 +17,10 @@ from itertools import islice
 import yaml
 
 def ignore_sigint():
+    """Used as pre-exec hook for the trainer program as to ignore ctrl-c. We'll
+    deal with ctrl-c in the python program, and then be very friendly about
+    stopping the trainer.
+    """
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 def parse_user_args():
@@ -65,6 +69,10 @@ class Modifier:
     name: str
     frequency: float
 
+    def __post_init__(self):
+        if self.name not in MODIFIERS:
+            raise ValueError(f"no modifier named '{self.name}' is defined")
+
 
 @dataclass(frozen=True)
 class Curriculum:
@@ -74,7 +82,15 @@ class Curriculum:
     modifiers: List[Modifier]
     stages_order: List[str]
 
+    def __post_init__(self):
+        if len(self.stages) != len(frozenset(self.stages)):
+            raise ValueError('stages can only occur once')
+
+        if not (frozenset(self.stages) <= frozenset(self.stages.keys())):
+            raise ValueError('each stage has to be defined')
+
     def next_stage(self, stage:Stage) -> Optional[Stage]:
+        """Helper to get the next stage given the current stage."""
         index = self.stages_order.index(stage.name)
         if index + 1 < len(self.stages_order):
             return self.stages[self.stages_order[index + 1]]
@@ -85,11 +101,12 @@ class Curriculum:
 @dataclass(frozen=True)
 class TrainerState:
     stage: str
-    random_state: Any
+    random_state: Any # whatever the type is returned by random.getstate(), which I think is implementation specific.
     datasets: Dict[str,DatasetState]
 
 
 class DatasetReader:
+    """Repeats, shuffles and reads a dataset ad infinitum."""
     dataset: Dataset
     seed: int
     line: int
@@ -131,7 +148,7 @@ class DatasetReader:
         subprocess.check_call([PATH_TO_SHUFFLE, str(self.seed), f'/dev/fd/{fh.fileno()}', *self.dataset.files], pass_fds=(fh.fileno(),))
 
         # Replace open file handle with this new file
-        self._fh = cast(TextIO, fh) # TODO: Not sure why TemporaryFile is an IO[str]
+        self._fh = cast(TextIO, fh) # TODO: Not sure why TemporaryFile is an IO[str] according to typing, but seems to implement TextIO.
         self._fh.seek(0)
         self.line = 0
 
@@ -169,6 +186,11 @@ class DatasetReader:
 
 
 class StateLoader:
+    """Tool to read and write TrainerState objects to yaml. Uses unsafe yaml
+    because `random.getstate()` basically returns a blob, and it is very
+    particular about the data types of that structure. So we use the yaml loader
+    that encodes the python data type as well (i.e. tuple vs list).
+    """
     def load(self, fh:TextIO) -> TrainerState:
         ymldata = yaml.load(fh, Loader=yaml.Loader)
         if not isinstance(ymldata, dict):
@@ -207,7 +229,7 @@ class CurriculumV1Loader:
 
     def _load_datasets(self, ymldata:dict) -> Dict[str,Dataset]:
         """Reads
-        ```yml
+        ```yaml
         datasets:
           - path/to/clean
           - path/to/dirty
@@ -219,9 +241,24 @@ class CurriculumV1Loader:
         }
 
     def _load_stage_order(self, ymldata:dict) -> List[str]:
+        """Reads
+        ```yaml
+        stages:
+          - stage1
+          - stage2
+        ```
+        """
         return list(ymldata['stages'])
 
     def _load_stages(self, ymldata:dict, stages_order:List[str], datasets:Dict[str,Dataset]) -> Dict[str,Stage]:
+        """Reads:
+        ```yaml
+        stagename:
+          - dataset1 frac
+          - dataset2 frac
+          - until dataset3 epochs
+        ```
+        """
         return {
             stage_name: self._load_stage(ymldata, stage_name, datasets, int(ymldata['seed']))
             for stage_name in stages_order
@@ -253,12 +290,15 @@ class CurriculumV1Loader:
         """
         return [
             Modifier(name, float(ymldata[name]))
-            for name in ['uppercase', 'titlecase']    
+            for name in MODIFIERS.keys()
             if name in ymldata
         ]
 
 
 class CurriculumV2Loader(CurriculumV1Loader):
+    """Slightly different curriculum format that can have multiple files per
+    dataset, and puts the modifiers in their own section."""
+
     def _load_datasets(self, ymldata:dict) -> Dict[str,Dataset]:
         """Reads
         ```yml
@@ -288,11 +328,14 @@ class CurriculumV2Loader(CurriculumV1Loader):
 
     def _load_modifier(self, line:str) -> Modifier:
         name, frequency = line.split()
-        assert name in MODIFIERS, f"unknown modifier named '{name}'"
         return Modifier(name, float(frequency))
 
 
 class CurriculumLoader:
+    """Reads curriculum yaml files. Wrapper that decides which reader to use
+    based on a version number that may be in there.
+    """
+
     IMPLEMENTATIONS={
         '1': CurriculumV1Loader,
         '2': CurriculumV2Loader,
@@ -309,7 +352,8 @@ class CurriculumLoader:
 
 
 class EpochTracker:
-    """Utility to track how many epochs the reader has progressed."""
+    """Utility to track how many epochs the reader has progressed since the
+    tracker started tracking."""
     def __init__(self, reader:DatasetReader):
         self.reader = reader
         self.epoch_offset = reader.epoch
@@ -327,6 +371,7 @@ class EpochTracker:
 
 
 class Trainer:
+    """Writes lines to a trainer program according to the curriculum."""
     curriculum: Curriculum
     readers: Dict[str, DatasetReader]
     stage: Optional[Stage]
@@ -424,6 +469,7 @@ class Trainer:
 
 
 class StateTracker:
+    """Wraps around the trainer.run() call to restore and dump state its."""
     path: str
     loader: StateLoader
 
@@ -447,7 +493,7 @@ class StateTracker:
             for batch in trainer.run(*args, **kwargs):
                 yield batch
         finally:
-            # Dump on clean exit as well as exception.
+            # Dump on clean exit as well as on exception.
             self._dump(trainer)
 
 

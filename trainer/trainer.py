@@ -567,17 +567,17 @@ if __name__ == '__main__':
     if args.do_not_resume:
         state_harness._restore = lambda trainer: None
 
-    model = subprocess.Popen(
+    model_trainer = subprocess.Popen(
         config['trainer'],
         stdin=subprocess.PIPE,
         encoding="utf-8",
         preexec_fn=ignore_sigint) # ignore_sigint makes marian ignore Ctrl-C. We'll stop it from here.
     
-    assert model.stdin is not None
+    assert model_trainer.stdin is not None
 
     try:
         for batch in state_harness.run(trainer):
-            model.stdin.writelines(batch)
+            model_trainer.stdin.writelines(batch)
     finally:
-        model.stdin.close()
-        model.wait()
+        model_trainer.stdin.close()
+        model_trainer.wait()

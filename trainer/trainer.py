@@ -24,8 +24,8 @@ def ignore_sigint():
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 # Path to something that can shuffle data. Called with seed, output-path, input-files
-# Ideally this also deduplicates the src side of the sentence pairs it shuffles ;)
-PATH_TO_SHUFFLE = os.path.dirname(os.path.realpath(__file__)) + "/random.sh"
+# TODO: Ideally this also deduplicates the src side of the sentence pairs it shuffles ;)
+PATH_TO_SHUFFLE = os.path.dirname(os.path.realpath(__file__)) + "/shuffle.py"
 
 # Available batch modifiers
 MODIFIERS = {

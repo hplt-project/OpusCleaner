@@ -17,6 +17,9 @@ BUFSIZE=2**16
 T = TypeVar('T')
 
 def chunked(iterable: Iterable[T], chunk_size:int) -> Iterable[Iterable[T]]:
+	"""Splits an iterable into shorter iterables of a fixed length. Note that
+	these are still iterables so please do just read them sequentially, and only
+	request the next chunk when you've exhausted the current one."""
 	try:
 		it = iter(iterable)
 		while True:
@@ -27,6 +30,9 @@ def chunked(iterable: Iterable[T], chunk_size:int) -> Iterable[Iterable[T]]:
 
 
 def split(fh: Iterable[bytes], lines:int, dir=None) -> Iterable[str]:
+	"""Split an iterable into a number of (temporary) files. Returns the
+	filenames. Note that you're responsible for deleting the tempfiles when
+	you're done with them."""
 	for chunk in chunked(fh, lines):
 		fd, name = mkstemp(dir=dir)
 		try:
@@ -40,11 +46,17 @@ def split(fh: Iterable[bytes], lines:int, dir=None) -> Iterable[str]:
 
 @dataclass(frozen=True)
 class ShuffleTask:
+	"""Job that describes to shuffle a file to the shuffle_chunk_worker thread.
+	Passing along the seed created by the main thread because those
+	random.random() calls are predictable. The order in which Shuffling tasks
+	are picked up and finished may not be."""
 	seed: float
 	filename: str
 
 
-def shuffle_chunk(queue:SimpleQueue[Optional[ShuffleTask]]):
+def shuffle_chunk_worker(queue:"SimpleQueue[Optional[ShuffleTask]]"):
+	"""Worker thread that takes a queue of filenames and seeds, and shuffles them
+	in memory. Put a None in the queue to make it stop."""
 	while True:
 		task = queue.get()
 
@@ -61,15 +73,19 @@ def shuffle_chunk(queue:SimpleQueue[Optional[ShuffleTask]]):
 
 
 def shuffle(fin: Iterable[bytes], lines:int, *, seed: Optional[int] = None, threads: Optional[int] = os.cpu_count()) -> Iterable[bytes]:
+	"""Shuffle a list by reading it into a bunch of files (of `lines` length)
+	and shuffling all of these with `threads` in-memory shufflers."""
 	random = Random(seed)
 
-	queue: SimpleQueue[Optional[ShuffleTask]] = SimpleQueue()
+	queue: "SimpleQueue[Optional[ShuffleTask]]" = SimpleQueue()
 
 	chunks: List[str] = []
 
 	try:
+		# Prepare shuffle workers to start shuffling chunks as soon as we've
+		# finished writing them.
 		shufflers = [
-			Thread(target=shuffle_chunk, args=[queue])
+			Thread(target=shuffle_chunk_worker, args=[queue])
 			for _ in range(threads if threads is not None else 1)
 		]
 
@@ -77,8 +93,12 @@ def shuffle(fin: Iterable[bytes], lines:int, *, seed: Optional[int] = None, thre
 			for shuffler in shufflers:
 				shuffler.start()
 
+			# Split the input file into separate temporary chunks
 			for filename in split(fin, lines):
+				# Remember the chunk's filename for later
 				chunks.append(filename)
+				# And immediately start shuffling that chunk in another thread
+				# TODO: Maybe multiprocess is more effective here because GIL?
 				queue.put(ShuffleTask(random.random(), filename))
 		finally:
 			# Tell shufflers that they can stop waiting
@@ -89,20 +109,25 @@ def shuffle(fin: Iterable[bytes], lines:int, *, seed: Optional[int] = None, thre
 			for shuffler in shufflers:
 				shuffler.join()
 
+		# Open all chunks. We'll be reading the next line from a random one of them.
 		chunk_fds = [open(filename, 'rb', buffering=BUFSIZE) for filename in chunks]
 
+		# While we still have chunks to read from...
 		while chunk_fds:
+			# Pick a random chunk, read the line
 			fd = random.choice(chunk_fds)
 			line = fd.readline()
+			# If the line was empty, the chunk has reached EOF and we close it.
 			if line == b'':
 				fd.close()
 				chunk_fds.remove(fd)
 				continue
 			yield line
 	finally:
+		# Whatever happened, if a filename of a temporary file made it into the
+		# `chunks` list, we are responsible for cleaning it up.
 		for filename in chunks:
-			if os.path.exists(filename):
-				os.unlink(filename)
+			os.unlink(filename)
 
 
 class Reader(Iterable[bytes]):

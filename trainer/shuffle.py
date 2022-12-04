@@ -5,11 +5,13 @@ import os
 from argparse import ArgumentParser, FileType
 from itertools import islice, chain
 from tempfile import mkstemp
-from typing import TypeVar, Iterable, List, Optional
+from typing import TypeVar, Iterable, List, Optional, Union, Set
 from queue import SimpleQueue
 from threading import Thread
 from dataclasses import dataclass
 from random import Random
+from xxhash import xxh32
+
 
 # Buffer size for reading files. Bufsize that Python assigns is generally too small?
 BUFSIZE=2**16
@@ -154,18 +156,55 @@ class Reader(Iterable[bytes]):
 			return self._read_plain(self.filename)
 
 
+LineType = TypeVar('LineType', bound=Union[str,bytes])
+
+def deduplicate(lines:Iterable[LineType], delimiter:LineType, columns:List[int]) -> Iterable[LineType]:
+	seen: Set[bytes] = set()
+	for line in lines:
+		fields = line.split(delimiter)
+		key = xxh32(delimiter.join(fields[col - 1] for col in columns)).digest()
+		if key in seen:
+			continue
+		seen.add(key)
+		yield line
+
+
+def intlist(desc:str) -> List[int]:
+	"""Turns '1-3,5' into [1,2,3,5]"""
+	ints = []
+	for rangedesc in desc.split(','):
+		if '-' in rangedesc:
+			first, last = rangedesc.split('-', 1)
+			ints.extend(range(int(first), int(last) + 1))
+		else:
+			ints.append(int(rangedesc))
+	return ints
+
+
 if __name__ == '__main__':
 	parser = ArgumentParser()
-	parser.add_argument('--chunksize', type=int, default=1_000_000)
-	parser.add_argument('--threads', '-j', type=int, default=os.cpu_count())
+	parser.add_argument('--chunksize', type=int, default=1_000_000, help='number of lines per chunk. Note that these chunks are read into memory when being shuffled')
+	parser.add_argument('--threads', '-j', type=int, default=os.cpu_count(), help=f'number of concurrent shuffle threads. Defaults to {os.cpu_count()}')
+
+	parser.add_argument('--unique', '-u', type=intlist, default=[], action='append', help='deduplicate output based on these columns. Eg. `1` means no src-trg pair will have the same src side, but trg side can occur more than once. Can be specified multiple times to deduplicate separately. E.g. -u 1 -u 2 will make both source and target sides always be unique')
+	parser.add_argument('--delimiter', '-d', type=str, default='\t', help='delimiter for deduplication')
+	  
 	parser.add_argument('seed', type=int)
 	parser.add_argument('output', type=FileType('wb', bufsize=BUFSIZE), default='-')
 	parser.add_argument('files', nargs='+')
 
 	args = parser.parse_args()
 
-	args.output.writelines(shuffle(
-		chain.from_iterable(Reader(filename) for filename in args.files),
-		lines=args.chunksize,
-		seed=args.seed,
-		threads=args.threads))
+	# Read the lines
+	it = chain.from_iterable(Reader(filename) for filename in args.files)
+
+	# Deduplicate lines before shuffling to make sure the deduplication is
+	# consistent regardless of the seed. Otherwise you might get different pairs
+	# when the shuffled order changed.
+	for column_list in args.unique:
+		it = deduplicate(it, delimiter=args.delimiter.encode(), columns=column_list)
+	
+	# Shuffle the lines
+	it = shuffle(it, lines=args.chunksize, seed=args.seed, threads=args.threads)
+
+	args.output.writelines(it)

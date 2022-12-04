@@ -112,9 +112,10 @@ class DatasetReader:
 
     _fh: Optional[TextIO] = None
 
-    def __init__(self, dataset:Dataset, seed:int):
+    def __init__(self, dataset:Dataset, seed:int, flip:bool = False):
         self.dataset = dataset
         self.seed = seed
+        self.flip = flip
         self.epoch = 0
         self.line = 0
 
@@ -142,8 +143,19 @@ class DatasetReader:
         # Open temporary file which will contain shuffled version of `cat self.files`
         fh = TemporaryFile(mode='w+', encoding='utf-8')
 
-        # Shuffle data to the temporary file
-        subprocess.check_call([PATH_TO_SHUFFLE, str(self.seed), f'/dev/fd/{fh.fileno()}', *self.dataset.files], pass_fds=(fh.fileno(),))
+        # Shuffle data to the temporary file. Deduplicate on the src side
+        # (different src can have same trg, but same src can never have
+        # different trg).
+        # TODO: but if we use the reversed system to do backtranslation, isn't
+        # this a bad idea? That system might have learned a different
+        # combination for the deduplicated pairs. Deduplicating on src and
+        # target separately will work around that, but that sounds too
+        # restrictive. To do that use `-u 1 -u 2` with shuffle.py.
+        subprocess.check_call([PATH_TO_SHUFFLE,
+            '--unique', str(2 if self.flip else 1),
+            str(self.seed),
+            f'/dev/fd/{fh.fileno()}',
+            *self.dataset.files], pass_fds=(fh.fileno(),))
 
         # Replace open file handle with this new file
         self._fh = cast(TextIO, fh) # TODO: Not sure why TemporaryFile is an IO[str] according to typing, but seems to implement TextIO.
@@ -168,6 +180,11 @@ class DatasetReader:
             if line == '':
                 raise StopIteration
             self.line += 1
+
+            # Flip source and target position
+            if self.flip:
+                line = '\t'.join(reversed(line.rstrip('\n').split('\t', maxsplit=1))) + '\n'
+
             return line
         except StopIteration:
             if just_opened:
@@ -192,9 +209,9 @@ class ShuffledFile:
 class AsyncDatasetReader(DatasetReader):
     _pending: Optional[ShuffledFile]
 
-    def __init__(self, dataset:Dataset, seed:int):
+    def __init__(self, *args, **kwargs):
         self._pending = None
-        super().__init__(dataset, seed)
+        super().__init__(*args, **kwargs)
 
     def _open_async(self, seed:int):
         # Open temporary file which will contain shuffled version of `cat self.files`
@@ -443,8 +460,9 @@ class Trainer:
     # Reader class to use (I.e. DatasetReader or AsyncDatasetReader)
     _reader_impl: Type[DatasetReader]
 
-    def __init__(self, curriculum:Curriculum, *, reader: Type[DatasetReader] = DatasetReader):
+    def __init__(self, curriculum:Curriculum, *, reader:Type[DatasetReader] = DatasetReader, flip:bool = False):
         self.curriculum = curriculum
+        self.flip = flip
         self._reader_impl = reader
         random.seed(self.curriculum.seed)
         first_stage_name = self.curriculum.stages_order[0]
@@ -466,7 +484,7 @@ class Trainer:
         random.setstate(state.random_state)
         self.stage = self.curriculum.stages[state.stage]
         self.readers = {
-            dataset.name: self._reader_impl(dataset, self.curriculum.seed).restore(state.datasets[dataset.name])
+            dataset.name: self._reader_impl(dataset, self.curriculum.seed, flip=self.flip).restore(state.datasets[dataset.name])
             for dataset in self.curriculum.datasets.values()
         }
         self.epoch_tracker = EpochTracker(self.readers[self.stage.until_dataset]).restore(state.epoch_tracker_state)
@@ -551,7 +569,8 @@ if __name__ == '__main__':
     parser.add_argument("--sync", action="store_true", help="Do not shuffle async")
     # parser.add_argument("--temporary-dir", '-t', default="./TMP", type=str, help='Temporary dir, used for shuffling and tracking state')
     parser.add_argument("--do-not-resume", '-d', action="store_true", help='Do not resume from the previous training state')
-
+    parser.add_argument("--flip", action="store_true", help="Flip source and target sides of sentence pairs.")
+    
     args = parser.parse_args()
 
     with open(args.config, 'r', encoding='utf-8') as fh:
@@ -559,7 +578,7 @@ if __name__ == '__main__':
 
     curriculum = CurriculumLoader().load(config)
 
-    trainer = Trainer(curriculum, reader=DatasetReader if args.sync else AsyncDatasetReader)
+    trainer = Trainer(curriculum, reader=DatasetReader if args.sync else AsyncDatasetReader, flip=args.flip)
 
     state_harness = StateTracker(args.state or f'{args.config}.state')
 

@@ -502,7 +502,7 @@ class Trainer:
                 # TODO: maybe make this self.stage.modifiers? Would that make sense?
                 for modifier in self.curriculum.modifiers:
                     modifier_fun = MODIFIERS[modifier.name]
-                    batch = [modifier_fun(line) if modifier.frequency > random.random() else line for line in batch]
+                    batch = [modifier_fun(line.rstrip('\n')) + '\n' if modifier.frequency > random.random() else line for line in batch]
 
                 random.shuffle(batch)
 

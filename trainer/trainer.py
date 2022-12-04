@@ -288,8 +288,8 @@ class StateLoader:
 
 
 class CurriculumV1Loader:
-    def load(self, ymldata:dict) -> Curriculum:
-        datasets = self._load_datasets(ymldata)
+    def load(self, ymldata:dict, *, basepath:str='./') -> Curriculum:
+        datasets = self._load_datasets(ymldata, basepath)
         stages_order = self._load_stage_order(ymldata)
         return Curriculum(
             seed=int(ymldata['seed']),
@@ -299,7 +299,7 @@ class CurriculumV1Loader:
             modifiers=self._load_modifiers(ymldata)
         )
 
-    def _load_datasets(self, ymldata:dict) -> Dict[str,Dataset]:
+    def _load_datasets(self, ymldata:dict, basepath:str) -> Dict[str,Dataset]:
         """Reads
         ```yaml
         datasets:
@@ -308,7 +308,7 @@ class CurriculumV1Loader:
         ```
         """
         return {
-            os.path.basename(filepath): Dataset(os.path.basename(filepath), [filepath])
+            os.path.basename(filepath): Dataset(os.path.basename(filepath), [os.path.join(basepath, filepath)])
             for filepath in ymldata['datasets']
         }
 
@@ -371,7 +371,7 @@ class CurriculumV2Loader(CurriculumV1Loader):
     """Slightly different curriculum format that can have multiple files per
     dataset, and puts the modifiers in their own section."""
 
-    def _load_datasets(self, ymldata:dict) -> Dict[str,Dataset]:
+    def _load_datasets(self, ymldata:dict, basepath:str) -> Dict[str,Dataset]:
         """Reads
         ```yml
         datasets:
@@ -381,7 +381,10 @@ class CurriculumV2Loader(CurriculumV1Loader):
         ```
         """
         return {
-            name: Dataset(name, files)
+            name: Dataset(name, [
+                os.path.join(basepath, filepath)
+                for filepath in files
+            ])
             for name, files in ymldata['datasets']
         }
 
@@ -413,14 +416,14 @@ class CurriculumLoader:
         '2': CurriculumV2Loader,
     }
 
-    def load(self, fh:Union[TextIO,str,dict]) -> Curriculum:
+    def load(self, fh:Union[TextIO,str,dict], *, **kwargs) -> Curriculum:
         if isinstance(fh, dict):
             ymldata = fh
         else:
             ymldata = yaml.safe_load(fh)
 
         impl = self.IMPLEMENTATIONS[str(ymldata.get('version', '1'))]()
-        return impl.load(ymldata)
+        return impl.load(ymldata, **kwargs)
 
 
 class EpochTracker:
@@ -576,7 +579,7 @@ if __name__ == '__main__':
     with open(args.config, 'r', encoding='utf-8') as fh:
         config = yaml.safe_load(fh)
 
-    curriculum = CurriculumLoader().load(config)
+    curriculum = CurriculumLoader().load(config, basepath=os.path.dirname(args.config))
 
     trainer = Trainer(curriculum, reader=DatasetReader if args.sync else AsyncDatasetReader, flip=args.flip)
 

@@ -31,7 +31,7 @@ def chunked(iterable: Iterable[T], chunk_size:int) -> Iterable[Iterable[T]]:
 		pass
 
 
-def split(fh: Iterable[bytes], lines:int, dir=None) -> Iterable[str]:
+def split_into_tempfiles(fh: Iterable[bytes], lines:int, dir=None) -> Iterable[str]:
 	"""Split an iterable into a number of (temporary) files. Returns the
 	filenames. Note that you're responsible for deleting the tempfiles when
 	you're done with them."""
@@ -96,7 +96,7 @@ def shuffle(fin: Iterable[bytes], lines:int, *, seed: Optional[int] = None, thre
 				shuffler.start()
 
 			# Split the input file into separate temporary chunks
-			for filename in split(fin, lines):
+			for filename in split_into_tempfiles(fin, lines):
 				# Remember the chunk's filename for later
 				chunks.append(filename)
 				# And immediately start shuffling that chunk in another thread

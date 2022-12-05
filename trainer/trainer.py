@@ -373,13 +373,13 @@ class CurriculumV1Loader:
             dataset_name, weight = line.split()
             datasets.append((available_datasets[dataset_name], float(weight)))
 
-        _, dataset_name, max_epochs = ymldata[stage_name][-1].split()
-        assert dataset_name in available_datasets, f"until clause of stage '{stage_name}' refers to unknown dataset '{dataset_name}'"
-        assert dataset_name in {dataset.name for dataset, weight in datasets if weight > 0.0}, f"until clause of stage '{stage_name}' watches dataset '{dataset_name}' but that dataset is not read during this stage"
+        _, until_dataset_name, max_epochs = ymldata[stage_name][-1].split()
+        assert until_dataset_name in available_datasets, f"until clause of stage '{stage_name}' refers to unknown dataset '{until_dataset_name}'"
+        assert until_dataset_name in {dataset.name for dataset, weight in datasets if weight > 0.0}, f"until clause of stage '{stage_name}' watches dataset '{until_dataset_name}' but that dataset is not read during this stage"
         return Stage(
             name=stage_name,
             datasets=datasets,
-            until_dataset=dataset_name,
+            until_dataset=until_dataset_name,
             until_epoch=int(max_epochs) if max_epochs != 'inf' else None
         )
 

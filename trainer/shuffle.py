@@ -139,6 +139,10 @@ class Reader(Iterable[bytes]):
 		self.filename = filename
 
 	def _read_gzip(self, filename:str) -> Iterable[bytes]:
+		"""Open gzipped files through gzip subprocess. It is faster than Python's
+		gzip submodule, and you get a bit of multiprocessing for free as the
+		external gzip process can decompress up to BUFSIZE while python is doing
+		other things."""
 		child = subprocess.Popen(['gzip', '-cd', filename], stdout=subprocess.PIPE, bufsize=BUFSIZE)
 		assert child.stdout is not None
 		yield from child.stdout

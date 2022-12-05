@@ -116,6 +116,18 @@ class DatasetReader:
     _fh: Optional[TextIO] = None
 
     def __init__(self, dataset:Dataset, seed:int, flip:bool=False, tmpdir:Optional[str]=None):
+        """
+        Parameters
+        ----------
+        dataset : Dataset
+            Description of the dataset and its files
+        seed : int
+            Seed number for the random number generator that shuffles the data internally
+        flip : bool, optional
+            Reverse source and target sides of the sentence pairs while reading (default is False)
+        tmpdir : str, optional
+            Path to directory in which the temporary shuffled dataset is written (default is `tempfile.gettempdir()`)
+        """
         self.dataset = dataset
         self.seed = seed
         self.flip = flip
@@ -155,6 +167,10 @@ class DatasetReader:
         # combination for the deduplicated pairs. Deduplicating on src and
         # target separately will work around that, but that sounds too
         # restrictive. To do that use `-u 1 -u 2` with shuffle.py.
+        # TODO: With the reimplementation of shuffle.py, it is technically
+        # feasible to just write to a named pipe (or even stdout) instead of
+        # a temporary file, and let the trainer read directly from that. Not 
+        # sure if that has any performance or stability benefits/drawbacks.
         subprocess.check_call([PATH_TO_SHUFFLE,
             '--unique', str(2 if self.flip else 1),
             *(['--temporary-directory', self.tmpdir] if self.tmpdir else []),
@@ -164,7 +180,9 @@ class DatasetReader:
         ], pass_fds=(fh.fileno(),))
 
         # Replace open file handle with this new file
-        self._fh = cast(TextIO, fh) # TODO: Not sure why TemporaryFile is an IO[str] according to typing, but seems to implement TextIO.
+        self._fh = cast(TextIO, fh) # TODO: Not sure why TemporaryFile is an
+                                    # IO[str] according to typing, but seems
+                                    # to implement TextIO.
         self._fh.seek(0)
         self.line = 0
 

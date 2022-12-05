@@ -223,14 +223,6 @@ class AsyncDatasetReader(DatasetReader):
         # Open temporary file which will contain shuffled version of `cat self.files`
         fh = TemporaryFile(mode='w+', encoding='utf-8', dir=self.tmpdir)
 
-        options = []
-
-        # See DatasetReader for notes on this
-        options += []
-
-        if self.tmpdir:
-            options += 
-
         self._pending = ShuffledFile(
             seed=seed,
             file=cast(TextIO, fh),

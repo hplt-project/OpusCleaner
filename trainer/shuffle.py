@@ -74,7 +74,7 @@ def shuffle_chunk_worker(queue:"SimpleQueue[Optional[ShuffleTask]]"):
 			fh.writelines(lines)
 
 
-def shuffle(fin: Iterable[bytes], lines:int, *, seed: Optional[int] = None, threads: Optional[int] = os.cpu_count()) -> Iterable[bytes]:
+def shuffle(fin: Iterable[bytes], lines:int, *, seed:Optional[int]=None, threads:Optional[int]=os.cpu_count(), tmpdir:Optional[str]=None) -> Iterable[bytes]:
 	"""Shuffle a list by reading it into a bunch of files (of `lines` length)
 	and shuffling all of these with `threads` in-memory shufflers."""
 	random = Random(seed)
@@ -96,7 +96,7 @@ def shuffle(fin: Iterable[bytes], lines:int, *, seed: Optional[int] = None, thre
 				shuffler.start()
 
 			# Split the input file into separate temporary chunks
-			for filename in split_into_tempfiles(fin, lines):
+			for filename in split_into_tempfiles(fin, lines, dir=tmpdir):
 				# Remember the chunk's filename for later
 				chunks.append(filename)
 				# And immediately start shuffling that chunk in another thread
@@ -185,10 +185,11 @@ if __name__ == '__main__':
 	parser = ArgumentParser()
 	parser.add_argument('--chunksize', type=int, default=1_000_000, help='number of lines per chunk. Note that these chunks are read into memory when being shuffled')
 	parser.add_argument('--threads', '-j', type=int, default=os.cpu_count(), help=f'number of concurrent shuffle threads. Defaults to {os.cpu_count()}')
+	parser.add_argument('--temporary-directory', '-T', type=str, help='temporary directory for shuffling batches')
 
 	parser.add_argument('--unique', '-u', type=intlist, default=[], action='append', help='deduplicate output based on these columns. Eg. `1` means no src-trg pair will have the same src side, but trg side can occur more than once. Can be specified multiple times to deduplicate separately. E.g. -u 1 -u 2 will make both source and target sides always be unique')
 	parser.add_argument('--delimiter', '-d', type=str, default='\t', help='delimiter for deduplication')
-	  
+
 	parser.add_argument('seed', type=int)
 	parser.add_argument('output', type=FileType('wb', bufsize=BUFSIZE), default='-')
 	parser.add_argument('files', nargs='+')
@@ -205,6 +206,6 @@ if __name__ == '__main__':
 		it = deduplicate(it, delimiter=args.delimiter.encode(), columns=column_list)
 	
 	# Shuffle the lines
-	it = shuffle(it, lines=args.chunksize, seed=args.seed, threads=args.threads)
+	it = shuffle(it, lines=args.chunksize, seed=args.seed, threads=args.threads, tmpdir=args.temporary_directory)
 
 	args.output.writelines(it)

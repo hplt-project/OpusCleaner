@@ -573,6 +573,7 @@ if __name__ == '__main__':
     # parser.add_argument("--temporary-dir", '-t', default="./TMP", type=str, help='Temporary dir, used for shuffling and tracking state')
     parser.add_argument("--do-not-resume", '-d', action="store_true", help='Do not resume from the previous training state')
     parser.add_argument("--flip", action="store_true", help="Flip source and target sides of sentence pairs.")
+    parser.add_argument("trainer", type=str, nargs="*", help="Trainer program that gets fed the input. If empty it is read from config.")
     
     args = parser.parse_args()
 
@@ -590,7 +591,7 @@ if __name__ == '__main__':
         state_harness._restore = lambda trainer: None
 
     model_trainer = subprocess.Popen(
-        config['trainer'],
+        args.trainer or config['trainer'],
         stdin=subprocess.PIPE,
         encoding="utf-8",
         preexec_fn=ignore_sigint) # ignore_sigint makes marian ignore Ctrl-C. We'll stop it from here.

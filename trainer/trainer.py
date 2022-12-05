@@ -572,14 +572,31 @@ class Trainer:
             if self.stage:
                 self.epoch_tracker = EpochTracker(self.readers[self.stage.until_dataset])
 
+
 class StateTracker:
     """Wraps around the trainer.run() call to restore and dump state its."""
     path: str
     loader: StateLoader
+    dump: bool
+    restore: bool
 
-    def __init__(self, path:str, *, loader:StateLoader=StateLoader()):
+    def __init__(self, path:str, *, loader:StateLoader=StateLoader(), restore:bool=True, dump:bool=True):
+        """
+        Parameters
+        --–-------
+        path : str
+            Path to state file
+        loader : type, optional
+            Loader class for encoding/decoding the state file
+        restore : bool, optional
+            Whether to restore the state if the state file currently exists (default is True)
+        dump : bool, optional
+            Whether to dump the state to the file after training (default is True)
+        """
         self.path = path
         self.loader = loader
+        self.dump = dump
+        self.restore = restore
 
     def _restore(self, trainer:Trainer):
         with open(self.path, 'r', encoding='utf-8') as fh:
@@ -590,7 +607,7 @@ class StateTracker:
             return self.loader.dump(trainer.state(), fh)
 
     def run(self, trainer:Trainer, *args, **kwargs):
-        if os.path.exists(self.path):
+        if self.restore and os.path.exists(self.path):
             self._restore(trainer)
 
         try:
@@ -598,7 +615,8 @@ class StateTracker:
                 yield batch
         finally:
             # Dump on clean exit as well as on exception.
-            self._dump(trainer)
+            if self.dump:
+                self._dump(trainer)
 
 
 if __name__ == '__main__':
@@ -620,11 +638,7 @@ if __name__ == '__main__':
 
     trainer = Trainer(curriculum, reader=DatasetReader if args.sync else AsyncDatasetReader, flip=args.flip, tmpdir=args.temporary_directory)
 
-    state_harness = StateTracker(args.state or f'{args.config}.state')
-
-    # Disable resume functionality if we don't want it.
-    if args.do_not_resume:
-        state_harness._restore = lambda trainer: None
+    state_tracker = StateTracker(args.state or f'{args.config}.state', restore=not args.do_not_resume)
 
     model_trainer = subprocess.Popen(
         args.trainer or config['trainer'],
@@ -635,7 +649,7 @@ if __name__ == '__main__':
     assert model_trainer.stdin is not None
 
     try:
-        for batch in state_harness.run(trainer):
+        for batch in state_tracker.run(trainer):
             model_trainer.stdin.writelines(batch)
     finally:
         model_trainer.stdin.close()

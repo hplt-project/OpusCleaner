@@ -3,8 +3,22 @@
 
 - [FastAPI](https://fastapi.tiangolo.com) as the base for the backend part.
 - [Pydantic](https://pydantic-docs.helpmanual.io/) for conversion of untyped JSON to typed objects. And because FastAPI automatically supports it and gives you useful error messages if you mess up things.
-- [Vue](https://vuejs.org/guide/introduction.html) for frontend, using native module support so no npm build step 🎉
-- uvicorn to run the damn thing.
+- [Vue](https://vuejs.org/guide/introduction.html) for frontend
+
+# Screenshots
+
+List and categorize the datasets you are going to use for training.
+[<img src=".github/screenshots/list-datasets.png" width="100%">](.github/screenshots/list-datasets.png)
+
+Download more datasets right from the interface.
+[<img src=".github/screenshots/add-datasets.png" width="100%">](.github/screenshots/add-datasets.png)
+
+Filter each individual dataset, showing you the results immediately.
+[<img src=".github/screenshots/filter-datasets.png" width="100%">](.github/screenshots/filter-datasets.png)
+
+Compare the dataset at different stages of filtering to see what the impact is of each filter.
+[<img src=".github/screenshots/diff-filter-output.png" width="100%">](.github/screenshots/diff-filter-output.png)
+
 
 # Paths
 - `data/train-parts` is scanned for datasets
@@ -16,10 +30,6 @@ python3 -m venv .env
 bash --init-file .env/bin/activate
 pip install -r requirements.txt
 
-mkdir -p data
-mtdata get -l ara-eng -tr OPUS-elrc_2922-v1-ara-eng --compress -o data
-mtdata get -l fra-eng -tr OPUS-elitr_eca-v1-eng-fra --compress -o data
-
 cd frontend
 npm clean-install
 npm run build
@@ -28,7 +38,7 @@ cd ..
 ./main.py serve --reload
 ```
 
-If you're doing frontend developemnt, try also running:
+If you're doing frontend development, try also running:
 ```sh
 cd frontend
 npm run dev

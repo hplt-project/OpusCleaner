@@ -13,7 +13,6 @@ from dataclasses import dataclass
 from typing import List, Tuple, Dict, Any, Optional, Union, Type, TextIO, cast
 from tempfile import TemporaryFile
 from itertools import islice
-from warnings import warning
 
 import yaml
 

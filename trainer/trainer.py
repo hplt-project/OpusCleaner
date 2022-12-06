@@ -415,7 +415,7 @@ class CurriculumV2Loader(CurriculumV1Loader):
                 os.path.join(basepath, filepath)
                 for filepath in files
             ])
-            for name, files in ymldata['datasets']
+            for name, files in ymldata['datasets'].items()
         }
 
     def _load_modifiers(self, ymldata:dict) -> List[Modifier]:
@@ -627,7 +627,7 @@ if __name__ == '__main__':
     parser.add_argument("--temporary-directory", '-T', default=None, type=str, help='Temporary dir, used for shuffling and tracking state')
     parser.add_argument("--do-not-resume", '-d', action="store_true", help='Do not resume from the previous training state')
     parser.add_argument("--flip", action="store_true", help="Flip source and target sides of sentence pairs.")
-    parser.add_argument("trainer", type=str, nargs="*", help="Trainer program that gets fed the input. If empty it is read from config.")
+    parser.add_argument("trainer", type=str, nargs=argparse.REMAINDER, help="Trainer program that gets fed the input. If empty it is read from config.")
     
     args = parser.parse_args()
 

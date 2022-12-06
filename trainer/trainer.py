@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import List, Tuple, Dict, Any, Optional, Union, Type, TextIO, cast
 from tempfile import TemporaryFile
 from itertools import islice
+from warnings import warning
 
 import yaml
 
@@ -638,7 +639,7 @@ if __name__ == '__main__':
 
     # Quick cheap check that all files exist before we begin training
     for dataset in curriculum.datasets.values():
-        missing_files = {file for file in dataset.files if not os.path.exist(file)}
+        missing_files = {file for file in dataset.files if not os.path.exists(file)}
         if missing_files:
             raise ValueError(f"Dataset '{dataset.name}' is missing files: {missing_files}")
 

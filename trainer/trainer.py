@@ -636,6 +636,12 @@ if __name__ == '__main__':
 
     curriculum = CurriculumLoader().load(config, basepath=os.path.dirname(args.config))
 
+    # Quick cheap check that all files exist before we begin training
+    for dataset in curriculum.datasets.values():
+        missing_files = {file for file in dataset.files if not os.path.exist(file)}
+        if missing_files:
+            raise ValueError(f"Dataset '{dataset.name}' is missing files: {missing_files}")
+
     trainer = Trainer(curriculum, reader=DatasetReader if args.sync else AsyncDatasetReader, flip=args.flip, tmpdir=args.temporary_directory)
 
     state_tracker = StateTracker(args.state or f'{args.config}.state', restore=not args.do_not_resume)

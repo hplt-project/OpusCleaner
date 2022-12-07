@@ -155,7 +155,7 @@ class DatasetReader:
             self._fh.close()
 
     def _open(self):
-        print("[Trainer] Reading {self.dataset.name} for epoch {self.epoch}")
+        print(f"[Trainer] Reading {self.dataset.name} for epoch {self.epoch}")
         # Open temporary file which will contain shuffled version of `cat self.files`
         fh = TemporaryFile(mode='w+', encoding='utf-8', dir=self.tmpdir)
 
@@ -263,7 +263,7 @@ class AsyncDatasetReader(DatasetReader):
         self._pending = None
 
     def _open(self):
-        print("[Trainer] Reading {self.dataset.name} for epoch {self.epoch}")
+        print(f"[Trainer] Reading {self.dataset.name} for epoch {self.epoch}")
 
         # First time self._pending is None, but all subsequent calls to _open
         # should have self._pending be set.
@@ -563,7 +563,7 @@ class Trainer:
 
     def run(self, *, batch_size=100):
         while self.stage is not None:
-            print("[Trainer] Starting stage {self.stage.name}")
+            print(f"[Trainer] Starting stage {self.stage.name}")
             while self.stage.until_epoch is not None and self.epoch_tracker.epoch < self.stage.until_epoch:
                 batch: List[str] = []
 

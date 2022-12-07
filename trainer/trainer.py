@@ -648,6 +648,7 @@ if __name__ == '__main__':
 
     model_trainer = subprocess.Popen(
         args.trainer or config['trainer'],
+        bufsize=0, # no limbo for lines written but not yet read by marian
         stdin=subprocess.PIPE,
         encoding="utf-8",
         preexec_fn=ignore_sigint) # ignore_sigint makes marian ignore Ctrl-C. We'll stop it from here.
@@ -657,6 +658,13 @@ if __name__ == '__main__':
     try:
         for batch in state_tracker.run(trainer):
             model_trainer.stdin.writelines(batch)
+    except KeyboardInterrupt:
+        print("Ctrl-c pressed, stopping training. Press ctrl-c again to force-quit trainer", file=sys.stderr)
     finally:
-        model_trainer.stdin.close()
-        model_trainer.wait()
+        try:
+            model_trainer.stdin.close()
+            model_trainer.wait()
+        except KeyboardInterrupt:
+            print("Ctrl-c pressed again, terminating trainer", file=sys.stderr)
+            model_trainer.terminate()
+            model_trainer.wait()

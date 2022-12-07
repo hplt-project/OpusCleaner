@@ -677,7 +677,7 @@ if __name__ == '__main__':
         for batch in state_tracker.run(trainer):
             model_trainer.stdin.writelines(batch)
     except KeyboardInterrupt:
-        print("[Trainer] Ctrl-c pressed, stopping training. Press ctrl-c again to force-quit trainer")
+        print("[Trainer] Ctrl-c pressed, stopping training. Press ctrl-c again to terminate trainer")
     finally:
         try:
             model_trainer.stdin.close()

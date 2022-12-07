@@ -139,8 +139,7 @@ class DatasetReader:
         return DatasetState(self.seed, self.line, self.epoch)
 
     def restore(self, state:DatasetState) -> 'DatasetReader':
-        if self._fh:
-            self._fh.close()
+        self.close()
 
         self.seed = state.seed
         self.epoch = state.epoch
@@ -156,6 +155,7 @@ class DatasetReader:
             self._fh.close()
 
     def _open(self):
+        print("[Trainer] Reading {self.dataset.name} for epoch {self.epoch}")
         # Open temporary file which will contain shuffled version of `cat self.files`
         fh = TemporaryFile(mode='w+', encoding='utf-8', dir=self.tmpdir)
 
@@ -254,21 +254,37 @@ class AsyncDatasetReader(DatasetReader):
         )
 
     def _kill_async(self):
-        if self._pending is not None:
-            self._pending.proc.kill()
-            self._pending.proc.wait()
-            self._pending.file.close()
+        if self._pending is None:
+            return
+
+        self._pending.proc.kill()
+        self._pending.proc.wait()
+        self._pending.file.close()
+        self._pending = None
 
     def _open(self):
-        # First shuffle
+        print("[Trainer] Reading {self.dataset.name} for epoch {self.epoch}")
+
+        # First time self._pending is None, but all subsequent calls to _open
+        # should have self._pending be set.
         if self._pending is None:
             self._open_async(self.seed)
 
+        # Assume shuffling has started
         assert self._pending is not None
         assert self._pending.seed == self.seed
+        
+        # Wait for that to finish (hopefully it already has since it was likely
+        # started last iteration)
         self._pending.proc.wait()
         assert self._pending.proc.returncode == 0
+
+        # Swap out the current _fh for the newly prepared one
+        assert self._fh is None or self._fh.closed
         self._fh = self._pending.file
+        self._pending = None
+        
+        # Make sure we start reading from the start again
         self._fh.seek(0)
         self.line = 0
 
@@ -276,8 +292,9 @@ class AsyncDatasetReader(DatasetReader):
         self._open_async(self.seed + 1)
 
     def restore(self, state:DatasetState) -> 'AsyncDatasetReader':
-        # Kill any advance work we did because it is likely wrong.
-        self._kill_async()
+        # Note: super().restore() will call close(), which will stop any
+        # running shuffling that is probably no longer relevant.
+        # TODO: Once PEP 673 is available, we can remove this overload entirely.
         return cast('AsyncDatasetReader', super().restore(state))
 
     def close(self):
@@ -546,6 +563,7 @@ class Trainer:
 
     def run(self, *, batch_size=100):
         while self.stage is not None:
+            print("[Trainer] Starting stage {self.stage.name}")
             while self.stage.until_epoch is not None and self.epoch_tracker.epoch < self.stage.until_epoch:
                 batch: List[str] = []
 
@@ -659,12 +677,12 @@ if __name__ == '__main__':
         for batch in state_tracker.run(trainer):
             model_trainer.stdin.writelines(batch)
     except KeyboardInterrupt:
-        print("Ctrl-c pressed, stopping training. Press ctrl-c again to force-quit trainer", file=sys.stderr)
+        print("[Trainer] Ctrl-c pressed, stopping training. Press ctrl-c again to force-quit trainer")
     finally:
         try:
             model_trainer.stdin.close()
             model_trainer.wait()
         except KeyboardInterrupt:
-            print("Ctrl-c pressed again, terminating trainer", file=sys.stderr)
+            print("[Trainer] Ctrl-c pressed again, terminating trainer")
             model_trainer.terminate()
             model_trainer.wait()

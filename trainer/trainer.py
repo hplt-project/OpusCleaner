@@ -643,7 +643,6 @@ if __name__ == '__main__':
 
     model_trainer = subprocess.Popen(
         args.trainer or config['trainer'],
-        bufsize=0, # no limbo for lines written but not yet read by marian
         stdin=subprocess.PIPE,
         encoding="utf-8",
         preexec_fn=ignore_sigint) # ignore_sigint makes marian ignore Ctrl-C. We'll stop it from here.

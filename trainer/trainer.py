@@ -659,6 +659,11 @@ if __name__ == '__main__':
             model_trainer.stdin.close()
             model_trainer.wait()
         except KeyboardInterrupt:
-            print("[Trainer] Ctrl-c pressed again, terminating trainer")
-            model_trainer.terminate()
-            model_trainer.wait()
+            try:
+                print("[Trainer] Ctrl-c pressed again, terminating trainer")
+                model_trainer.terminate()
+                model_trainer.wait()
+            except KeyboardInterrupt:
+                print("[Trainer] Ctrl-c pressed third time, killing trainer")
+                model_trainer.kill()
+                model_trainer.wait()

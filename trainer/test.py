@@ -28,6 +28,9 @@ class TestDatasetReader(unittest.TestCase):
 	reader: Type[DatasetReader] = DatasetReader
 
 	def test_repeating_read(self):
+		"""Test whether when we read 3000 lines from a 1000 lines dataset we do
+		inded read each line 3 times.
+		"""
 		# Read 3000 lines
 		with closing(self.reader(Dataset('test', [TEST_FILE]), seed=1234)) as reader:
 			counter = Counter(line for _, line in zip(range(3000), reader))
@@ -39,6 +42,9 @@ class TestDatasetReader(unittest.TestCase):
 		# ideally in a different order than previous read.
 
 	def test_shuffled_read(self):
+		"""That that when we read 2000 lines from a 1000 line testfile, we read
+		each line twice, but we do read them in a different order.
+		"""
 		# Read 3000 lines
 		with closing(self.reader(Dataset('test', [TEST_FILE]), seed=1234)) as reader:
 			lines1 = [line for _, line in zip(range(1000), reader)]
@@ -49,6 +55,9 @@ class TestDatasetReader(unittest.TestCase):
 		self.assertNotEqual(lines1, lines2)
 
 	def test_offsets(self):
+		"""Test whether `epoch` and `line` properties of a DatasetReader are
+		counting properly.
+		"""
 		with closing(self.reader(Dataset('test', [TEST_FILE]), seed=1234)) as reader:
 			for _ in zip(range(500), reader):
 				pass
@@ -63,6 +72,10 @@ class TestDatasetReader(unittest.TestCase):
 			self.assertEqual(reader.line, 750)
 
 	def test_resume_offset(self):
+		"""Test whether resuming from a DatasetReader with the same testfile and the
+		same seed does indeed yield the entire dataset with no duplicates or
+		omissions.
+		"""
 		counter = Counter()
 
 		with closing(self.reader(Dataset('test', [TEST_FILE]), seed=1234)) as reader1:
@@ -79,6 +92,9 @@ class TestDatasetReader(unittest.TestCase):
 		self.assertEqual(set(counter[key] for key in counter.keys()), {1})
 
 	def test_resume_order(self):
+		"""Test whether when we resume reading a DatasetReader, the order is the
+		same as if we'd read everything from the initial (non-resumed) reader.
+		"""
 		counter = Counter()
 
 		with closing(self.reader(Dataset('test', [TEST_FILE]), seed=1234)) as reader1, \
@@ -101,11 +117,16 @@ class TestDatasetReader(unittest.TestCase):
 
 
 class TestAsyncDatasetReader(TestDatasetReader):
+	"""Run all the same tests, but on the async reader that shuffles in advance."""
 	reader = AsyncDatasetReader
 
 
 class TestTrainer(unittest.TestCase):
 	def test_resume(self):
+		"""End-to-end test for resuming training where we test that a resumed
+		trainer continues with the same sentences in the same order as the original
+		trainer would have, if it were to continue after dumping its state.
+		"""
 		config = {
 			'datasets': {
 				'clean': 'test/data/clean',

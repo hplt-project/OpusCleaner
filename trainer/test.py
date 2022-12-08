@@ -107,11 +107,11 @@ class TestAsyncDatasetReader(TestDatasetReader):
 class TestTrainer(unittest.TestCase):
 	def test_resume(self):
 		config = {
-			'datasets': [
-				'test/data/clean',
-				'test/data/medium',
-				'test/data/dirty'
-			],
+			'datasets': {
+				'clean': 'test/data/clean',
+				'medium': 'test/data/medium',
+				'dirty': 'test/data/dirty'
+			},
 			'stages': [
 				'start',
 				'mid'

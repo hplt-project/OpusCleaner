@@ -330,15 +330,14 @@ class CurriculumV1Loader:
 
     def _load_datasets(self, ymldata:dict, basepath:str) -> Dict[str,Dataset]:
         """Reads
-        ```yaml
+        ```yml
         datasets:
-          - path/to/clean
-          - path/to/dirty
+          clean: path/to/clean.gz
         ```
         """
         return {
-            os.path.basename(filepath): Dataset(os.path.basename(filepath), [os.path.join(basepath, filepath)])
-            for filepath in ymldata['datasets']
+            name: Dataset(name, [os.path.join(basepath, filepath)])
+            for name, filepath in ymldata['datasets'].items()
         }
 
     def _load_stage_order(self, ymldata:dict) -> List[str]:
@@ -385,41 +384,6 @@ class CurriculumV1Loader:
     def _load_modifiers(self, ymldata:dict) -> List[Modifier]:
         """Reads
         ```yml
-        uppercase: 0.05
-        titlecase: 0.05
-        ```
-        """
-        return [
-            Modifier(name, float(ymldata[name]))
-            for name in MODIFIERS.keys()
-            if name in ymldata
-        ]
-
-
-class CurriculumV2Loader(CurriculumV1Loader):
-    """Slightly different curriculum format that can have multiple files per
-    dataset, and puts the modifiers in their own section."""
-
-    def _load_datasets(self, ymldata:dict, basepath:str) -> Dict[str,Dataset]:
-        """Reads
-        ```yml
-        datasets:
-          clean:
-            - a.gz
-            - b.gz
-        ```
-        """
-        return {
-            name: Dataset(name, [
-                os.path.join(basepath, filepath)
-                for filepath in files
-            ])
-            for name, files in ymldata['datasets'].items()
-        }
-
-    def _load_modifiers(self, ymldata:dict) -> List[Modifier]:
-        """Reads
-        ```yml
         modifiers:
           - uppercase 0.05
           - titlecase 0.05
@@ -442,7 +406,6 @@ class CurriculumLoader:
 
     IMPLEMENTATIONS={
         '1': CurriculumV1Loader,
-        '2': CurriculumV2Loader,
     }
 
     def load(self, fh:Union[TextIO,str,dict], **kwargs) -> Curriculum:

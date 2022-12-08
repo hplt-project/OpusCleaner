@@ -1,8 +1,8 @@
 # Datasets are already TSV files
 datasets:
-  - test/data/clean
-  - test/data/medium
-  - test/data/dirty
+  clean: test/data/clean
+  medium: test/data/medium
+  dirty: test/data/dirty
 
 stages:
   - start
@@ -10,24 +10,26 @@ stages:
   - end
 
 start:
-  - clean 0.8
+  - clean  0.8
   - medium 0.2
-  - dirty 0
+  - dirty  0
   - until clean 2 # Until two epochs of clean
 
 mid:
-  - clean 0.6
+  - clean  0.6
   - medium 0.3
-  - dirty 0.1
+  - dirty  0.1
   - until medium 1
 
 end:
-  - clean 0.4
+  - clean  0.4
   - medium 0.3
-  - dirty 0.3
+  - dirty  0.3
   - until dirty 5 # use `inf` to mean until forever
 
-uppercase: 0.05
-titlecase: 0.05
+modifiers:
+  - uppercase 0.05
+  - titlecase 0.05
+
 seed: 1111
 trainer: /home/dheart/uni_stuff/postdoc/empty-train/trainer/test.py

@@ -110,12 +110,11 @@ class DatasetReader:
     line: int
     epoch: int
 
-    flip: bool
     tmpdir: Optional[str]
 
     _fh: Optional[TextIO] = None
 
-    def __init__(self, dataset:Dataset, seed:int, flip:bool=False, tmpdir:Optional[str]=None):
+    def __init__(self, dataset:Dataset, seed:int, tmpdir:Optional[str]=None):
         """
         Parameters
         ----------
@@ -123,14 +122,11 @@ class DatasetReader:
             Description of the dataset and its files
         seed : int
             Seed number for the random number generator that shuffles the data internally
-        flip : bool, optional
-            Reverse source and target sides of the sentence pairs while reading (default is False)
         tmpdir : str, optional
             Path to directory in which the temporary shuffled dataset is written (default is `tempfile.gettempdir()`)
         """
         self.dataset = dataset
         self.seed = seed
-        self.flip = flip
         self.tmpdir = tmpdir
         self.epoch = 0
         self.line = 0
@@ -159,20 +155,12 @@ class DatasetReader:
         # Open temporary file which will contain shuffled version of `cat self.files`
         fh = TemporaryFile(mode='w+', encoding='utf-8', dir=self.tmpdir)
 
-        # Shuffle data to the temporary file. Deduplicate on the src side
-        # (different src can have same trg, but same src can never have
-        # different trg).
-        # TODO: but if we use the reversed system to do backtranslation, isn't
-        # this a bad idea? That system might have learned a different
-        # combination for the deduplicated pairs. Deduplicating on src and
-        # target separately will work around that, but that sounds too
-        # restrictive. To do that use `-u 1 -u 2` with shuffle.py.
+        # Shuffle data to the temporary file.
         # TODO: With the reimplementation of shuffle.py, it is technically
         # feasible to just write to a named pipe (or even stdout) instead of
         # a temporary file, and let the trainer read directly from that. Not 
         # sure if that has any performance or stability benefits/drawbacks.
         subprocess.check_call([PATH_TO_SHUFFLE,
-            '--unique', str(2 if self.flip else 1),
             *(['--temporary-directory', self.tmpdir] if self.tmpdir else []),
             str(self.seed),
             f'/dev/fd/{fh.fileno()}',
@@ -204,11 +192,6 @@ class DatasetReader:
             if line == '':
                 raise StopIteration
             self.line += 1
-
-            # Flip source and target position
-            if self.flip:
-                line = '\t'.join(reversed(line.rstrip('\n').split('\t', maxsplit=1))) + '\n'
-
             return line
         except StopIteration:
             if just_opened:
@@ -245,7 +228,6 @@ class AsyncDatasetReader(DatasetReader):
             seed=seed,
             file=cast(TextIO, fh),
             proc=subprocess.Popen([PATH_TO_SHUFFLE,
-                '--unique', str(2 if self.flip else 1),
                 *(['--temporary-directory', self.tmpdir] if self.tmpdir else []),
                 str(seed),
                 f'/dev/fd/{fh.fileno()}',
@@ -507,18 +489,14 @@ class Trainer:
     stage: Optional[Stage]
     epoch_tracker: EpochTracker
 
-    # Whether to reverse src/trg pairs
-    flip:bool
-
     # Path to write temporary shuffled files to
     tmpdir:Optional[str]
 
     # Reader class to use (I.e. DatasetReader or AsyncDatasetReader)
     _reader_impl: Type[DatasetReader]
 
-    def __init__(self, curriculum:Curriculum, *, reader:Type[DatasetReader] = DatasetReader, flip:bool = False, tmpdir:Optional[str]=None):
+    def __init__(self, curriculum:Curriculum, *, reader:Type[DatasetReader] = DatasetReader, tmpdir:Optional[str]=None):
         self.curriculum = curriculum
-        self.flip = flip
         self.tmpdir = tmpdir
         self._reader_impl = reader
         random.seed(self.curriculum.seed)
@@ -540,7 +518,7 @@ class Trainer:
         random.setstate(state.random_state)
         self.stage = self.curriculum.stages[state.stage]
         self.readers = {
-            dataset.name: self._reader_impl(dataset, self.curriculum.seed, flip=self.flip, tmpdir=self.tmpdir).restore(state.datasets[dataset.name])
+            dataset.name: self._reader_impl(dataset, self.curriculum.seed, tmpdir=self.tmpdir).restore(state.datasets[dataset.name])
             for dataset in self.curriculum.datasets.values()
         }
         self.epoch_tracker = EpochTracker(self.readers[self.stage.until_dataset]).restore(state.epoch_tracker_state)
@@ -644,7 +622,6 @@ if __name__ == '__main__':
     parser.add_argument("--sync", action="store_true", help="Do not shuffle async")
     parser.add_argument("--temporary-directory", '-T', default=None, type=str, help='Temporary dir, used for shuffling and tracking state')
     parser.add_argument("--do-not-resume", '-d', action="store_true", help='Do not resume from the previous training state')
-    parser.add_argument("--flip", action="store_true", help="Flip source and target sides of sentence pairs.")
     parser.add_argument("trainer", type=str, nargs=argparse.REMAINDER, help="Trainer program that gets fed the input. If empty it is read from config.")
     
     args = parser.parse_args()
@@ -660,7 +637,7 @@ if __name__ == '__main__':
         if missing_files:
             raise ValueError(f"Dataset '{dataset.name}' is missing files: {missing_files}")
 
-    trainer = Trainer(curriculum, reader=DatasetReader if args.sync else AsyncDatasetReader, flip=args.flip, tmpdir=args.temporary_directory)
+    trainer = Trainer(curriculum, reader=DatasetReader if args.sync else AsyncDatasetReader, tmpdir=args.temporary_directory)
 
     state_tracker = StateTracker(args.state or f'{args.config}.state', restore=not args.do_not_resume)
 

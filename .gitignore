@@ -28,6 +28,7 @@ coverage
 *.sw?
 
 /data
+/trainer/TMP
 *__pycache__*
 .env
 placeholders/mappings.yml

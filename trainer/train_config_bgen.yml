@@ -1,0 +1,65 @@
+# Datasets are already TSV files
+datasets:
+  bt: test/data/bt.bgen.pls
+  clean: test/data/clean.bgen.pls
+  medium: test/data/medium.bgen.pls
+  dirty: test/data/dirty.bgen.pls
+  web: test/data/web.bgen.pls
+
+stages:
+  - bt
+  - start
+  - mid
+  - end
+
+bt:
+  - bt     0.8
+  - clean  0.2
+  - medium 0
+  - dirty  0
+  - web    0
+  - until bt 2
+
+start:
+  - bt     0.1
+  - clean  0.7
+  - medium 2
+  - dirty  0
+  - web    0
+  - until clean 3
+
+mid:
+  - bt     0
+  - clean  0.6
+  - medium 0.3
+  - dirty  0.1
+  - web    0
+  - until medium 1
+
+end:
+  - bt     0
+  - clean  0.4
+  - medium 0.3
+  - dirty  0.2
+  - web    0.1
+  - until dirty 2
+
+modifiers:
+  - uppercase 0.05
+  - titlecase 0.05
+
+seed: 1111
+trainer: /home/dheart/uni_stuff/postdoc/empty-train/trainer/test.py
+
+# Settings for creating vocabulary
+path_to_spm: /home/dheart/uni_stuff/postdoc/marian-dev/build/spm_train
+vocab_size: 8000
+
+vocab: /home/dheart/uni_stuff/postdoc/empty-train/trainer/test/vocab.bgen.spm
+placeholder-symbol: "<PLACEHOLDER>"
+num-placeholders: 4
+regexes:
+    - (https?:\/\/www\.\w{1,63}\.\w{1,63}(?:\/\w{0,63}){0,})
+    - (www\.\w{1,63}\.\w{1,63}(?:\/\w{0,63}){0,})
+    - ([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)
+

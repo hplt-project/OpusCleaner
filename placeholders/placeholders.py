@@ -15,6 +15,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-c', '--config', type=str, help='Path to yaml configuration file, required for encoding')
 parser.add_argument('-m', '--mappings_file', type=str, default="mappings.yml", help='Path to the mappings, one yaml entry per line.')
 parser.add_argument('-s', '--seed', type=int, default=None, help='Seed for random number generator.')
+parser.add_argument('-n', '--no-mapping', action="store_true", help='Do not dump a mapping file for decoding. Useful for training')
+parser.add_argument('-t', '--strict', action="store_true", help="Only generate a placeholder if there's equal number on the source and target side of each (assumes TSV input).")
 mutex_group_1 = parser.add_mutually_exclusive_group(required=True)
 mutex_group_1.add_argument('--decode', action='store_true')
 mutex_group_1.add_argument('--encode', action='store_true')
@@ -28,7 +30,7 @@ class Rule:
 @dataclass
 class Configuration:
     """Object holding the yaml config"""
-    def __init__(self, config_file):
+    def __init__(self, config_file, dump_placeholders: bool):
         with open(config_file, 'r') as config_handle:
             my_config = yaml.safe_load(config_handle)
 
@@ -36,7 +38,7 @@ class Configuration:
         self.rules = [Rule(regex) for regex in my_config['regexes']]
         self.placeholder_symbol = my_config.get('placeholder-symbol', '@')
         self.num_placeholders = my_config.get('num-placeholders', 20)
-        self.placeholders = [self.placeholder_symbol + str(i) for i in range(self.num_placeholders)]
+        self.placeholders = [self.placeholder_symbol[:-1] + str(i) + self.placeholder_symbol[-1] for i in range(self.num_placeholders)]
 
         # Add a rule that escapes patterns that look like a placeholder already
         # TODO: this will match placeholders we can't reach because `num_placeholders` might be smaller
@@ -47,7 +49,7 @@ class Configuration:
         self.rules.append(Rule(pattern=re.escape(self.placeholder_symbol) + r'\d+'))
 
         # During encoding assert that we have vocab
-        if 'vocab' in my_config:
+        if not dump_placeholders and 'vocab' in my_config:
             vocab = my_config['vocab']
             self.sp = SentencePieceProcessor(vocab)
 
@@ -64,12 +66,13 @@ class Configuration:
 
 class Encoder:
     '''Encodes spm strings'''
-    def __init__(self, placeholders: List[str], spm_vocab: SentencePieceProcessor, rules: List[Rule], *, random: Random = Random()):
+    def __init__(self, placeholders: List[str], spm_vocab: SentencePieceProcessor, rules: List[Rule], strict: bool, *, random: Random = Random()):
         self.placeholders = placeholders
         self.sp = spm_vocab
         self.rules = rules
         self.unk_id  = self.sp.unk_id()
         self.random = random
+        self.strict = strict # Use strict mode, only making replacements when the same amount of tokens are on the source and the target side
 
         # Compile rules into one mega-pattern
         self.rule_pattern = re.compile('|'.join('(?:{})'.format(rule.pattern) for rule in self.rules))
@@ -112,23 +115,37 @@ class Encoder:
             inputline += token
         inputline += '\n'
 
+        # Check if strict rules apply
+        if self.strict:
+            src, trg = inputline.split('\t')
+            for mytoken, myreplacement in replacements.items():
+                if src.count(myreplacement) != trg.count(myreplacement):
+                    # We have a mismatch placeholder on source and target
+                    inputline = inputline.replace(myreplacement, mytoken)
+
         return (inputline, dict((v, k) for k, v in replacements.items()))
 
 
-def encode(my_placeholders: List[str], my_sp: SentencePieceProcessor, my_rules: List[Rule], *, random: Random) -> None:
+def encode(my_placeholders: List[str], my_sp: SentencePieceProcessor, my_rules: List[Rule], strict: bool, *, random: Random, no_mapping: bool) -> None:
     '''Encodes everything form stdin, dumping it to stdout and dumping a file with
        all replacements'''
-    encoder = Encoder(my_placeholders, my_sp, my_rules, random=random)
-    with open(args.mappings_file, 'w') as yamlout:
-        for counter, line in enumerate(sys.stdin):
-
-            encoded_line, mappings = encoder.make_placeholders(line)
+    encoder = Encoder(my_placeholders, my_sp, my_rules, strict, random=random)
+    if no_mapping: # Do not produce any mappings as we are going to just use it during training
+        for line in sys.stdin:
+            encoded_line, _ = encoder.make_placeholders(line)
             sys.stdout.write(encoded_line) # Write the encoded line to stdout
+    else:
+        with open(args.mappings_file, 'w') as yamlout:
+            for counter, line in enumerate(sys.stdin):
 
-            # Keep track of which sentence has what replacement mappings via a yaml config
-            sent_mapping = {counter: mappings}
-            yaml.dump(sent_mapping, yamlout, allow_unicode=True)
-            yamlout.flush()
+                encoded_line, mappings = encoder.make_placeholders(line)
+                sys.stdout.write(encoded_line) # Write the encoded line to stdout
+
+                # Keep track of which sentence has what replacement mappings via a yaml config
+                sent_mapping = {counter: mappings}
+                yaml.dump(sent_mapping, yamlout, allow_unicode=True)
+                yamlout.flush()
+
 
 
 def decode() -> None:
@@ -154,13 +171,13 @@ if __name__ == "__main__":
     random = Random(args.seed)
 
     if args.encode or args.dump_placeholders:
-        config = Configuration(args.config)
+        config = Configuration(args.config, args.dump_placeholders)
 
     if args.dump_placeholders:
         print(" ".join(config.placeholders))
         sys.exit(0)
     elif args.encode:
-        encode(config.placeholders, config.sp, config.rules, random=random)
+        encode(config.placeholders, config.sp, config.rules, args.strict, random=random, no_mapping=args.no_mapping)
     else:
         decode()
 

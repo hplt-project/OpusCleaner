@@ -1,10 +1,10 @@
 # Datasets are already TSV files
 datasets:
-  - test/data/bt.bgen.pls
-  - test/data/clean.bgen.pls
-  - test/data/medium.bgen.pls
-  - test/data/dirty.bgen.pls
-  - test/data/web.bgen.pls
+  bt: test/data/bt.bgen.pls
+  clean: test/data/clean.bgen.pls
+  medium: test/data/medium.bgen.pls
+  dirty: test/data/dirty.bgen.pls
+  web: test/data/web.bgen.pls
 
 stages:
   - bt
@@ -13,39 +13,41 @@ stages:
   - end
 
 bt:
-  - bt.bgen.pls 0.8
-  - clean.bgen.pls 0.2
-  - medium.bgen.pls 0
-  - dirty.bgen.pls 0
-  - web.bgen.pls 0
-  - until bt.bgen.pls 2
+  - bt     0.8
+  - clean  0.2
+  - medium 0
+  - dirty  0
+  - web    0
+  - until bt 2
 
 start:
-  - bt.bgen.pls 0.1
-  - clean.bgen.pls 0.7
-  - medium.bgen.pls 2
-  - dirty.bgen.pls 0
-  - web.bgen.pls 0
-  - until clean.bgen.pls 3
+  - bt     0.1
+  - clean  0.7
+  - medium 2
+  - dirty  0
+  - web    0
+  - until clean 3
 
 mid:
-  - bt.bgen.pls 0
-  - clean.bgen.pls 0.6
-  - medium.bgen.pls 0.3
-  - dirty.bgen.pls 0.1
-  - web.bgen.pls 0
-  - until medium.bgen.pls 1
+  - bt     0
+  - clean  0.6
+  - medium 0.3
+  - dirty  0.1
+  - web    0
+  - until medium 1
 
 end:
-  - bt.bgen.pls 0
-  - clean.bgen.pls 0.4
-  - medium.bgen.pls 0.3
-  - dirty.bgen.pls 0.2
-  - web.bgen.pls 0.1
-  - until dirty.bgen.pls 2
+  - bt     0
+  - clean  0.4
+  - medium 0.3
+  - dirty  0.2
+  - web    0.1
+  - until dirty 2
 
-uppercase: 0.05
-titlecase: 0.05
+modifiers:
+  - uppercase 0.05
+  - titlecase 0.05
+
 seed: 1111
 trainer: /home/dheart/uni_stuff/postdoc/empty-train/trainer/test.py
 

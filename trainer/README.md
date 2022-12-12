@@ -8,9 +8,9 @@ Define your training process via a configuration file. You define the datasets o
 ```yml
 # Datasets are already TSV files
 datasets:
-  - test/data/clean
-  - test/data/medium
-  - test/data/dirty
+  clean: test/data/clean
+  medium: test/data/medium
+  dirty: test/data/dirty
 
 stages:
   - start
@@ -35,16 +35,18 @@ end:
   - dirty 0.3
   - until dirty 5 # use `inf` to mean until forever
 
-uppercase: 0.05 # Apply uppercase randomly to 0.05% of sentences. Use 0 to disable
-titlecase: 0.05 # Apply titlecase randomly to 0.05% of sentences. Use 0 to disable
+modifiers:
+- uppercase 0.05 # Apply uppercase randomly to 0.05% of sentences. Use 0 to disable
+- titlecase 0.05 # Apply titlecase randomly to 0.05% of sentences. Use 0 to disable
+
 seed: 1111
 trainer: /path/to/trainer/run.py
 ```
 
 ## Usage
 ```bash
-% ./trainer.py --help                                                                                                          :(
-usage: trainer.py [-h] --config CONFIG [--temporary-dir TEMPORARY_DIR] [--do-not-resume]
+% ./trainer.py --help
+usage: trainer.py [-h] --config CONFIG [--temporary-directory TEMPORARY_DIR] [--state STATE_FILE] [--do-not-resume] [--sync] [trainer-command [arguments]]
 
 Feeds marian tsv data for training.
 
@@ -52,8 +54,11 @@ options:
   -h, --help            show this help message and exit
   --config CONFIG, -c CONFIG
                         YML configuration input.
-  --temporary-dir TEMPORARY_DIR, -t TEMPORARY_DIR
+  --temporary-directory TEMPORARY_DIR, -t TEMPORARY_DIR
                         Temporary dir, used for shuffling and tracking state
+  --state STATE_FILE    Path to trainer state file which stores how much of
+                        each dataset has been read. Defaults to ${CONFIG}.state
+  --sync                Do not shuffle in the background
   --do-not-resume, -d   Do not resume from the previous training state
 ```
 Once you fix the paths in the configuration file, `train_config.yml` you can run a test case by doing:
@@ -62,7 +67,7 @@ Once you fix the paths in the configuration file, `train_config.yml` you can run
 ```
 You can check resulting mixed file in `/tmp/test`. If your neural network trainer doesn't support training from `stdin`, you can use this tool to generate a training dataset and then disable data reordering or shuffling at your trainer implementation, as your training input should be balanced.
 
-At the start of the training all datasets are shuffled. Each time a dataset's end is reached, it is re-shuffled. Shuffling happens inside the training directory (by default `./TMP`) where the training state is also kept. If training is interrupted, re-running the trainer should resume from where it was (ALMOST, in case the buffer wasn't consumed by the neural network trainer, it will be skipped, but this is usually only a few hundred sentence pairs, no more).
+At the start of the training all datasets are shuffled. Each time a dataset's end is reached, it is re-shuffled. Shuffling [in the system temp directory](https://docs.python.org/3.11/library/tempfile.html#tempfile.gettempdir) but can be repositioned using `--temporary-directory` or the `TMPDIR` environment variable. By default, the training state is kept in the same place as the configuration file. If training is interrupted, re-running the trainer should resume from where it was (depending on how much your neural network trainer has buffered, that part will be skipped).
 
 ## Generating vocabulary and placeholders before training
 To use the placeholder code augment your training data with placeholders before training, look at this example script:

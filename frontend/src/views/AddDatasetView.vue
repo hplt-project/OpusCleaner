@@ -153,6 +153,10 @@ async function requestDownloadSelection(datasets) {
 	});
 }
 
+const sizeFormat = new Intl.NumberFormat();
+
+const langFormat = new Intl.DisplayNames([], {type: 'language', languageDisplay: 'standard'});
+
 </script>
 
 <template>
@@ -161,13 +165,13 @@ async function requestDownloadSelection(datasets) {
 			<label>
 				Source
 				<select v-model="srcLang">
-					<option v-for="lang in srcLangs" :key="lang" :value="lang">{{ lang }}</option>
+					<option v-for="lang in srcLangs" :key="lang.id" :value="lang.id">{{ langFormat.of(lang.tag) }}</option>
 				</select>
 			</label>
 			<label>
 				Target
 				<select v-model="trgLang">
-					<option v-for="lang in trgLangs" :key="lang" :value="lang">{{ lang }}</option>
+					<option v-for="lang in trgLangs" :key="lang.id" :value="lang.id">{{ langFormat.of(lang.tag) }}</option>
 				</select>
 			</label>
 		</div>
@@ -177,20 +181,19 @@ async function requestDownloadSelection(datasets) {
 					<tr>
 						<th class="col-checkbox"></th>
 						<th class="col-name" title="Name of dataset">Name</th>
-						<th class="col-group" title="Group that publishes dataset">Group</th>
+						<th class="col-corpus" title="Corpus">Corpus</th>
 						<th class="col-version" title="Version of dataset (only latest versions are shown)">Version</th>
 						<th class="col-languages" title="Languages in this particular download">Languages</th>
-						<th class="col-filesize" title="Estimated size of download or size currently on disk">Filesize</th>
+						<th class="col-size" title="Number of sentence pairs">Sentences</th>
 					</tr>
 				</thead>
 				<tbody>
 					<tr v-for="dataset in datasets" :key="dataset.id" :id="`did-${dataset.id}`">
 						<td class="col-checkbox" :title="dataset.url"><input type="checkbox" v-model="selection" :value="dataset" :disabled="dataset.id in downloads || 'paths' in dataset"></td>
-						<td class="col-name" :title="dataset.cite">{{ dataset.name }}</td>
-						<td class="col-group">{{ dataset.group }}</td>
+						<td class="col-name"><a :href="`https://opus.nlpl.eu/${dataset.corpus}.php`" target="_blank">{{ dataset.corpus }}</a></td>
 						<td class="col-version">{{ dataset.version }}</td>
-						<td class="col-languages">{{ dataset.langs.join(', ') }}</td>
-						<td class="col-filesize">{{ dataset.size ? formatSize(dataset.size) : '' }}</td>
+						<td class="col-languages">{{ dataset.langs.join(' → ') }}</td>
+						<td class="col-filesize">{{ dataset.size ? sizeFormat.format(dataset.size) : '' }}</td>
 					</tr>
 				</tbody>
 			</table>
@@ -198,7 +201,7 @@ async function requestDownloadSelection(datasets) {
 		<div class="dataset-selection">
 			<h2>Downloads</h2>
 			<ul>
-				<li v-for="download in downloads" :key="download.entry.id">{{ download.entry.name }} <em>{{ download.state }}</em></li>
+				<li v-for="download in downloads" :key="download.entry.id">{{ download.entry.corpus }} <em>{{ download.state }}</em></li>
 			</ul>
 			<h2>Shopping cart</h2>
 			<ul>

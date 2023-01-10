@@ -1,5 +1,5 @@
 # Empty-train
-Empty train is a machine translation/language model data cleaner and training scheduler.
+Empty train is a machine translation/language model data cleaner and training scheduler. The Training scheduler has moved to [empty-trainer](https://github.com/hplt-project/empty-trainer).
 
 ## Cleaner
 The cleaner bit takes care of downloading and cleaning multiple different datasets and preparing them for translation.
@@ -59,5 +59,8 @@ python -m laserembeddings download-models
 ```
 
 Then go to http://127.0.0.1:8000/ for the "interface" or http://127.0.0.1:8000/docs for the API.
-## Trainer
-The [trainer](../../tree/main/trainer) takes a simple configuration file and path to a training script and takes care of training scheduling, shuffling and start/resumption of training of very large corpora from different sources/different quality levels/ different languages.
+
+# Acknowledgements
+
+This project has received funding from the European Union’s Horizon Europe research and innovation programme under grant agreement No 101070350 and from UK Research and Innovation (UKRI) under the UK government’s Horizon Europe funding guarantee [grant number 10052546]
+

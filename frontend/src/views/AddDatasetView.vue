@@ -2,6 +2,7 @@
 import {ref, reactive, computed, watch, onMounted} from 'vue';
 import { Interval } from '../interval.js';
 import { formatSize } from '../format.js';
+import {DownloadCloudIcon} from 'vue3-feather';
 
 const loading = ref(0);
 
@@ -157,102 +158,147 @@ async function requestDownloadSelection(datasets) {
 
 <template>
 	<div class="downloader">
-		<div class="filter-controls">
+		<h1 class="datasets-catalogue-title">
+			Datasets catalogue
+			<small>12.345 datasets</small>
+		</h1>
+		<div class="search-inputs">
 			<label>
-				Source
+				<input type="text" placeholder="Search dataset…">
+			</label>
+			<label class="toggle">
+				<input type="checkbox">
+				Monolingual
+			</label>
+			<label class="toggle">
+				<input type="checkbox">
+				Bilingual
+			</label>
+			<label>
+				Origin language
 				<select v-model="srcLang">
 					<option v-for="lang in srcLangs" :key="lang" :value="lang">{{ lang }}</option>
 				</select>
 			</label>
 			<label>
-				Target
+				Target language
 				<select v-model="trgLang">
 					<option v-for="lang in trgLangs" :key="lang" :value="lang">{{ lang }}</option>
 				</select>
 			</label>
 		</div>
 		<div class="dataset-list">
-			<table>
-				<thead>
-					<tr>
-						<th class="col-checkbox"></th>
-						<th class="col-name" title="Name of dataset">Name</th>
-						<th class="col-group" title="Group that publishes dataset">Group</th>
-						<th class="col-version" title="Version of dataset (only latest versions are shown)">Version</th>
-						<th class="col-languages" title="Languages in this particular download">Languages</th>
-						<th class="col-filesize" title="Estimated size of download or size currently on disk">Filesize</th>
-					</tr>
-				</thead>
-				<tbody>
-					<tr v-for="dataset in datasets" :key="dataset.id" :id="`did-${dataset.id}`">
-						<td class="col-checkbox" :title="dataset.url"><input type="checkbox" v-model="selection" :value="dataset" :disabled="dataset.id in downloads || 'paths' in dataset"></td>
-						<td class="col-name" :title="dataset.cite">{{ dataset.name }}</td>
-						<td class="col-group">{{ dataset.group }}</td>
-						<td class="col-version">{{ dataset.version }}</td>
-						<td class="col-languages">{{ dataset.langs.join(', ') }}</td>
-						<td class="col-filesize">{{ dataset.size ? formatSize(dataset.size) : '' }}</td>
-					</tr>
-				</tbody>
-			</table>
+			<div class="dataset" v-for="dataset in datasets" :key="dataset.id" :id="`did-${dataset.id}`">
+				<div class="dataset-name">
+					<h3 class="dataset-title">{{ dataset.name }}</h3>
+					<button class="download-dataset-button">
+						Download
+						<DownloadCloudIcon class="download-icon"/>
+					</button>
+				</div>
+				<dl class="metadata-dataset">
+					<dt>Group</dt>
+					<dd title="Group">{{ dataset.group }}</dd>
+					<dt>Languages</dt>
+					<dd title="Languages">{{ dataset.langs.join('-') }}</dd>
+					<dt>Size</dt>
+					<dd tile="Download size">{{ dataset.size ? formatSize(dataset.size) : '' }}</dd>
+				</dl>
+			</div>
 		</div>
-		<div class="dataset-selection">
-			<h2>Downloads</h2>
-			<ul>
-				<li v-for="download in downloads" :key="download.entry.id">{{ download.entry.name }} <em>{{ download.state }}</em></li>
-			</ul>
-			<h2>Shopping cart</h2>
-			<ul>
-				<li v-for="dataset in selection" :key="dataset.id">{{ dataset.name }}</li>
-			</ul>
-			<button @click="downloadSelection">Download</button>
-		</div>
+		<Teleport to=".navbar">
+			<details class="downloads-popup">
+				<summary><h2>Downloads</h2></summary>
+				<ul>
+					<li v-for="download in downloads" :key="download.entry.id">{{ download.entry.name }} <em>{{ download.state }}</em></li>
+				</ul>
+			</details>
+		</Teleport>
 	</div>
 </template>
 
 <style scoped>
-.downloader {
-	flex: 1;
-	display: flex;
-	flex-direction: row;
-	overflow: hidden;
+.datasets-catalogue-title {
+	font-size: 20px;
+	color: #182231;
 }
 
-.downloader > * {
-	padding: 1em;
+.datasets-catalogue-title span {
+	font-size: 16px;
+	font-weight: lighter;
 }
 
-.downloader > *:not(:first-child) {
-	border-left: 1px solid #ccc;
+.search-inputs {
+	margin: 10px 0 20px 0;
+}
+.search-button {
+	background-color: #e4960e;
+	color: #182231;
+	border: none;
+	border-radius: 2px;
+	height: 28px;
+	padding: 0 8px;
+	margin: 0 2px;
 }
 
-.filter-controls {
-	flex: 0 0 200px;
+.search-inputs input {
+	height: 28px;
+	border-radius: 3px;
 }
 
-.filter-controls label {
-	display: block;
+.search-inputs input::placeholder {
+	padding-left: 5px;
+}
+
+.search-inputs select {
+	height: 28px;
+	border-radius: 3px;
 }
 
 .dataset-list {
-	flex: 1;
-	overflow: auto;
+	display: grid;
+	grid-template-columns: repeat(auto-fill,minmax(400px, 1fr));
+	row-gap: 20px;
+	column-gap: 20px;
 }
 
-.dataset-list > table {
-	width: 100%;
+.dataset {
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	background-color: #dbe5e6;
+	border-radius: 5px;
+	padding: 20px;
+	height: 120px;
 }
 
-.dataset-list .col-filesize {
-	text-align: right;
+.dataset-name {
+	display: flex;
+	justify-content: space-between;
+}
+.dataset-title {
+	font-size: 26px;
 }
 
-.dataset-list thead th {
-	text-align: left !important;
+.metadata-dataset dt {
+	display: none;
 }
 
-.dataset-selection {
-	flex: 0 0 300px;
-	overflow: auto;
+.metadata-dataset dd {
+	display: inline;
+	margin-right: 20px;
 }
 
+.download-dataset-button {
+	display: flex;
+	align-items: center;
+	width: 100px;
+	padding: 2px 8px;
+	border: none;
+	border-radius: 2px;
+	background-color: #dfbd79;
+}
+.download-icon {
+	margin-left: 5px;
+}
 </style>

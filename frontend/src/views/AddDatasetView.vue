@@ -15,6 +15,12 @@ const languages = new Map();
 // Datasets by language
 const cache = new Map();
 
+const nameFilter = ref("");
+
+const includeMonolingual = ref(true);
+
+const includeBilingual = ref(true);
+
 const srcLang = ref();
 
 const trgLang = ref();
@@ -66,12 +72,30 @@ const datasets = computed(() => {
 	if (!cache.has(key)) {
 		const list = ref([]);
 		cache.set(key, list);
+		// Fetches actual list async, but the cache entry is available immediately.
 		fetchDatasets(srcLang.value, trgLang.value).then(datasets => {
 			list.value = datasets;
 		})
 	}
 
-	return cache.get(key).value;
+	// cache contains refs, so this computed() is called again once the data
+	// is actually fetched.
+	let datasets = cache.get(key).value;
+
+	if (nameFilter.value.length > 0)
+		datasets = datasets.filter(({name, group}) => {
+			return name.toLowerCase().indexOf(nameFilter.value.toLowerCase()) !== -1
+					|| group.toLowerCase().indexOf(nameFilter.value.toLowerCase()) !== -1;
+		});
+
+	datasets = datasets.filter(dataset => {
+		if (dataset.langs.length > 1)
+			return includeBilingual.value;
+		else
+			return includeMonolingual.value;
+	});
+
+	return datasets;
 });
 
 const downloads = reactive({});
@@ -116,7 +140,7 @@ function castDownloadListToMap(list) {
 }
 
 function download(dataset) {
-	requestDownloadSelection([dataset.id]).then(update => {
+	requestDownloadSelection([dataset]).then(update => {
 		Object.assign(downloads, castDownloadListToMap(update));
 	});
 }
@@ -182,26 +206,24 @@ async function requestDownloadSelection(datasets) {
 	<div class="downloader">
 		<h1 class="datasets-catalogue-title">
 			Datasets catalogue
-			<small>12.345 datasets</small>
+			<small><em>TODO</em> datasets</small>
 		</h1>
 		<div class="search-inputs">
 			<label>
-				<input type="text" placeholder="Search dataset…">
+				<input type="search" placeholder="Search dataset…" v-model="nameFilter">
 			</label>
-			<label class="toggle">
-				<input type="checkbox">
+			<label class="search-button" :class="{'checked': includeMonolingual}">
+				<input type="checkbox" v-model="includeMonolingual">
 				Monolingual
 			</label>
-			<label class="toggle">
-				<input type="checkbox">
+			<label class="search-button" :class="{'checked': includeBilingual}">
+				<input type="checkbox" v-model="includeBilingual">
 				Bilingual
 			</label>
 			<label>
-				Origin language
 				<VueSelect v-model="srcLang" :options="srcLangOptions" :reduce="({lang}) => lang" placeholder="Origin language" />
 			</label>
 			<label>
-				Target language
 				<VueSelect v-model="trgLang" :options="trgLangOptions" :reduce="({lang}) => lang" placeholder="Target language" />
 			</label>
 		</div>
@@ -260,14 +282,26 @@ async function requestDownloadSelection(datasets) {
 .search-inputs {
 	margin: 10px 0 20px 0;
 }
+
 .search-button {
-	background-color: #e4960e;
 	color: #182231;
 	border: none;
 	border-radius: 2px;
+	display: inline-block;
+	line-height: 28px;
 	height: 28px;
 	padding: 0 8px;
 	margin: 0 2px;
+	cursor: pointer;
+	background-color: #dbe5e6;
+}
+
+.search-button.checked {
+	background-color: #e4960e;
+}
+
+.search-button input {
+	display: none;
 }
 
 .search-inputs input {
@@ -328,7 +362,13 @@ async function requestDownloadSelection(datasets) {
 	border: none;
 	border-radius: 2px;
 	background-color: #dfbd79;
+	cursor: pointer;
 }
+
+.download-dataset-button:disabled {
+	cursor: default;
+}
+
 .download-icon {
 	margin-left: 5px;
 }

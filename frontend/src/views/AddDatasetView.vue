@@ -2,7 +2,10 @@
 import {ref, reactive, computed, watch, onMounted} from 'vue';
 import { Interval } from '../interval.js';
 import { formatSize } from '../format.js';
+import VueSelect from 'vue-select';
 import {DownloadCloudIcon} from 'vue3-feather';
+
+import 'vue-select/dist/vue-select.css';
 
 const loading = ref(0);
 
@@ -33,6 +36,28 @@ const trgLangs = computed(() => {
 	return languages.get(srcLang.value).value; // reactive, so will update once fetch() finishes
 });
 
+const srcLangOptions = computed(() => {
+	const intl = new Intl.DisplayNames([], {type:'language'});
+	return (srcLangs.value || []).map(lang => {
+		try {
+			return {lang, label: `${intl.of(lang)} (${lang})`};
+		} catch (RangeError) {
+			return {lang, label: lang};
+		}
+	})
+});
+
+const trgLangOptions = computed(() => {
+	const intl = new Intl.DisplayNames([], {type:'language'});
+	return (trgLangs.value || []).map(lang => {
+		try {
+			return {lang, label: `${intl.of(lang)} (${lang})`};
+		} catch (RangeError) {
+			return {lang, label: lang};
+		}
+	})
+});
+
 const datasets = computed(() => {
 	if (!srcLang.value || !trgLang.value)
 		return [];
@@ -48,8 +73,6 @@ const datasets = computed(() => {
 
 	return cache.get(key).value;
 });
-
-const selection = ref([]); // List of datasets to download
 
 const downloads = reactive({});
 
@@ -92,11 +115,10 @@ function castDownloadListToMap(list) {
 	return Object.fromEntries(list.map(download => [download.entry.id, download]));
 }
 
-function downloadSelection() {
-	requestDownloadSelection(selection.value).then(update => {
+function download(dataset) {
+	requestDownloadSelection([dataset.id]).then(update => {
 		Object.assign(downloads, castDownloadListToMap(update));
 	});
-	selection.value = [];
 }
 
 const sizeRequests = new Map();
@@ -176,22 +198,18 @@ async function requestDownloadSelection(datasets) {
 			</label>
 			<label>
 				Origin language
-				<select v-model="srcLang">
-					<option v-for="lang in srcLangs" :key="lang" :value="lang">{{ lang }}</option>
-				</select>
+				<VueSelect v-model="srcLang" :options="srcLangOptions" :reduce="({lang}) => lang" placeholder="Origin language" />
 			</label>
 			<label>
 				Target language
-				<select v-model="trgLang">
-					<option v-for="lang in trgLangs" :key="lang" :value="lang">{{ lang }}</option>
-				</select>
+				<VueSelect v-model="trgLang" :options="trgLangOptions" :reduce="({lang}) => lang" placeholder="Target language" />
 			</label>
 		</div>
 		<div class="dataset-list">
 			<div class="dataset" v-for="dataset in datasets" :key="dataset.id" :id="`did-${dataset.id}`">
 				<div class="dataset-name">
 					<h3 class="dataset-title">{{ dataset.name }}</h3>
-					<button class="download-dataset-button">
+					<button class="download-dataset-button" @click="download(dataset)" :disabled="dataset.id in downloads || 'paths' in dataset">
 						Download
 						<DownloadCloudIcon class="download-icon"/>
 					</button>
@@ -218,9 +236,20 @@ async function requestDownloadSelection(datasets) {
 </template>
 
 <style scoped>
+
 .datasets-catalogue-title {
 	font-size: 20px;
 	color: #182231;
+	text-transform: uppercase;
+	display: flex;
+	align-items: baseline;
+}
+
+.datasets-catalogue-title small {
+	display: inline-block;
+	border-left: 1px solid currentColor;
+	margin-left: 10px;
+	padding-left: 10px;
 }
 
 .datasets-catalogue-title span {
@@ -250,7 +279,9 @@ async function requestDownloadSelection(datasets) {
 	padding-left: 5px;
 }
 
-.search-inputs select {
+.search-inputs .v-select {
+	display: inline-block;
+	width: 180px;
 	height: 28px;
 	border-radius: 3px;
 }

@@ -22,7 +22,7 @@ const categoryPicker = ref(); // Element
 		<Teleport to=".navbar">
 			<RouterLink class="import-data-button" v-bind:to="{name:'add-dataset'}">
 				Import dataset
-				<UploadIcon/>
+				<UploadIcon class="import-data-icon" />
 			</RouterLink>
 		</Teleport>
 
@@ -57,9 +57,9 @@ const categoryPicker = ref(); // Element
 						{{ getFilterSteps(dataset).value.length }}
 					</td>
 					<td>
-						<RouterLink class="icon-button" :to="{}"><CodeIcon/></RouterLink>
-						<RouterLink class="icon-button" :to="{name: 'edit-filters', params: {datasetName: dataset.name}}"><FilterIcon/></RouterLink>
-						<RouterLink class="icon-button" :to="{}"><PieChartIcon/></RouterLink>
+						<RouterLink class="icon-button" title="Show filter yaml" :to="{}"><CodeIcon/></RouterLink>
+						<RouterLink class="icon-button" title="Edit filters" :to="{name: 'edit-filters', params: {datasetName: dataset.name}}"><FilterIcon/></RouterLink>
+						<RouterLink class="icon-button" title="Show dataset statistics" :to="{}"><PieChartIcon/></RouterLink>
 					</td>
 				</tr>
 			</tbody>
@@ -93,6 +93,9 @@ const categoryPicker = ref(); // Element
   background-color: #17223d;
   color: #e4960e;
   font-size: 18px;
+
+  text-decoration: none;
+  line-height: 40px;
 }
 
 .import-data-icon {
@@ -160,6 +163,7 @@ const categoryPicker = ref(); // Element
   border-radius: 15px;
   margin-right: 5px;
   font-size: 14px;
+  background-color: #ddd;
 }
 
 .green-tag {

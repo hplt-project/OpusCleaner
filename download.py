@@ -6,7 +6,7 @@ import asyncio
 import json
 from glob import iglob
 from itertools import chain
-from typing import Iterable, Dict, List, Optional, Set, Union, Tuple
+from typing import Iterable, Dict, List, Optional, Set, Union, Tuple, cast
 from enum import Enum
 from queue import SimpleQueue
 from subprocess import Popen
@@ -19,8 +19,6 @@ from operator import itemgetter
 from warnings import warn
 
 from pydantic import BaseModel
-from mtdata.entry import lang_pair
-from mtdata.iso.bcp47 import bcp47, BCP47Tag
 from fastapi import FastAPI, HTTPException
 
 from config import DATA_PATH, DOWNLOAD_PATH
@@ -33,7 +31,7 @@ class EntryRef(BaseModel):
 class Entry(EntryRef):
     corpus: str
     version: str
-    langs: List[BCP47Tag]
+    langs: Tuple[str,str]
 
 
 class LocalEntry(Entry):
@@ -124,22 +122,16 @@ class OpusAPI:
     def __init__(self, endpoint):
         self.endpoint = endpoint
 
-    def languages(self, lang1: Optional[str] = None) -> Dict[str,BCP47Tag]:
+    def languages(self, lang1: Optional[str] = None) -> List[str]:
         query = {'languages': 'True'}
 
         if lang1 is not None:
             query['source'] = lang1
 
-        languages = {}
         with urlopen(f'{self.endpoint}?{urlencode(query)}') as fh:
-            for lang in json.load(fh).get('languages', []):
-                try:
-                    languages[lang] = bcp47(lang)
-                except Exception as e:
-                    warn(f'Could not parse {lang} as BCP47: {e!s}')
-        return languages
+            return json.load(fh).get('languages', [])
 
-    def find_datasets(self, lang1, lang2) -> List[Entry]:
+    def find_datasets(self, lang1:str, lang2:str) -> List[Entry]:
         query = {
             'source': lang1,
             'target': lang2,
@@ -163,14 +155,14 @@ def cast_entry(entry, **kwargs) -> Entry:
         id = int(entry['id']),
         corpus = str(entry['corpus']),
         version = str(entry['version']),
-        langs = [bcp47(entry['source']), bcp47(entry['target'])],
+        langs = (entry['source'], entry['target']), # FIXME these are messy OPUS-API lang codes :(
         **kwargs)
 
     paths = set(
         filename
         for data_root in [os.path.dirname(DATA_PATH), DOWNLOAD_PATH]
-        for lang in args['langs']
-        for filename in iglob(os.path.join(data_root, f'{args["corpus"]!s}.{lang.lang}.gz'), recursive=True)
+        for lang in cast(Tuple[str,str], args['langs'])
+        for filename in iglob(os.path.join(data_root, f'{args["corpus"]!s}.{lang}.gz'), recursive=True)
     )
 
     if paths:
@@ -181,24 +173,19 @@ def cast_entry(entry, **kwargs) -> Entry:
     else:
         return RemoteEntry(
             **args,
+            size=int(entry['size']),
             url=str(entry['url']))
 
 
 @app.get("/languages/")
 @app.get("/languages/{lang1}")
-def list_languages(lang1:Optional[str] = None) -> List[Dict[str,str]]:
-    return sorted([
-        {
-            'id': key,
-            'tag': lang.tag.replace('_', '-') # mtdata uses the non-standard `_` because `-` is used for pairs already
-        }
-        for key, lang in api.languages(lang1).items()
-    ], key=itemgetter('tag'))
+def list_languages(lang1:Optional[str] = None) -> List[str]:
+    return sorted(api.languages(lang1))
 
 
 @app.get("/by-language/{langs}")
 def list_datasets(langs:str) -> Iterable[Entry]:
-    return api.find_datasets(*lang_pair(langs))
+    return api.find_datasets(*langs.split('-'))
 
 
 @app.get('/downloads/')

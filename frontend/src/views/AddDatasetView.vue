@@ -157,6 +157,14 @@ const sizeFormat = new Intl.NumberFormat();
 
 const langFormat = new Intl.DisplayNames([], {type: 'language', languageDisplay: 'standard'});
 
+function formatLang(lang) {
+	try {
+		return `${langFormat.of(lang)} (${lang})`;
+	} catch {
+		return lang; /* not all codes returned by OPUS-API are languages, some are just numbers, some are made up */
+	}
+}
+
 </script>
 
 <template>
@@ -165,13 +173,13 @@ const langFormat = new Intl.DisplayNames([], {type: 'language', languageDisplay:
 			<label>
 				Source
 				<select v-model="srcLang">
-					<option v-for="lang in srcLangs" :key="lang.id" :value="lang.id">{{ langFormat.of(lang.tag) }}</option>
+					<option v-for="lang in srcLangs" :key="lang" :value="lang">{{ formatLang(lang) }}</option>
 				</select>
 			</label>
 			<label>
 				Target
 				<select v-model="trgLang">
-					<option v-for="lang in trgLangs" :key="lang.id" :value="lang.id">{{ langFormat.of(lang.tag) }}</option>
+					<option v-for="lang in trgLangs" :key="lang" :value="lang">{{ formatLang(lang) }}</option>
 				</select>
 			</label>
 		</div>

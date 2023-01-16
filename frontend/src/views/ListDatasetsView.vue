@@ -84,98 +84,68 @@ const categoryPicker = ref(); // Element
 }
 
 .import-data-button {
-  display: flex;
-  align-items: center;
-  border: none;
-  border-radius: 3px;
-  height: 40px;
-  padding: 0 30px;
-  background-color: #17223d;
-  color: #e4960e;
-  font-size: 18px;
+	display: flex;
+	align-items: center;
+	border: none;
+	border-radius: 3px;
+	height: 40px;
+	padding: 0 30px;
+	background-color: #17223d;
+	color: #e4960e;
+	font-size: 18px;
 
-  text-decoration: none;
-  line-height: 40px;
+	text-decoration: none;
+	line-height: 40px;
 }
 
 .import-data-icon {
-  margin-left: 5px;
+	margin-left: 5px;
 }
 .datasets-table {
-  border: 2px solid #1c3948;
-  border-collapse: collapse;
-  width: 100%;
+	border: 2px solid #1c3948;
+	border-collapse: collapse;
+	width: 100%;
 }
 
 .datasets-table thead {
-  background-color: #17223d;
-  color: #e4960e;
-  font-size: 20px;
-  text-align: left;
+	background-color: #17223d;
+	color: #e4960e;
+	font-size: 20px;
+	text-align: left;
 }
 
 .datasets-table tbody {
-  color: #17223d;
+	color: #17223d;
 }
 
 .datasets-table thead th {
-  padding: 20px 0px 10px 10px;
-  min-width: 150px;
+	padding: 20px 0px 10px 10px;
+	min-width: 150px;
 }
 
 .datasets-table tbody tr {
-  border-bottom: 1px solid #1c3948;
-  border-right: 2px solid #1c3948;
+	border-bottom: 1px solid #1c3948;
+	border-right: 2px solid #1c3948;
 }
 
 .datasets-table tbody td {
-  border-right: 2px solid #1c3948;
+	border-right: 2px solid #1c3948;
 }
 
 .datasets-table tbody tr td {
-  padding: 10px;
+	padding: 10px;
 }
 
 .category-tags {
-  display: flex;
-}
-
-.tags-container {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+	display: flex;
 }
 
 .tags {
-  width: 45%;
-  font-family: "Fira Code", monospace;
+	width: 45%;
 }
 
 .filter-steps {
-  text-align: right;
-}
-
-.tag {
-  display: flex;
-  align-items: center;
-  width: fit-content;
-  padding: 3px 20px 3px 10px;
-  border-radius: 15px;
-  margin-right: 5px;
-  font-size: 14px;
-  background-color: #ddd;
-}
-
-.green-tag {
-  background-color: #afffca;
-}
-
-.red-tag {
-  background-color: #ffafaf;
-}
-
-.blue-tag {
-  background-color: #afcfff;
+	text-align: right;
 }
 
 </style>

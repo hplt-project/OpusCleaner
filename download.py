@@ -180,11 +180,12 @@ class OpusAPI:
             'target': lang2,
             'preprocessing': 'moses'
         }
-        print(f'{self.endpoint}?{urlencode(query)}')
+        
         with urlopen(f'{self.endpoint}?{urlencode(query)}') as fh:
             datasets = [cast_entry(entry) for entry in json.load(fh).get('corpora', [])]
 
         # FIXME dirty hack to keep a local copy to be able to do id based lookup
+        # Related: https://github.com/Helsinki-NLP/OPUS-API/issues/3
         for dataset in datasets:
             self._datasets[dataset.id] = dataset
 

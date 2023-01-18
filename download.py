@@ -4,6 +4,7 @@ import os
 import sys
 import asyncio
 import json
+import gzip
 from glob import iglob
 from itertools import chain
 from typing import Iterable, Dict, List, Optional, Set, Union, Tuple, cast
@@ -17,7 +18,7 @@ from urllib.parse import urlencode
 from pprint import pprint
 from operator import itemgetter
 from warnings import warn
-from tempfile import TemporaryFile
+from tempfile import TemporaryDirectory, TemporaryFile
 from shutil import copyfileobj
 from multiprocessing import Process
 from zipfile import ZipFile
@@ -57,13 +58,35 @@ class DownloadState(Enum):
 
 
 def get_dataset(entry: RemoteEntry, path: str):
-    with urlopen(entry.url) as fh, TemporaryFile() as ftemp:
-        copyfileobj(fh, ftemp)
-        with ZipFile(ftemp) as archive:
-            # TODO: extract the actual text files into path/train-parts
-            # maybe even gzip them in the process because why would we ever want
-            # raw files sitting on expensive storage?
-            archive.extractall(path)
+    # List of extensions of the expected files, e.g. `.en-mt.mt` and `.en-mt.en`.
+    suffixes = [f'.{"-".join(entry.langs)}.{lang}' for lang in entry.langs]
+
+    with TemporaryFile() as temp_archive:
+        # Download zip file to temporary file
+        with urlopen(entry.url) as fh:
+            copyfileobj(fh, temp_archive)
+
+        # Then selectively extract that zipfile to a temporary directory
+        with TemporaryDirectory(dir=path) as temp_extracted:
+            files = []
+
+            with ZipFile(temp_archive) as archive:
+                for info in archive.filelist:
+                    if info.is_dir() or not any(info.filename.endswith(suffix) for suffix in suffixes):
+                        continue
+                    
+                    temp_dest = os.path.join(temp_extracted, os.path.basename(info.filename) + '.gz')
+                    dest = os.path.join(path, os.path.basename(info.filename) + '.gz')
+
+                    with archive.open(info) as fin, gzip.open(temp_dest, 'wb') as fout:
+                        copyfileobj(fin, fout)
+
+                    # Keep a list of extracted files, and where they eventually need to go to
+                    files.append((temp_dest, dest))
+
+            # Once we know all files extracted as expected, move them to their permanent place.
+            for temp_path, dest_path in files:
+                os.rename(temp_path, dest_path)
 
 
 class EntryDownload:
@@ -155,7 +178,7 @@ class OpusAPI:
         query = {
             'source': lang1,
             'target': lang2,
-            'preprocessing': 'smt' # TODO: also add xml separately?
+            'preprocessing': 'moses'
         }
         print(f'{self.endpoint}?{urlencode(query)}')
         with urlopen(f'{self.endpoint}?{urlencode(query)}') as fh:

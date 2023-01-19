@@ -37,16 +37,19 @@ class Entry(EntryRef):
     corpus: str
     version: str
     langs: Tuple[str,str]
+    size: Optional[int] # Size on disk
+
+    @property
+    def basename(self) -> str:
+        return f'{self.corpus}-{self.version}.{"-".join(self.langs)}'
 
 
 class LocalEntry(Entry):
     paths: Set[str]
-    size: Optional[int] # Size on disk
 
 
 class RemoteEntry(Entry):
     url: str
-    size: int
 
 
 class DownloadState(Enum):
@@ -74,15 +77,21 @@ def get_dataset(entry: RemoteEntry, path: str):
                 for info in archive.filelist:
                     if info.is_dir() or not any(info.filename.endswith(suffix) for suffix in suffixes):
                         continue
-                    
-                    temp_dest = os.path.join(temp_extracted, os.path.basename(info.filename) + '.gz')
-                    dest = os.path.join(path, os.path.basename(info.filename) + '.gz')
 
+                    # `info.filename` is something like "beepboop.en-nl.en", `lang` will be "en".
+                    _, lang = info.filename.rsplit('.', maxsplit=1)
+
+                    filename = f'{entry.basename}.{lang}.gz'
+                    temp_dest = os.path.join(temp_extracted, filename)
+                    data_dest = os.path.join(path, filename)
+
+                    # Extract the file from the zip archive into the temporary directory, compress
+                    # it while we're at it.
                     with archive.open(info) as fin, gzip.open(temp_dest, 'wb') as fout:
                         copyfileobj(fin, fout)
 
                     # Keep a list of extracted files, and where they eventually need to go to
-                    files.append((temp_dest, dest))
+                    files.append((temp_dest, data_dest))
 
             # Once we know all files extracted as expected, move them to their permanent place.
             for temp_path, dest_path in files:
@@ -202,30 +211,38 @@ downloader = Downloader(2)
 
 datasets_by_id: Dict[int, Entry] = {}
 
-def cast_entry(entry, **kwargs) -> Entry:
-    args = dict(
-        id = int(entry['id']),
-        corpus = str(entry['corpus']),
-        version = str(entry['version']),    
-        size = int(entry['size']) * 1024, # FIXME file size but do we care?
-        langs = (entry['source'], entry['target']), # FIXME these are messy OPUS-API lang codes :(
-        **kwargs)
+def cast_entry(data) -> Entry:
+    entry = Entry(
+        id=int(data['id']),
+        corpus=str(data['corpus']),
+        version=str(data['version']),    
+        size=int(data['size']) * 1024, # FIXME file size but do we care?
+        langs=(data['source'], data['target']), # FIXME these are messy OPUS-API lang codes :(
+    )
 
     paths = set(
         filename
         for data_root in [os.path.dirname(DATA_PATH), DOWNLOAD_PATH]
-        for lang in cast(Tuple[str,str], args['langs'])
-        for filename in iglob(os.path.join(data_root, f'{args["corpus"]!s}.{lang}.gz'), recursive=True)
+        for lang in cast(Tuple[str,str], entry.langs)
+        for filename in iglob(os.path.join(data_root, f'{entry.basename}.{lang}.gz'), recursive=True)
     )
+
+    # Print search paths
+    # print('\n'.join(
+    #     filename
+    #     for data_root in [os.path.dirname(DATA_PATH), DOWNLOAD_PATH]
+    #     for lang in cast(Tuple[str,str], entry.langs)
+    #     for filename in [os.path.join(data_root, f'{entry.basename}.{lang}.gz')]
+    # ))
 
     if paths:
         return LocalEntry(
-            **args,
+            **entry.__dict__,
             paths=paths)
     else:
         return RemoteEntry(
-            **args,
-            url=str(entry['url']))
+            **entry.__dict__,
+            url=str(data['url']))
 
 
 @app.get("/languages/")

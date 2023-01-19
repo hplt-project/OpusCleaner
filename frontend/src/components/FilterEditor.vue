@@ -7,13 +7,14 @@ import {diff} from '../diff.js';
 import InlineDiff from './InlineDiff.vue';
 import LoadingIndicator from './LoadingIndicator.vue';
 import {stream} from '../stream.js';
-import { getFilters } from '../store/filters.js';
+import { getFilters, filterRequiresLanguage } from '../store/filters.js';
 import { getFilterSteps, saveFilterSteps, filterStepsModified } from '../store/filtersteps.js';
 import { getCategoriesForDataset } from '../store/categories.js';
 import { formatNumberSuffix } from '../format.js';
 import CategoryPicker from '../components/CategoryPicker.vue';
 import Checkbox from '../components/Checkbox.vue';
 import SegmentedControl from '../components/SegmentedControl.vue';
+import FilterStep from '../components/FilterStep.vue';
 import {UploadIcon, Edit3Icon, TagIcon} from 'vue3-feather';
 
 
@@ -227,14 +228,6 @@ function removeFilterStep(i) {
 	filterSteps.value.splice(i, 1);
 }
 
-function filterDefinition(filterStep) {
-	return filters.value.find(filter => filter.name === filterStep.filter);
-}
-
-function filterRequiresLanguage(filterStep) {
-	return filterDefinition(filterStep)?.type == 'monolingual';
-}
-
 function setFilterData(dataTransfer, el) {
 	dataTransfer.setData('text/plain', JSON.stringify(createFilterStep(el.__draggable_context.element), null, 2));
 }
@@ -328,9 +321,7 @@ const categoryPicker = ref();
 						<button class="icon-button" @click="categoryPicker.showForDataset(dataset, $event)"><Edit3Icon/></button>
 					</div>
 
-					<SegmentedControl class="table-buttons" v-model="view" :options="VIEWS">
-						
-					</SegmentedControl>
+					<SegmentedControl class="table-buttons" v-model="view" :options="VIEWS"/>
 				</div>
 			</div>
 		
@@ -403,44 +394,24 @@ const categoryPicker = ref();
 						</li>
 					</template>
 					<template v-slot:item="{element:filterStep, index:i}">
-						<li class="property-list">
-							<header>
+						<FilterStep
+							class="filter-step"
+							v-model="filterSteps[i]"
+							v-bind:languages="languages">
+							<template v-slot:header>
 								<LoadingIndicator class="loading-indicator" :state="getLoadingStage(i)"/>
 								<span class="filter-name">{{ filterStep.filter }}</span>
 								<button v-on:click="removeFilterStep(i)">Remove</button>
-							</header>
-							<div v-if="filterRequiresLanguage(filterStep)">
-								<label :for="`step-${i}-column`">Column</label>
-								<select :id="`step-${i}-column`" v-model="filterStep.language">
-									<option v-for="lang in languages">{{lang}}</option>
-								</select>
-							</div>
-							<div v-for="(parameter, name) in filterDefinition(filterStep)?.parameters || {}">
-								<label :for="`step-${i}-${name}`">{{ name }}</label>
-								<select v-if="parameter.type == 'str' && parameter.allowed_values" v-model="filterStep.parameters[name]" v-bind:id="`step-${i}-${name}`">
-									<option v-for="value in parameter.allowed_values" v-bind:value="value">{{value}}</option>
-								</select>
-								<input v-else-if="parameter.type == 'bool'" type="checkbox" v-model="filterStep.parameters[name]" v-bind:id="`step-${i}-${name}`">
-								<input v-else-if="parameter.type == 'int' || parameter.type == 'float'"
-									type="number"
-									v-model="filterStep.parameters[name]"
-									v-bind:id="`step-${i}-${name}`"
-									v-bind:min="parameter.min"
-									v-bind:max="parameter.max"
-									v-bind:step="parameter.type == 'int' ? 1 : 0.1">
-								<input v-else type="text" v-model="filterStep.parameters[name]" v-bind:id="`step-${i}-${name}`">
-								
-								<small v-if="parameter.help" class="property-list-description">{{parameter.help}}</small>
-							</div>
-							<footer>
+							</template>
+							<template v-slot:footer>
 								<span class="line-count" title="Line count">{{ samples[i+1]?.stdout?.length }}</span>
 								<button v-on:click="showOutput(i)">
 									Show
 									<span v-if="samples[i+1]?.stderr" title="This step produced output on stderr.">⚠</span>
 								</button>
-								<button v-on:click="showDiff(i)" title="Compare the input and output of this step to show the effects of the filter.">Diff</button>
-							</footer>
-						</li>
+								<button v-on:click="showDiff(i)" title="Compare the input and output of this step to show the effects of the filter.">Diff</button> 
+							</template>
+						</FilterStep>
 					</template>
 				</draggable>
 				<draggable tag="ul" class="available-filters"
@@ -675,71 +646,6 @@ const categoryPicker = ref();
 	margin: 0;
 	padding: 0.5em 1em;
 	list-style: none;
-}
-
-input[type=number] {
-	width: 5em;
-}
-
-input[type=checkbox] {
-	width: 1em;
-}
-
-.property-list {
-	border: 1px solid var(--border-color);
-	border-radius: 4px;
-}
-
-.property-list > *:not(:last-child) {
-	border-bottom: 1px solid var(--border-color);
-}
-
-.property-list > header {
-	background: var(--border-color);
-}
-
-.property-list > * > *:first-child {
-	margin-left: 0;
-}
-
-.property-list > header > button {
-	flex: 0;
-}
-
-.property-list > header > .filter-name {
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.property-list > header > .loading-indicator {
-	flex: 0;
-	align-self: flex-start;
-}
-
-.property-list > * {
-	padding: 0.5em;
-	display: flex;
-	flex-wrap: wrap;
-	justify-content: space-between;
-}
-
-.property-list > header > *,
-.property-list > footer > * {
-	flex: 1;
-}
-
-.property-list > * > * {
-	flex: 0;
-	align-self: center;
-	margin-left: 0.5em;
-}
-
-.property-list > * > small {
-	flex: 1 0 100%;
-}
-
-.property-list > * > input[type=checkbox] {
-	flex-basis: 1em;
 }
 
 .dataset-categories {

@@ -213,7 +213,7 @@ function formatLang(lang) {
 			</ul>
 			<h2>Shopping cart</h2>
 			<ul>
-				<li v-for="dataset in selection" :key="dataset.id">{{ dataset.name }}</li>
+				<li v-for="dataset in selection" :key="dataset.id">{{ dataset.corpus }} <small>{{ dataset.version }}</small></li>
 			</ul>
 			<button @click="downloadSelection">Download</button>
 		</div>

@@ -490,6 +490,29 @@ const categoryPicker = ref();
 	border-collapse: collapse;
 	width: 100%;
 	overflow: hidden;
+
+	border: 1px solid #1c3948;
+  text-align: left;
+  background-color: #e3eaeb;
+  row-gap: 10px;
+}
+
+.sample table thead {
+  color: #e4960e;
+  background-color: #17223d;
+}
+
+.sample table thead th {
+  padding: 20px 0 10px 10px;
+}
+.sample table thead tr {
+  margin-bottom: 10px;
+}
+
+.sample table tbody td {
+  border: 1px solid #1c3948;
+  color: #1d4149;
+  line-height: 1.4;
 }
 
 .sample table td {
@@ -641,6 +664,19 @@ const categoryPicker = ref();
 	position: absolute;
 	left: calc(50% - 1em);
 }
+
+.filter-steps .filter-name {
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.filter-steps .loading-indicator {
+	flex: 0 !important;
+	align-self: flex-start;
+	margin: 0 0.5em 0 0;
+}
+
 
 .controls, .available-filters, .filter-steps {
 	margin: 0;

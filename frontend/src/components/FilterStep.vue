@@ -12,8 +12,8 @@ const uid = getUniqueId();
 </script>
 
 <template>
-	<li class="property-list">
-		<details>
+	<li>
+		<details class="property-list">
 			<summary>
 				<slot name="header"></slot>
 			</summary>
@@ -107,7 +107,7 @@ input[type=checkbox] {
 	border-bottom: 1px solid var(--border-color);
 }
 
-.property-list > header {
+.property-list > summary {
 	background: var(--border-color);
 }
 
@@ -115,18 +115,8 @@ input[type=checkbox] {
 	margin-left: 0;
 }
 
-.property-list > header > button {
+.property-list > summary > button {
 	flex: 0;
-}
-
-.property-list > header > .filter-name {
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.property-list > header > .loading-indicator {
-	flex: 0;
-	align-self: flex-start;
 }
 
 .property-list > * {
@@ -136,6 +126,7 @@ input[type=checkbox] {
 	justify-content: space-between;
 }
 
+.property-list > summary > *,
 .property-list > header > *,
 .property-list > footer > * {
 	flex: 1;

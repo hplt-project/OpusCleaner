@@ -153,7 +153,7 @@ async function requestDownloadSelection(datasets) {
 	});
 }
 
-const sizeFormat = new Intl.NumberFormat();
+const countFormat = new Intl.NumberFormat();
 
 const langFormat = new Intl.DisplayNames([], {type: 'language', languageDisplay: 'standard'});
 
@@ -188,11 +188,11 @@ function formatLang(lang) {
 				<thead>
 					<tr>
 						<th class="col-checkbox"></th>
-						<th class="col-name" title="Name of dataset">Name</th>
 						<th class="col-corpus" title="Corpus">Corpus</th>
 						<th class="col-version" title="Version of dataset (only latest versions are shown)">Version</th>
 						<th class="col-languages" title="Languages in this particular download">Languages</th>
-						<th class="col-size" title="Number of sentence pairs">Sentences</th>
+						<th class="col-pairs" title="Number of sentence pairs">Sentences</th>
+						<th class="col-filesize" title="File size">Size</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -201,7 +201,8 @@ function formatLang(lang) {
 						<td class="col-name"><a :href="`https://opus.nlpl.eu/${dataset.corpus}-${dataset.version}.php`" target="_blank">{{ dataset.corpus }}</a></td>
 						<td class="col-version">{{ dataset.version }}</td>
 						<td class="col-languages">{{ dataset.langs.join(' → ') }}</td>
-						<td class="col-filesize">{{ dataset.size ? sizeFormat.format(dataset.size) : '' }}</td>
+						<td class="col-pairs">{{ dataset.pairs ? countFormat.format(dataset.pairs) : '' }}</td>
+						<td class="col-filesize">{{ dataset.size ? formatSize(dataset.size) : '' }}</td>
 					</tr>
 				</tbody>
 			</table>
@@ -247,18 +248,20 @@ function formatLang(lang) {
 .dataset-list {
 	flex: 1;
 	overflow: auto;
+	white-space: nowrap;
 }
 
 .dataset-list > table {
 	width: 100%;
 }
 
-.dataset-list .col-filesize {
+.dataset-list .col-filesize,
+.dataset-list .col-pairs {
 	text-align: right;
 }
 
 .dataset-list thead th {
-	text-align: left !important;
+	text-align: left;
 }
 
 .dataset-selection {

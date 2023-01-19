@@ -37,7 +37,8 @@ class Entry(EntryRef):
     corpus: str
     version: str
     langs: Tuple[str,str]
-    size: Optional[int] # Size on disk
+    pairs: Optional[int] # Number of sentence pairs
+    size: Optional[int] # Size on disk in bytes (rounded to lowest 1024)
 
     @property
     def basename(self) -> str:
@@ -215,7 +216,8 @@ def cast_entry(data) -> Entry:
     entry = Entry(
         id=int(data['id']),
         corpus=str(data['corpus']),
-        version=str(data['version']),    
+        version=str(data['version']),
+        pairs=int(data['alignment_pairs']) if data.get('alignment_pairs') != '' else None,
         size=int(data['size']) * 1024, # FIXME file size but do we care?
         langs=(data['source'], data['target']), # FIXME these are messy OPUS-API lang codes :(
     )

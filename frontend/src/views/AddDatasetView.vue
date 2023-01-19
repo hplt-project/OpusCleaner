@@ -198,7 +198,7 @@ function formatLang(lang) {
 				<tbody>
 					<tr v-for="dataset in datasets" :key="dataset.id" :id="`did-${dataset.id}`">
 						<td class="col-checkbox" :title="dataset.url"><input type="checkbox" v-model="selection" :value="dataset" :disabled="dataset.id in downloads || 'paths' in dataset"></td>
-						<td class="col-name"><a :href="`https://opus.nlpl.eu/${dataset.corpus}.php`" target="_blank">{{ dataset.corpus }}</a></td>
+						<td class="col-name"><a :href="`https://opus.nlpl.eu/${dataset.corpus}-${dataset.version}.php`" target="_blank">{{ dataset.corpus }}</a></td>
 						<td class="col-version">{{ dataset.version }}</td>
 						<td class="col-languages">{{ dataset.langs.join(' → ') }}</td>
 						<td class="col-filesize">{{ dataset.size ? sizeFormat.format(dataset.size) : '' }}</td>

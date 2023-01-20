@@ -155,3 +155,86 @@ function buildValues({equals, useLongestToken}, components, newString, oldString
 function clonePath(path) {
   return { newPos: path.newPos, components: path.components.slice(0) };
 }
+
+export function diffSample(languages, previous, sample) {
+  // Only mark different if neither of the columns is the same.
+  const equals = (a, b) => !languages.every(lang => a[lang] != b[lang]);
+  
+  // Mark pairs that have exactly the same text on both sides as identical.
+  const identical = (a, b) => languages.every(lang => a[lang] == b[lang]);
+
+  const chunks = diff(previous?.stdout || [], sample?.stdout || [], {equals});
+
+  let offset = 0;
+
+  // Now also fish out all those rows that appear the same, but have
+  // a difference in only one of the languages
+  for (let i = 0; i < chunks.length; ++i) {
+    console.assert(chunks[i].count === chunks[i].value.length);
+
+    if (chunks[i].added)
+      continue;
+
+    if (chunks[i].removed) {
+      offset += chunks[i].count;
+      continue;
+    }
+
+    let first, last; // first offset of difference, offset of the first identical that follows.
+
+    // Search for the first different sentence pair in this mutation block.
+    for (first = 0; first < chunks[i].value.length; ++first) {
+      if (!identical(previous.stdout[offset + first], chunks[i].value[first]))
+        break;
+    }
+
+    // Did we find the first different sentence pair? If not skip this
+    // chunk of chunks.
+    if (first == chunks[i].value.length) {
+      offset += chunks[i].count;
+      continue;
+    }
+
+    // Find the first line that is identical again, the end of our
+    // 'changed' block.
+    for (last = first+1; last < chunks[i].value.length; ++last) {
+      if (identical(previous.stdout[offset + last], chunks[i].value[last]))
+        break;
+    }
+
+    console.assert(last <= chunks[i].value.length);
+
+    // If it's not the first line of the mutation, we need to split it
+    // in at least two (maybe three)
+    if (first > 0) {
+      chunks.splice(i, 0, {count: first, value: chunks[i].value.slice(0, first)})
+      ++i; // We inserted it before the one we're handling right now,
+           // so increase `i` accordingly
+    }
+
+    chunks[i].value = chunks[i].value.slice(first);
+    chunks[i].count = last - first;
+    chunks[i].changed = true;
+
+    // If the mutation contains lines that are the same after the
+    // changed ones, add those back in as well. Make sure they are
+    // evaluated next.
+    if (last - first < chunks[i].value.length) {
+      const count = chunks[i].value.length - (last - first);
+      chunks.splice(i+1, 0, {count, value: chunks[i].value.slice(last - first)});
+      chunks[i].value = chunks[i].value.slice(0, last - first)
+      // Do not increase i so next iteration looks at this newly added
+      // one, there might be more changes here!
+    }
+
+    console.assert(chunks[i].value.every((curr, i) => !identical(previous.stdout[offset + first + i], curr)));
+
+    // TODO clean this up this is a test.
+    chunks[i].differences = chunks[i].value.map((current, i) => ({previous: previous.stdout[offset + first + i], current}));
+
+    offset += last; // Add the offset for this plus optionally the
+                    // spliced in identical chunk we added.
+  }
+
+  return readonly(chunks);
+}

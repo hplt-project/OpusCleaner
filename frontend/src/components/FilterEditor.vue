@@ -13,6 +13,8 @@ import SegmentedControl from '../components/SegmentedControl.vue';
 import FilterStep from '../components/FilterStep.vue';
 import FilterOutputTable from '../components/FilterOutputTable.vue';
 import {Edit3Icon, TagIcon} from 'vue3-feather';
+import VueSelect from 'vue-select';
+import 'vue-select/dist/vue-select.css';
 
 
 const multiDragKey = navigator.platform.match(/^(Mac|iPhone$)/) ? 'Meta' : 'Control';
@@ -127,6 +129,13 @@ function getLoadingStage(index) {
 		return 'pending';
 }
 
+function filterFilters(filters, query) {
+	return query.length === 0 ? filters : filters.filter(({name, description}) => {
+		return name.toLowerCase().indexOf(query.toLowerCase()) !== -1
+		    || (description && description.toLowerCase().indexOf(query.toLowerCase()) !== -1);
+	});
+}
+
 const categoryPicker = ref();
 
 </script>
@@ -153,7 +162,14 @@ const categoryPicker = ref();
 		</div>
 
 		<div class="filter-container">
-			<div class="filter-input"></div>
+			<div class="filter-input">
+				<VueSelect :filter="filterFilters" :options="filters" placeholder="Search filters…">
+					<template #option="{ name, description }">
+						{{ name }}<br>
+						<small>{{ description }}</small>
+					</template>
+				</VueSelect>
+			</div>
 
 			<draggable tag="ol" class="filter-steps"
 			v-model="filterSteps" item-key="stamp" 

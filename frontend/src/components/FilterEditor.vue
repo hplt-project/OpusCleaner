@@ -12,7 +12,7 @@ import Checkbox from '../components/Checkbox.vue';
 import SegmentedControl from '../components/SegmentedControl.vue';
 import FilterStep from '../components/FilterStep.vue';
 import FilterOutputTable from '../components/FilterOutputTable.vue';
-import {Edit3Icon, TagIcon} from 'vue3-feather';
+import {Edit3Icon, TagIcon, PlusIcon, MinusIcon} from 'vue3-feather';
 import VueSelect from 'vue-select';
 import 'vue-select/dist/vue-select.css';
 
@@ -165,8 +165,10 @@ const categoryPicker = ref();
 			<div class="filter-input">
 				<VueSelect :filter="filterFilters" :options="filters" placeholder="Search filters…">
 					<template #option="{ name, description }">
-						{{ name }}<br>
-						<small>{{ description }}</small>
+						<div class="filter-search-result" :title="description">
+							{{ name }}<br>
+							<small>{{ description }}</small>
+						</div>
 					</template>
 				</VueSelect>
 			</div>
@@ -197,7 +199,7 @@ const categoryPicker = ref();
 						<template v-slot:header>
 							<LoadingIndicator class="loading-indicator" :state="getLoadingStage(i)"/>
 							<span class="filter-name">{{ filterStep.filter }}</span>
-							<button v-on:click="removeFilterStep(i)">Remove</button>
+							<button v-on:click="removeFilterStep(i)" class="remove-filter-btn" title="Do not use filter"><MinusIcon/></button>
 						</template>
 						<template v-slot:footer>
 							<span class="line-count" title="Line count">{{ samples[i+1]?.stdout?.length }}</span>
@@ -218,9 +220,15 @@ const categoryPicker = ref();
 				v-bind:clone="createFilterStep">
 				<template v-slot:item="{element:filter}">
 					<li class="filter">
-						<span v-bind:title="filter.description" class="filter-name">{{filter.name}}</span>
-						<span class="filter-type">{{filter.type}}</span>
-						<button v-on:click="addFilterStep(filter)" class="add-filter-btn">Add</button>
+						<details>
+							<summary>
+								<span v-bind:title="filter.description" class="filter-name">{{filter.name}}</span>
+								<button v-on:click="addFilterStep(filter)" class="add-filter-btn" title="Use filter">
+									<PlusIcon/>
+								</button>
+							</summary>
+							<p>{{ filter.description }}</p>
+						</details>
 					</li>
 				</template>
 			</draggable>
@@ -243,6 +251,18 @@ const categoryPicker = ref();
 		display: flex;
 		flex-direction: column;
 	}
+
+		.controls {
+			display: flex;
+			align-content: space-between;
+		}
+
+		.controls {
+			display: flex;
+			justify-content: space-between;
+			align-items: flex-end;
+			padding: 4px;
+		}
 
 		.filter-output {
 			display: flex;
@@ -276,6 +296,25 @@ const categoryPicker = ref();
 		border-left: 1px solid var(--border-color);
 	}
 
+		.filter-input {
+			background: #17223d;
+			color: white;
+			padding: 0.4em;
+		}
+
+			.filter-input .v-select {
+				background: Canvas; /* TODO messes with the rounded corners */
+				color: CanvasText;
+				--vs-border-radius: 0;
+				--vs-border-color: #e4960e;
+				--vs-border-width: 2px; /* TODO looks wonky */
+			}
+
+				.filter-input .v-select .filter-search-result {
+					overflow: hidden;
+					text-overflow: ellipsis;
+				}
+
 .filter-steps {
 	flex: 1 0 auto;
 	border-top: 1px solid var(--border-color);
@@ -303,6 +342,17 @@ const categoryPicker = ref();
 	display: flex;
 }
 
+.filter > details {
+	display: flex;
+	flex: 1;
+}
+
+.filter > details > summary {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
 .filter .filter-name {
 	flex: 2;
 }
@@ -313,13 +363,27 @@ const categoryPicker = ref();
 	padding-left: 0.5em;
 }
 
-.filter .add-filter-btn {
+.add-filter-btn,
+.remove-filter-btn {
 	flex: 0;
 	align-self: center;
+
+	appearance: none;
+	background: transparent;
+	border: none;
+	cursor: pointer;
 }
 
+.add-filter-btn:hover,
+.remove-filter-btn:hover {
+
+}
+
+.available-filters li,
 .filter-steps li {
-	margin: 1em 0;
+	border: 1px solid #313640;
+	padding: .4em 1em;
+
 	position: relative; /* for ::after arrow */
 	background: var(--background-color); /* for when it is being dragged */
 }
@@ -352,9 +416,10 @@ const categoryPicker = ref();
 }
 
 
-.controls, .available-filters, .filter-steps {
+.available-filters, .filter-steps {
 	margin: 0;
-	padding: 0.5em 1em;
+	padding: 0;
+/*	padding: 0.5em 1em;*/
 	list-style: none;
 }
 

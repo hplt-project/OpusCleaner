@@ -153,6 +153,18 @@ async function requestDownloadSelection(datasets) {
 	});
 }
 
+const countFormat = new Intl.NumberFormat();
+
+const langFormat = new Intl.DisplayNames([], {type: 'language', languageDisplay: 'standard'});
+
+function formatLang(lang) {
+	try {
+		return `${langFormat.of(lang)} (${lang})`;
+	} catch {
+		return lang; /* not all codes returned by OPUS-API are languages, some are just numbers, some are made up */
+	}
+}
+
 </script>
 
 <template>
@@ -161,13 +173,13 @@ async function requestDownloadSelection(datasets) {
 			<label>
 				Source
 				<select v-model="srcLang">
-					<option v-for="lang in srcLangs" :key="lang" :value="lang">{{ lang }}</option>
+					<option v-for="lang in srcLangs" :key="lang" :value="lang">{{ formatLang(lang) }}</option>
 				</select>
 			</label>
 			<label>
 				Target
 				<select v-model="trgLang">
-					<option v-for="lang in trgLangs" :key="lang" :value="lang">{{ lang }}</option>
+					<option v-for="lang in trgLangs" :key="lang" :value="lang">{{ formatLang(lang) }}</option>
 				</select>
 			</label>
 		</div>
@@ -176,20 +188,20 @@ async function requestDownloadSelection(datasets) {
 				<thead>
 					<tr>
 						<th class="col-checkbox"></th>
-						<th class="col-name" title="Name of dataset">Name</th>
-						<th class="col-group" title="Group that publishes dataset">Group</th>
+						<th class="col-corpus" title="Corpus">Corpus</th>
 						<th class="col-version" title="Version of dataset (only latest versions are shown)">Version</th>
 						<th class="col-languages" title="Languages in this particular download">Languages</th>
-						<th class="col-filesize" title="Estimated size of download or size currently on disk">Filesize</th>
+						<th class="col-pairs" title="Number of sentence pairs">Sentences</th>
+						<th class="col-filesize" title="File size">Size</th>
 					</tr>
 				</thead>
 				<tbody>
 					<tr v-for="dataset in datasets" :key="dataset.id" :id="`did-${dataset.id}`">
 						<td class="col-checkbox" :title="dataset.url"><input type="checkbox" v-model="selection" :value="dataset" :disabled="dataset.id in downloads || 'paths' in dataset"></td>
-						<td class="col-name" :title="dataset.cite">{{ dataset.name }}</td>
-						<td class="col-group">{{ dataset.group }}</td>
+						<td class="col-name"><a :href="`https://opus.nlpl.eu/${dataset.corpus}-${dataset.version}.php`" target="_blank">{{ dataset.corpus }}</a></td>
 						<td class="col-version">{{ dataset.version }}</td>
-						<td class="col-languages">{{ dataset.langs.join(', ') }}</td>
+						<td class="col-languages">{{ dataset.langs.join(' → ') }}</td>
+						<td class="col-pairs">{{ dataset.pairs ? countFormat.format(dataset.pairs) : '' }}</td>
 						<td class="col-filesize">{{ dataset.size ? formatSize(dataset.size) : '' }}</td>
 					</tr>
 				</tbody>
@@ -198,11 +210,11 @@ async function requestDownloadSelection(datasets) {
 		<div class="dataset-selection">
 			<h2>Downloads</h2>
 			<ul>
-				<li v-for="download in downloads" :key="download.entry.id">{{ download.entry.name }} <em>{{ download.state }}</em></li>
+				<li v-for="download in downloads" :key="download.entry.id">{{ download.entry.corpus }} <em>{{ download.state }}</em></li>
 			</ul>
 			<h2>Shopping cart</h2>
 			<ul>
-				<li v-for="dataset in selection" :key="dataset.id">{{ dataset.name }}</li>
+				<li v-for="dataset in selection" :key="dataset.id">{{ dataset.corpus }} <small>{{ dataset.version }}</small></li>
 			</ul>
 			<button @click="downloadSelection">Download</button>
 		</div>
@@ -236,18 +248,20 @@ async function requestDownloadSelection(datasets) {
 .dataset-list {
 	flex: 1;
 	overflow: auto;
+	white-space: nowrap;
 }
 
 .dataset-list > table {
 	width: 100%;
 }
 
-.dataset-list .col-filesize {
+.dataset-list .col-filesize,
+.dataset-list .col-pairs {
 	text-align: right;
 }
 
 .dataset-list thead th {
-	text-align: left !important;
+	text-align: left;
 }
 
 .dataset-selection {

@@ -13,9 +13,9 @@ DEFAULT_CATEGORIES = [
 	{'name': 'dirty'}
 ]
 
-# TODO: Derive this from DATA_PATH but in such a way that mtdata actually writes
-# the files to the correct folder?
-DOWNLOAD_PATH = 'data'
+# TODO: Derive this from DATA_PATH. The `train-parts` is a mtdata compatibility
+# thing. I'm now used to also have a data/clean directory there, so keeping it.
+DOWNLOAD_PATH = 'data/train-parts'
 
 # glob expression that looks for the filter files. Unfortunately you can't use
 # commas and {} in this expression. TODO: fix that, you should be able to name

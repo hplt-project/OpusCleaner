@@ -184,7 +184,8 @@ const categoryPicker = ref();
 						class="filter-step"
 						v-model="filterSteps[i]"
 						v-bind:languages="languages"
-						v-bind:open="filterSteps[i].open"><!-- intentionally not two-way binding open because I don't really care about updates to it. -->
+						v-bind:open="filterSteps[i].open"
+						v-on:update:open="filterSteps[i].open=$event">
 						<template v-slot:header>
 							<span class="filter-name">{{ filterStep.filter }}</span>
 							<small v-if="getLoadingStage(i) === 'loaded'" class="line-count" title="Line count">{{ samples[i+1]?.stdout?.length }}</small>

@@ -8,12 +8,14 @@ const {open, languages, modelValue} = defineProps({
 	modelValue: Object
 })
 
+defineEmits(['update:modelValue', 'update:open']);
+
 const uid = getUniqueId();
 </script>
 
 <template>
 	<li>
-		<details class="property-list">
+		<details class="property-list" @toggle="$emit('update:open', $event.target.open)" :open="open">
 			<summary>
 				<slot name="header"></slot>
 			</summary>

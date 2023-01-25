@@ -97,7 +97,8 @@ function createFilterStep(filter) {
 	return {
 		filter: filter.name,
 		language: filterRequiresLanguage({filter:filter.name}) ? languages.value[0] : null,
-		parameters: Object.fromEntries(Object.entries(filter.parameters).map(([key, parameter]) => [key, parameter.default]))
+		parameters: Object.fromEntries(Object.entries(filter.parameters).map(([key, parameter]) => [key, parameter.default])),
+		open: true, /* Open newly added items by default */
 	}
 }
 
@@ -178,24 +179,16 @@ const categoryPicker = ref();
 			:multi-drag="true"
 			:set-data="setFilterStepData"
 			:multi-drag-key="multiDragKey">
-				<template v-slot:header>
-					<li class="property-list">
-						<header>
-							<span class="filter-name">Sample</span>
-							<small v-if="getLoadingStage(-1) === 'loaded'" class="line-count" title="Line count">{{ samples[0]?.stdout?.length }}</small>
-							<small v-else class="loading-state">{{ getLoadingStage(-1) }}</small>
-						</header>
-					</li>
-				</template>
 				<template v-slot:item="{element:filterStep, index:i}">
 					<FilterStep
 						class="filter-step"
 						v-model="filterSteps[i]"
-						v-bind:languages="languages">
+						v-bind:languages="languages"
+						v-bind:open="filterSteps[i].open"><!-- intentionally not two-way binding open because I don't really care about updates to it. -->
 						<template v-slot:header>
 							<span class="filter-name">{{ filterStep.filter }}</span>
 							<small v-if="getLoadingStage(i) === 'loaded'" class="line-count" title="Line count">{{ samples[i+1]?.stdout?.length }}</small>
-							<small v-else class="loading-state">{{ getLoadingStage(i) }}</small>
+							<small v-else class="loading-state" :class="{[getLoadingStage(i)]:true}">{{ getLoadingStage(i) }}</small>
 							<button v-on:click="removeFilterStep(i)" class="remove-filter-btn" title="Do not use filter"><MinusIcon/></button>
 						</template>
 					</FilterStep>
@@ -227,7 +220,6 @@ const categoryPicker = ref();
 
 <style scoped>
 	@import '../css/property-list.css';
-
 .clean-corpus-container {
 	flex: 1 1 auto;
 	overflow: hidden;
@@ -308,7 +300,6 @@ const categoryPicker = ref();
 
 .filter-steps {
 	flex: 1 0 auto;
-	border-top: 1px solid var(--border-color);
 	overflow-y: auto;
 }
 
@@ -377,23 +368,13 @@ const categoryPicker = ref();
 	background: var(--background-color); /* for when it is being dragged */
 }
 
-.filter-original-sample {
-	padding: .4em 1em;
+.loading-state,
+.line-count {
+	flex: 0 !important;
 }
 
-.filter-steps li.selected {
-	box-shadow: 0 0 0 4px rgba(0, 0, 255, 0.5);
-}
-
-.filter-steps li:not(:last-child):not(.selected)::after {
-	content: '';
-	width: 0;
-	height: 0;
-	border-top: 1em solid var(--border-color);
-	border-left: 1em solid transparent;
-	border-right: 1em solid transparent;
-	position: absolute;
-	left: calc(50% - 1em);
+.loading-state.failed {
+	color: red;
 }
 
 .filter-steps .filter-name {
@@ -402,17 +383,9 @@ const categoryPicker = ref();
 	text-overflow: ellipsis;
 }
 
-.filter-steps .loading-indicator {
-	flex: 0 !important;
-	align-self: flex-start;
-	margin: 0 0.5em 0 0;
-}
-
-
 .available-filters, .filter-steps {
 	margin: 0;
 	padding: 0;
-/*	padding: 0.5em 1em;*/
 	list-style: none;
 }
 
@@ -424,10 +397,6 @@ const categoryPicker = ref();
 
 .dataset-categories li {
 	display: inline;
-}
-
-.line-count {
-	flex: 0 !important;
 }
 
 </style>

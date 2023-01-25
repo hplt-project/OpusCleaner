@@ -3,7 +3,6 @@
 // Docs for draggable@4: https://github.com/SortableJS/vue.draggable.next
 import {ref, computed, watch, watchEffect, onMounted, readonly} from 'vue';
 import draggable from 'vuedraggable';
-import LoadingIndicator from './LoadingIndicator.vue';
 import {stream} from '../stream.js';
 import { getFilters, filterRequiresLanguage } from '../store/filters.js';
 import { getFilterSteps, saveFilterSteps, filterStepsModified } from '../store/filtersteps.js';
@@ -182,13 +181,10 @@ const categoryPicker = ref();
 				<template v-slot:header>
 					<li class="property-list">
 						<header>
-							<LoadingIndicator class="loading-indicator" :state="getLoadingStage(-1)"/>
 							<span class="filter-name">Sample</span>
+							<small v-if="getLoadingStage(-1) === 'loaded'" class="line-count" title="Line count">{{ samples[0]?.stdout?.length }}</small>
+							<small v-else class="loading-state">{{ getLoadingStage(-1) }}</small>
 						</header>
-						<footer>
-							<span class="line-count" title="Line count">{{ samples[0]?.stdout?.length }}</span>
-							<button v-on:click="showOutput(-1)">Show</button>
-						</footer>
 					</li>
 				</template>
 				<template v-slot:item="{element:filterStep, index:i}">
@@ -197,17 +193,10 @@ const categoryPicker = ref();
 						v-model="filterSteps[i]"
 						v-bind:languages="languages">
 						<template v-slot:header>
-							<LoadingIndicator class="loading-indicator" :state="getLoadingStage(i)"/>
 							<span class="filter-name">{{ filterStep.filter }}</span>
+							<small v-if="getLoadingStage(i) === 'loaded'" class="line-count" title="Line count">{{ samples[i+1]?.stdout?.length }}</small>
+							<small v-else class="loading-state">{{ getLoadingStage(i) }}</small>
 							<button v-on:click="removeFilterStep(i)" class="remove-filter-btn" title="Do not use filter"><MinusIcon/></button>
-						</template>
-						<template v-slot:footer>
-							<span class="line-count" title="Line count">{{ samples[i+1]?.stdout?.length }}</span>
-							<button v-on:click="showOutput(i)">
-								Show
-								<span v-if="samples[i+1]?.stderr" title="This step produced output on stderr.">⚠</span>
-							</button>
-							<button v-on:click="showDiff(i)" title="Compare the input and output of this step to show the effects of the filter.">Diff</button> 
 						</template>
 					</FilterStep>
 				</template>
@@ -220,7 +209,7 @@ const categoryPicker = ref();
 				v-bind:clone="createFilterStep">
 				<template v-slot:item="{element:filter}">
 					<li class="filter">
-						<details>
+						<details class="property-list">
 							<summary>
 								<span v-bind:title="filter.description" class="filter-name">{{filter.name}}</span>
 								<button v-on:click="addFilterStep(filter)" class="add-filter-btn" title="Use filter">
@@ -237,6 +226,8 @@ const categoryPicker = ref();
 </template>
 
 <style scoped>
+	@import '../css/property-list.css';
+
 .clean-corpus-container {
 	flex: 1 1 auto;
 	overflow: hidden;
@@ -382,10 +373,12 @@ const categoryPicker = ref();
 .available-filters li,
 .filter-steps li {
 	border: 1px solid #313640;
-	padding: .4em 1em;
-
 	position: relative; /* for ::after arrow */
 	background: var(--background-color); /* for when it is being dragged */
+}
+
+.filter-original-sample {
+	padding: .4em 1em;
 }
 
 .filter-steps li.selected {
@@ -431,6 +424,10 @@ const categoryPicker = ref();
 
 .dataset-categories li {
 	display: inline;
+}
+
+.line-count {
+	flex: 0 !important;
 }
 
 </style>

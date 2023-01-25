@@ -6,16 +6,7 @@ input[type=checkbox] {
 	width: 1em;
 }
 
-.property-list {
-	border: 1px solid var(--border-color);
-}
-
-.property-list > *:not(:last-child) {
-	border-bottom: 1px solid var(--border-color);
-}
-
 .property-list > summary {
-	background: var(--border-color);
 	align-items: center;
 }
 

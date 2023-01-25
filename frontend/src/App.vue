@@ -31,6 +31,10 @@ import horizonLogo from './assets/horizon-europe.png';
 </template>
 
 <style>
+:root {
+  --border-color: #17223d;
+}
+
 * {
   margin: 0;
   padding: 0;

@@ -163,7 +163,7 @@ export function diffSample(languages, previous, sample) {
   // Mark pairs that have exactly the same text on both sides as identical.
   const identical = (a, b) => languages.every(lang => a[lang] == b[lang]);
 
-  const chunks = diff(previous?.stdout || [], sample?.stdout || [], {equals});
+  const chunks = diff(previous || [], sample || [], {equals});
 
   let offset = 0;
 
@@ -184,7 +184,7 @@ export function diffSample(languages, previous, sample) {
 
     // Search for the first different sentence pair in this mutation block.
     for (first = 0; first < chunks[i].value.length; ++first) {
-      if (!identical(previous.stdout[offset + first], chunks[i].value[first]))
+      if (!identical(previous[offset + first], chunks[i].value[first]))
         break;
     }
 
@@ -198,7 +198,7 @@ export function diffSample(languages, previous, sample) {
     // Find the first line that is identical again, the end of our
     // 'changed' block.
     for (last = first+1; last < chunks[i].value.length; ++last) {
-      if (identical(previous.stdout[offset + last], chunks[i].value[last]))
+      if (identical(previous[offset + last], chunks[i].value[last]))
         break;
     }
 
@@ -227,14 +227,14 @@ export function diffSample(languages, previous, sample) {
       // one, there might be more changes here!
     }
 
-    console.assert(chunks[i].value.every((curr, i) => !identical(previous.stdout[offset + first + i], curr)));
+    console.assert(chunks[i].value.every((curr, i) => !identical(previous[offset + first + i], curr)));
 
     // TODO clean this up this is a test.
-    chunks[i].differences = chunks[i].value.map((current, i) => ({previous: previous.stdout[offset + first + i], current}));
+    chunks[i].differences = chunks[i].value.map((current, i) => ({previous: previous[offset + first + i], current}));
 
     offset += last; // Add the offset for this plus optionally the
                     // spliced in identical chunk we added.
   }
 
-  return readonly(chunks);
+  return chunks;
 }

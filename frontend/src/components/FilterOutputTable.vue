@@ -1,9 +1,9 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, readonly } from 'vue';
 import { diffSample } from '../diff.js';
 import InlineDiff from './InlineDiff.vue';
 
-const {languages, rows, refRows, displayAsRows} = defineProps({
+const props = defineProps({
 	languages: {
 		type: Array,
 	},
@@ -22,13 +22,9 @@ const {languages, rows, refRows, displayAsRows} = defineProps({
 
 const outputElement = ref();
 
-const isShowingDiff = computed(() => {
-	return refRows !== null;
-})
+const isShowingDiff = computed(() => props.refRows !== null);
 
-const differences = computed(() => {
-	return refRows !== null ? diffSample(languages.value, refRows, rows) : [];
-});
+const differences = computed(() => readonly(props.refRows !== null ? diffSample(props.languages, props.refRows, props.rows) : []));
 
 const stats = computed(() => {
 	let additions = 0, deletions = 0, changes = 0;
@@ -77,23 +73,26 @@ function languageName(lang) {
 
 <template>
 	<div class="filter-output-table">
-		<div v-if="isShowingDiff" class="controls">
-			<span>Comparing sample to the filtered sample: {{ stats.additions }} lines added, {{ stats.deletions }} lines removed, and {{ stats.changes }} lines changed.</span>
-			<template v-if="stats.additions || stats.deletions || stats.changes">
-				<button @click="scrollToNextChange()" title="Scroll to next difference">Next</button>
-			</template>
-		</div>
-		<div ref="outputElement" class="sample" :class="{'display-as-rows': displayAsRows}">
+		<div ref="outputElement" class="sample" :class="{'display-as-rows': props.displayAsRows}">
 			<table v-if="rows">
 				<thead>
 					<tr>
-						<th v-for="lang in languages" :key="lang">{{ languageName(lang) }}</th>
+						<th v-for="lang in props.languages" :key="lang">{{ languageName(lang) }}</th>
+					</tr>
+					<tr v-if="isShowingDiff">
+						<td :colspan="props.languages.length">
+							<div class="controls" v-if="stats.additions || stats.deletions || stats.changes">
+								<!-- Wrapping controls in a div because a <td/> is hard to style -->
+								<span>Comparing sample to the filtered sample: {{ stats.additions }} lines added, {{ stats.deletions }} lines removed, and {{ stats.changes }} lines changed.</span>
+								<button @click="scrollToNextChange()" title="Scroll to next difference">Next</button>
+							</div>
+						</td>
 					</tr>
 				</thead>
 				<tbody v-if="isShowingDiff" class="table-diff">
 					<template v-for="(chunk, i) in differences">
 						<tr v-for="(entry, j) in chunk.value" :key="`${i}:${j}`" :class="{'added':chunk.added, 'removed':chunk.removed, 'changed':chunk.changed}">
-							<td v-for="lang in languages" :key="lang" :lang="lang">
+							<td v-for="lang in props.languages" :key="lang" :lang="lang">
 								<template v-if="chunk.changed">
 									<InlineDiff class="inline-diff" :current="entry[lang]" :previous="chunk.differences[j].previous[lang]"/>
 								</template>
@@ -105,8 +104,8 @@ function languageName(lang) {
 					</template>
 				</tbody>
 				<tbody v-else>
-					<tr v-for="(entry, i) in rows" :key="i">
-						<td v-for="lang in languages" :key="lang" :lang="lang">{{entry[lang]}}</td>
+					<tr v-for="(entry, i) in props.rows" :key="i">
+						<td v-for="lang in props.languages" :key="lang" :lang="lang">{{entry[lang]}}</td>
 					</tr>
 				</tbody>
 			</table>
@@ -118,6 +117,14 @@ function languageName(lang) {
 .filter-output-table {
 	display: flex;
 	overflow: hidden;
+	flex-direction: column;
+}
+
+.controls {
+	flex: 0;
+	display: flex;
+	justify-content: space-between;
+	padding: 0.4em;
 }
 
 .sample {

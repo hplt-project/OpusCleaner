@@ -152,8 +152,8 @@ const categoryPicker = ref();
 				<FilterOutputTable
 					class="filter-output-table"
 					:languages="languages"
-					:rows="view === 'original' ? original.stdout : sample?.stdout"
-					:ref-rows="view === 'changes' ? original.stdout : null"
+					:rows="view === 'original' ? original?.stdout : sample?.stdout"
+					:ref-rows="view === 'changes' ? original?.stdout : null"
 					:display-as-rows="displayAsRows"/>
 				<div class="filter-error" v-if="sample?.stderr" translate="no">
 					<pre>{{ sample.stderr }}</pre>

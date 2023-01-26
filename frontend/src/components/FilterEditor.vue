@@ -64,19 +64,16 @@ const original = computed(() => {
 	return samples.value.length > 0 ? samples.value[0] : null;
 });
 
-
-let _sampleAbortController = new AbortController();
-
-async function fetchSample() {
-	_sampleAbortController.abort();
-	_sampleAbortController = new AbortController();
+async function fetchSample(onCleanup) {
+	const abortController = new AbortController();
+	onCleanup(() => abortController.abort());
 	
 	isFetchingSamples.value = true;
 	samples.value = [];
 
 	const response = stream(`/api/datasets/${encodeURIComponent(dataset.name)}/sample`, {
 		method: 'POST',
-		signal: _sampleAbortController.signal,
+		signal: abortController.signal,
 		headers: {
 			'Content-Type': 'application/json',
 			'Accept': 'application/json',

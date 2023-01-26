@@ -238,14 +238,9 @@ const categoryPicker = ref();
 
 		.controls {
 			display: flex;
-			align-content: space-between;
-		}
-
-		.controls {
-			display: flex;
 			justify-content: space-between;
 			align-items: flex-end;
-			padding: 4px;
+			padding: 4px 16px 4px 0; /* 16px to align with the diff gutter */
 		}
 
 		.filter-output {

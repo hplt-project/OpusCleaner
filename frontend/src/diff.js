@@ -158,10 +158,10 @@ function clonePath(path) {
 
 export function diffSample(languages, previous, sample) {
   // Only mark different if neither of the columns is the same.
-  const equals = (a, b) => !languages.every(lang => a[lang] != b[lang]);
+  const equals = (a, b) => !languages.every(lang => a[lang] !== b[lang]);
   
   // Mark pairs that have exactly the same text on both sides as identical.
-  const identical = (a, b) => languages.every(lang => a[lang] == b[lang]);
+  const identical = (a, b) => languages.every(lang => a[lang] === b[lang]);
 
   const chunks = diff(previous || [], sample || [], {equals});
 

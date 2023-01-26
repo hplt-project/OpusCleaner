@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, readonly } from 'vue';
+import { ref, computed, readonly, onUpdated } from 'vue';
 import { diffSample } from '../diff.js';
 import InlineDiff from './InlineDiff.vue';
 
@@ -69,6 +69,39 @@ function languageName(lang) {
 	}
 }
 
+const gutter = ref();
+
+onUpdated(() => {
+	if (gutter.value.hidden = !isShowingDiff)
+		 return;
+
+	const viewHeight = outputElement.value.clientHeight;
+	const tableHeight = outputElement.value.firstElementChild.clientHeight;
+
+	gutter.value.width = 16;
+	gutter.value.height = viewHeight;
+
+	const ctx = gutter.value.getContext('2d');
+	const {width, height} = gutter.value;
+	ctx.clearRect(0, 0, width, height);
+
+	const colors = {
+		'added': 'green',
+		'removed': 'red',
+		'changed': 'yellow'
+	};
+
+	outputElement.value.querySelectorAll('tbody tr:is(.added, .removed, .changed)').forEach(row => {
+		ctx.fillStyle = colors[row.className];
+		ctx.fillRect(
+			/* x */ 0,
+			/* y */ row.offsetTop / tableHeight * viewHeight,
+			/* w */ width,
+			/* h */ Math.max(row.offsetHeight / tableHeight, 1)
+		);
+	});
+});
+
 </script>
 
 <template>
@@ -109,6 +142,7 @@ function languageName(lang) {
 					</tr>
 				</tbody>
 			</table>
+			<canvas class="gutter" ref="gutter" width="16"></canvas>
 		</div>
 	</div>
 </template>
@@ -130,9 +164,12 @@ function languageName(lang) {
 .sample {
 	flex: 1 1 auto;
 	overflow-y: auto;
+
+	display: flex;
 }
 
 .sample table {
+	flex: 1;
 	table-layout: fixed;
 	border-collapse: collapse;
 	width: 100%;
@@ -144,6 +181,12 @@ function languageName(lang) {
   row-gap: 10px;
 
   position: relative; /* for the sticky thead */
+}
+
+.sample .gutter {
+	flex: 0;
+	position: sticky;
+	top: 0;
 }
 
 .sample table thead {

@@ -21,7 +21,12 @@ const uid = getUniqueId();
 			</summary>
 			<div v-if="filterRequiresLanguage(modelValue)">
 				<label :for="`step-${uid}-column`">Column</label>
-				<select :id="`step-${uid}-column`" v-model="modelValue.language">
+				<select :id="`step-${uid}-column`"
+					v-bind:value="modelValue.language"
+					v-on:input="$emit('update:modelValue', {
+						...modelValue,
+						language: $event.target.value
+					})">
 					<option v-for="lang in languages" v-bind:key="lang">{{lang}}</option>
 				</select>
 			</div>

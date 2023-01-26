@@ -42,7 +42,7 @@ function languages(dataset) {
 					<td>{{ languages(dataset).join('–') }}</td>
 					<td class="tags"><TagsEditor :dataset="dataset"/></td>
 					<td class="filter-steps">
-						{{ getFilterSteps(dataset).value.length }}
+						{{ getFilterSteps(dataset).steps.value.length }}
 					</td>
 					<td>
 						<RouterLink class="icon-button" title="Show filter yaml" :to="{}"><CodeIcon/></RouterLink>

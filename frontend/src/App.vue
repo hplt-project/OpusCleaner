@@ -85,4 +85,9 @@ body {
 .icon-button:visited {
   color: inherit;
 }
+
+.icon-button:disabled {
+  cursor: inherit;
+  opacity: 0.5; /* There should be a better way */
+}
 </style>

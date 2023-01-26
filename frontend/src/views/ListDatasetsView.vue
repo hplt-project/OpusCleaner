@@ -6,6 +6,7 @@ import { getFilterSteps } from '../store/filtersteps.js';
 import { getCategoriesForDataset } from '../store/categories.js';
 import TagsEditor from '../components/TagsEditor.vue';
 import {UploadIcon, CodeIcon, FilterIcon, PieChartIcon, Edit3Icon, TagIcon} from 'vue3-feather';
+import NoDatasetImage from '../assets/data-cuate.svg';
 
 function languages(dataset) {
 	const keys = Object.keys(dataset?.columns || {});
@@ -26,7 +27,7 @@ function languages(dataset) {
 
 		<h2 class="table-title">Your datasets</h2>
 
-		<table class="datasets-table">
+		<table class="datasets-table" v-if="getDatasets().length > 0">
 			<thead>
 				<tr>
 					<th>Name</th>
@@ -52,6 +53,11 @@ function languages(dataset) {
 				</tr>
 			</tbody>
 		</table>
+		<div class="illustration-container" v-else>
+			<img :src="NoDatasetImage">
+			<p>No datasets yet. Click on the import data button on the right to get started.</p>
+			<p class="credits">Image by <a href="https://www.freepik.com/free-vector/no-data-concept-illustration_8961448.htm" target="_blank">storyset on Freepik</a>.</p>
+		</div>
 	</div>
 </template>
 
@@ -119,6 +125,22 @@ function languages(dataset) {
 
 .filter-steps {
 	text-align: right;
+}
+
+.illustration-container {
+	text-align: center;
+	font-size: 1.2em;
+	line-height: 2;
+}
+
+.illustration-container img {
+	max-width: 600px;
+	width: calc(100% - 4em);
+	margin: 2em;
+}
+
+.illustration-container .credits {
+	font-size: 0.8em;
 }
 
 </style>

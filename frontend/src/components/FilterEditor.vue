@@ -1,7 +1,7 @@
 <script setup>
 // Docs for Vue@3: https://vuejs.org/guide/introduction.html
 // Docs for draggable@4: https://github.com/SortableJS/vue.draggable.next
-import {ref, computed, watch, watchEffect, onMounted, readonly} from 'vue';
+import {ref, computed, watch, watchEffect, onMounted, onUnmounted, readonly} from 'vue';
 import draggable from 'vuedraggable';
 import {stream} from '../stream.js';
 import { getFilters, filterRequiresLanguage } from '../store/filters.js';
@@ -149,8 +149,26 @@ const lineCounts = computed(() => {
 	}
 });
 
+// Listens for ctrl+z (undo) and ctrl+shift+z (redo)
+function keyListener(e) {
+	if ((multiDragKey === 'Meta' ? e.metaKey : e.ctrlKey) && e.keyCode === 90) {
+		if (e.shiftKey) {
+			if (filterSteps.canRedo.value)
+				filterSteps.redo();
+		} else {
+			if (filterSteps.canUndo.value)
+				filterSteps.undo();
+		}
+		e.preventDefault();
+	}
+}
+
 onMounted(() => {
-	console.log('filterSteps', filterSteps);
+	document.body.addEventListener('keydown', keyListener);
+})
+
+onUnmounted(() => {
+	document.body.removeEventListener('keydown', keyListener);
 })
 
 const filterIsOpen = new class {

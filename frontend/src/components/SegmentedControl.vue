@@ -23,9 +23,12 @@ defineEmits(['update:modelValue']);
 	--border-color: #1c3948;
 	--active-color: #e4960e;
 	--color: #17223d;
+
+	display: inline-flex;
+	align-items: stretch;
+	flex-direction: row;
+	flex-wrap: nowrap;
 }
-
-
 
 .segmented-control > label:first-child > span {
 	border-radius: 4px 0 0 4px;
@@ -40,6 +43,9 @@ defineEmits(['update:modelValue']);
 }
 
 .segmented-control > label {
+	flex: 1;
+	display: flex;
+	white-space: nowrap;
 	line-height: 2em;
 	cursor: pointer;
 }

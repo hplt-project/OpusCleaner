@@ -135,6 +135,13 @@ function filterFilters(filters, query) {
 
 const categoryPicker = ref();
 
+const lineCounts = computed(() => {
+	return {
+		'original': samples.value.length > 0 ? samples.value[0].stdout?.length : null,
+		'clean': samples.value.length === filterSteps.value.length + 1 ? samples.value[filterSteps.value.length].stdout?.length : null
+	}
+});
+
 </script>
 
 <template>
@@ -142,7 +149,11 @@ const categoryPicker = ref();
 		<div class="output-panel">
 			<header class="controls">
 				<Checkbox v-model="displayAsRows">Display as rows</Checkbox>
-				<SegmentedControl class="table-buttons" v-model="view" :options="VIEWS"/>
+				<SegmentedControl class="table-buttons" v-model="view" :options="VIEWS">
+					<template v-slot="{option}">
+						{{ option }} <small class="line-count" title="Number of lines in sample" v-if="option in lineCounts">{{ lineCounts[option] }}</small>
+					</template>
+				</SegmentedControl>
 			</header>
 
 			<div class="filter-output">
@@ -380,6 +391,14 @@ const categoryPicker = ref();
 
 .dataset-categories li {
 	display: inline;
+}
+
+.table-buttons .line-count::before {
+	content: '(';
+}
+
+.table-buttons .line-count::after {
+	content: ')';
 }
 
 </style>

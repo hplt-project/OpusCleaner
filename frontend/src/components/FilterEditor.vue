@@ -190,7 +190,7 @@ const categoryPicker = ref();
 							<span class="filter-name">{{ filterStep.filter }}</span>
 							<small v-if="getLoadingStage(i) === 'loaded'" class="line-count" title="Line count">{{ samples[i+1]?.stdout?.length }}</small>
 							<small v-else class="loading-state" :class="{[getLoadingStage(i)]:true}">{{ getLoadingStage(i) }}</small>
-							<button v-on:click="removeFilterStep(i)" class="remove-filter-btn" title="Do not use filter"><MinusIcon/></button>
+							<button v-on:click="removeFilterStep(i)" class="icon-button remove-filter-btn" title="Do not use filter"><MinusIcon/></button>
 						</template>
 					</FilterStep>
 				</template>
@@ -206,7 +206,7 @@ const categoryPicker = ref();
 						<details class="property-list">
 							<summary>
 								<span v-bind:title="filter.description" class="filter-name">{{filter.name}}</span>
-								<button v-on:click="addFilterStep(filter)" class="add-filter-btn" title="Use filter">
+								<button v-on:click="addFilterStep(filter)" class="icon-button add-filter-btn" title="Use filter">
 									<PlusIcon/>
 								</button>
 							</summary>
@@ -345,16 +345,6 @@ const categoryPicker = ref();
 .remove-filter-btn {
 	flex: 0;
 	align-self: center;
-
-	appearance: none;
-	background: transparent;
-	border: none;
-	cursor: pointer;
-}
-
-.add-filter-btn:hover,
-.remove-filter-btn:hover {
-
 }
 
 .available-filters li,

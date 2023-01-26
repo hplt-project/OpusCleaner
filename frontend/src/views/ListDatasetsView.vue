@@ -4,7 +4,7 @@ import { RouterLink } from 'vue-router';
 import { getDatasets } from '../store/datasets.js';
 import { getFilterSteps } from '../store/filtersteps.js';
 import { getCategoriesForDataset } from '../store/categories.js';
-import CategoryPicker from '../components/CategoryPicker.vue';
+import TagsEditor from '../components/TagsEditor.vue';
 import {UploadIcon, CodeIcon, FilterIcon, PieChartIcon, Edit3Icon, TagIcon} from 'vue3-feather';
 
 function languages(dataset) {
@@ -12,8 +12,6 @@ function languages(dataset) {
 	const intl = new Intl.DisplayNames([], {type:'language'});
 	return keys.map(lang => intl.of(lang));
 }
-
-const categoryPicker = ref(); // Element
 
 </script>
 
@@ -42,17 +40,7 @@ const categoryPicker = ref(); // Element
 				<tr v-for="dataset in getDatasets()" :key="dataset.id">
 					<td>{{ dataset.name }}</td>
 					<td>{{ languages(dataset).join('–') }}</td>
-					<td class="tags">
-						<div class="tags-container">
-							<div class="category-tags">
-								<span class="tag" v-for="category in getCategoriesForDataset(dataset)" :key="category.name">
-									<TagIcon/>
-									<span class="tag-name">{{ category.name }}</span>
-								</span>
-							</div>
-							<button class="icon-button" @click="event => categoryPicker.showForDataset(dataset, event)"><Edit3Icon/></button>
-						</div>
-					</td>
+					<td class="tags"><TagsEditor :dataset="dataset"/></td>
 					<td class="filter-steps">
 						{{ getFilterSteps(dataset).value.length }}
 					</td>
@@ -64,25 +52,10 @@ const categoryPicker = ref(); // Element
 				</tr>
 			</tbody>
 		</table>
-		<CategoryPicker ref="categoryPicker"></CategoryPicker>
 	</div>
 </template>
 
 <style scoped>
-@import '../css/categories.css';
-
-.icon-button {
-	appearance: none;
-	border: none;
-	background: inherit;
-	cursor: pointer;
-	color: inherit;
-}
-
-.icon-button:visited {
-	color: inherit;
-}
-
 .import-data-button {
 	display: flex;
 	align-items: center;

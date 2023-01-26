@@ -32,6 +32,7 @@ import horizonLogo from './assets/horizon-europe.png';
 
 <style>
 :root {
+  --background-color: #fff;
   --border-color: #17223d;
 }
 
@@ -71,5 +72,17 @@ body {
 
 .thanking {
   display: flex;
+}
+
+.icon-button {
+  appearance: none;
+  border: none;
+  background: inherit;
+  cursor: pointer;
+  color: inherit;
+}
+
+.icon-button:visited {
+  color: inherit;
 }
 </style>

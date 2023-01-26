@@ -102,7 +102,11 @@ function createFilterStep(filter) {
 }
 
 function addFilterStep(filter) {
-	filterSteps.update([...filterSteps.steps.value, createFilterStep(filter)]);
+	const step = createFilterStep(filter);
+	filterSteps.update([...filterSteps.steps.value, step]);
+
+	// Open new steps by default
+	filterIsOpen.get(step).value = true;
 }
 
 function removeFilterStep(i) {

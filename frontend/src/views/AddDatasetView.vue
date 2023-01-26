@@ -7,6 +7,23 @@ import {DownloadCloudIcon} from 'vue3-feather';
 
 import 'vue-select/dist/vue-select.css';
 
+const SORT_ORDER_OPTIONS = [
+	{
+		label: 'Corpus name',
+		compare: (a, b) => a.corpus.localeCompare(b.corpus)
+	},
+	{
+		label: 'Download size',
+		compare: (a, b) => b.size - a.size
+	},
+	{
+		label: 'Sentence pairs',
+		compare: (a, b) => b.pairs - a.pairs
+	}
+];
+
+const sortOrder = ref(SORT_ORDER_OPTIONS[0]);
+
 const loading = ref(0);
 
 // Per language all target languages
@@ -16,6 +33,8 @@ const languages = new Map();
 const cache = new Map();
 
 const nameFilter = ref("");
+
+const latestOnly = ref(true);
 
 const includeMonolingual = ref(true);
 
@@ -83,9 +102,8 @@ const datasets = computed(() => {
 	let datasets = cache.get(key).value;
 
 	if (nameFilter.value.length > 0)
-		datasets = datasets.filter(({name, group}) => {
-			return name.toLowerCase().indexOf(nameFilter.value.toLowerCase()) !== -1
-					|| group.toLowerCase().indexOf(nameFilter.value.toLowerCase()) !== -1;
+		datasets = datasets.filter(({corpus, group}) => {
+			return corpus.toLowerCase().indexOf(nameFilter.value.toLowerCase()) !== -1;
 		});
 
 	datasets = datasets.filter(dataset => {
@@ -94,6 +112,17 @@ const datasets = computed(() => {
 		else
 			return includeMonolingual.value;
 	});
+
+	if (latestOnly.value) {
+		datasets = Array.from(datasets.reduce((latest, dataset) => {
+			if (!latest.has(dataset.corpus) || latest.get(dataset.corpus).version < dataset.version)
+				latest.set(dataset.corpus, dataset);
+
+			return latest
+		}, new Map()).values());
+	}
+
+	datasets.sort(sortOrder.value.compare);
 
 	return datasets;
 });
@@ -144,24 +173,6 @@ function download(dataset) {
 		Object.assign(downloads, castDownloadListToMap(update));
 	});
 }
-
-const sizeRequests = new Map();
-
-watch(datasets, (datasets) => {
-	datasets.forEach(dataset => {
-		if (dataset.size)
-			return;
-
-		if (!sizeRequests.has(dataset.id))
-			sizeRequests.set(dataset.id,
-				fetch(`/api/download/datasets/${encodeURIComponent(dataset.id)}`)
-					.then(response => response.json()))
-
-		sizeRequests.get(dataset.id).then(remote => {
-			Object.assign(dataset, remote);
-		});
-	})
-})
 
 async function fetchJSON(url, options) {
 	try {
@@ -222,11 +233,18 @@ const countFormat = new Intl.NumberFormat();
 				<input type="checkbox" v-model="includeBilingual">
 				Bilingual
 			</label>
+			<label class="search-button" :class="{'checked': latestOnly}">
+				<input type="checkbox" v-model="latestOnly">
+				Latest only
+			</label>
 			<label>
 				<VueSelect v-model="srcLang" :options="srcLangOptions" :reduce="({lang}) => lang" placeholder="Origin language" />
 			</label>
 			<label>
 				<VueSelect v-model="trgLang" :options="trgLangOptions" :reduce="({lang}) => lang" placeholder="Target language" />
+			</label>
+			<label>
+				<VueSelect v-model="sortOrder" :options="SORT_ORDER_OPTIONS" placeholder="Sort order" />
 			</label>
 		</div>
 		<div class="dataset-list">

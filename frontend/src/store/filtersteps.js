@@ -1,44 +1,39 @@
-import { ref, toRaw, readonly, reactive, computed } from 'vue';
+import { ref, toRaw, readonly, reactive, computed, watch } from 'vue';
 import { cyrb53 } from '../hash.js';
 import { getUniqueId } from '../hacks.js';
+
+const FILTERSTEP_SAVE_DELAY = 1500;
 
 // Configuration (steps) per dataset
 const configurations = new Map();
 
 class FilterStepsList {
-	#hash = ref(null); // Hash of last safe
 	#steps = ref([]); // List of step configurations
+	steps = readonly(this.#steps);
+	
+	serverHash = ref(null); // Hash of last save
+	clientHash = computed(() => hashFilterSteps(this.#steps.value));
+	isModified = computed(() => this.serverHash.value !== this.clientHash.value);
+	
 	#history = []; // previous versions of #steps array
 	#forward = []; // future versions of #steps array
 
-	hash = readonly(this.#hash);
-	steps = readonly(this.#steps);
-	
-	isModified = computed(() => {
-		return this.#hash.value !== hashFilterSteps(this.#steps.value);
-	});
 	canUndo = computed(() => {
-		console.log('canUndo', this.#history.length > 0);
-		this.#steps.value;
+		this.#steps.value; // mentioned for dependency
 		return this.#history.length > 0;
 	});
 	canRedo = computed(() => {
-		console.log('canRedo', this.#forward.length > 0);
-		this.#steps.value;
+		this.#steps.value; // mentioned for dependency
 		return this.#forward.length > 0;
 	});
 
-	construtor() {
-		//
-	}
-
 	restore(steps) {
-		if (steps !== this.steps.value) {
-			this.#history.splice(0, this.#history.length);
-			this.#forward.splice(0, this.#forward.length);
-			this.#steps.value = steps;
-		}
-		this.#hash.value = hashFilterSteps(steps);
+		if (steps === this.steps.value)
+			return;
+
+		this.#history.splice(0, this.#history.length);
+		this.#forward.splice(0, this.#forward.length);
+		this.#steps.value = steps;
 	}
 
 	update(steps) {
@@ -75,30 +70,35 @@ export function getFilterSteps(dataset) {
 
 		fetchFilterSteps(dataset).then(configuration => {
 			entry.restore(configuration.map(step => ({...step, id: getUniqueId()})));
+			entry.serverHash.value = entry.clientHash.value;
+
+			watch(entry.clientHash, (newHash, oldHash, onCleanup) => {
+				if (newHash === entry.serverHash.value)
+					return;
+
+				// Delay saving a bit for new changes so we don't hammer the API
+				const delay = setTimeout(async () => {
+					console.assert(entry.isModified.value, 'filtersteps configuration is marked as not-modified');
+					console.assert(entry.clientHash.value === newHash, 'hash changed after watch() but onCleanup was not called');
+					console.assert(newHash === hashFilterSteps(entry.steps.value), 'newHash does not match the hash for the current filtersteps configuration');
+					
+					const response = await fetch(`/api/datasets/${encodeURIComponent(dataset.name)}/configuration.json`, {
+						method: 'POST',
+						headers: {
+							'Content-Type': 'application/json',
+							'Accept': 'application/json'
+						},
+						body: JSON.stringify(entry.steps.value, null, 2)
+					});
+
+					if (response.ok)
+						entry.serverHash.value = newHash;
+				}, FILTERSTEP_SAVE_DELAY);
+
+				onCleanup(() => clearTimeout(delay));
+			})
 		});
 	}
 
 	return configurations.get(dataset.name);
-}
-
-export async function saveFilterSteps(dataset) {
-	const entry = configurations.get(dataset.name);
-	const steps = entry.steps.value;
-
-	// (Hashing before the `await fetch` to make sure we capture the submitted state)
-	const hash = hashFilterSteps(steps);
-
-	const response = await fetch(`/api/datasets/${encodeURIComponent(dataset.name)}/configuration.json`, {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-			'Accept': 'application/json'
-		},
-		body: JSON.stringify(steps, null, 2)
-	});
-
-	if (response.ok)
-		entry.restore(steps);
-
-	return response
 }

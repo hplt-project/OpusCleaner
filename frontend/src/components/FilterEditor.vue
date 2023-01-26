@@ -5,7 +5,7 @@ import {ref, computed, watch, watchEffect, onMounted, onUnmounted, readonly} fro
 import draggable from 'vuedraggable';
 import {stream} from '../stream.js';
 import { getFilters, filterRequiresLanguage } from '../store/filters.js';
-import { getFilterSteps, saveFilterSteps } from '../store/filtersteps.js';
+import { getFilterSteps } from '../store/filtersteps.js';
 import { formatNumberSuffix } from '../format.js';
 import Checkbox from '../components/Checkbox.vue';
 import SegmentedControl from '../components/SegmentedControl.vue';

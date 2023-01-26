@@ -57,7 +57,7 @@ body {
 .footer {
   display: flex;
   width: 75%;
-  margin: 60px 0;
+  margin: 60px auto;
   font-family: "Lato", sans-serif;
 }
 

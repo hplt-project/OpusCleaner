@@ -61,31 +61,36 @@ const original = computed(() => {
 	return samples.value.length > 0 ? samples.value[0] : null;
 });
 
-async function fetchSample(onCleanup) {
+// Fetch sample once, and every time any of the related variables change
+// which is either filterSteps or the dataset.
+watchEffect(async (onCleanup) => {
 	const abortController = new AbortController();
 	onCleanup(() => abortController.abort());
 	
 	isFetchingSamples.value = true;
 	samples.value = [];
 
-	const response = stream(`/api/datasets/${encodeURIComponent(dataset.name)}/sample`, {
-		method: 'POST',
-		signal: abortController.signal,
-		headers: {
-			'Content-Type': 'application/json',
-			'Accept': 'application/json',
-		},
-		body: JSON.stringify(filterSteps.steps.value, null, 2)
-	});
+	try {
+		const response = stream(`/api/datasets/${encodeURIComponent(dataset.name)}/sample`, {
+			method: 'POST',
+			signal: abortController.signal,
+			headers: {
+				'Content-Type': 'application/json',
+				'Accept': 'application/json',
+			},
+			body: JSON.stringify(filterSteps.steps.value, null, 2)
+		});
 
-	for await (let sample of response) {
-		samples.value.push(readonly(sample));
+		for await (let sample of response) {
+			samples.value.push(readonly(sample));
+		}
+	} catch (err) {
+		if (err.toString().indexOf('The operation was aborted') === -1)
+			throw err;
+	} finally {
+		isFetchingSamples.value = false;
 	}
-
-	isFetchingSamples.value = false;
-}
-
-watchEffect(fetchSample);
+});
 
 function createFilterStep(filter) {
 	return {

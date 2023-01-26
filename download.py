@@ -3,21 +3,26 @@
 import os
 import sys
 import asyncio
+import json
+import gzip
 from glob import iglob
 from itertools import chain
-from typing import Iterable, Dict, List, Optional, Set, Union, Tuple
+from typing import Iterable, Dict, List, Optional, Set, Union, Tuple, cast
 from enum import Enum
 from queue import SimpleQueue
-from subprocess import Popen
+from subprocess import Popen, PIPE
 from threading import Thread
 from collections import defaultdict
 from urllib.request import Request, urlopen
+from urllib.parse import urlencode
 from pprint import pprint
+from operator import itemgetter
+from warnings import warn
+from tempfile import TemporaryDirectory, TemporaryFile
+from shutil import copyfileobj
+from multiprocessing import Process
+from zipfile import ZipFile
 
-import mtdata.entry
-from mtdata.entry import lang_pair, DatasetId
-from mtdata.index import Index, get_entries
-from mtdata.iso.bcp47 import bcp47, BCP47Tag
 from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException
 
@@ -25,25 +30,27 @@ from config import DATA_PATH, DOWNLOAD_PATH
 
 
 class EntryRef(BaseModel):
-    id: str
+    id: int
 
 
 class Entry(EntryRef):
-    group: str
-    name: str
+    corpus: str
     version: str
-    langs: List[str]
-    cite: Optional[str]
+    langs: Tuple[str,str]
+    pairs: Optional[int] # Number of sentence pairs
+    size: Optional[int] # Size on disk in bytes (rounded to lowest 1024)
+
+    @property
+    def basename(self) -> str:
+        return f'{self.corpus}-{self.version}.{"-".join(self.langs)}'
 
 
 class LocalEntry(Entry):
     paths: Set[str]
-    size: Optional[int] # Size on disk
 
 
 class RemoteEntry(Entry):
-    url: Union[str, Tuple[str,str]]
-    size: Optional[int] # 'Content-Length' from a HTTP HEAD request
+    url: str
 
 
 class DownloadState(Enum):
@@ -54,44 +61,74 @@ class DownloadState(Enum):
     FAILED = 'failed'
 
 
-def get_dataset(entry: Entry, path: str) -> Popen:
-    """Gets datasets, using a subprocess call to mtdata. Might be less brittle to internal
-    mtdata interface changes"""
-    call_type: str # We have train/test/dev
-    if "dev" in entry.name:
-        call_type = "-dv"
-    elif "test" in entry.name:
-        call_type = "-ts"
-    else:
-        call_type = "-tr"
+def get_dataset(entry: RemoteEntry, path: str):
+    # List of extensions of the expected files, e.g. `.en-mt.mt` and `.en-mt.en`.
+    suffixes = [f'.{"-".join(entry.langs)}.{lang}' for lang in entry.langs]
 
-    # Download the dataset
-    return Popen(["mtdata", "get", "-l", "-".join(entry.langs), call_type, entry.id, "--compress",  "-o", path])
+    with TemporaryFile() as temp_archive:
+        # Download zip file to temporary file
+        with urlopen(entry.url) as fh:
+            copyfileobj(fh, temp_archive)
+
+        # Then selectively extract that zipfile to a temporary directory
+        with TemporaryDirectory(dir=path) as temp_extracted:
+            files = []
+
+            with ZipFile(temp_archive) as archive:
+                for info in archive.filelist:
+                    if info.is_dir() or not any(info.filename.endswith(suffix) for suffix in suffixes):
+                        continue
+
+                    # `info.filename` is something like "beepboop.en-nl.en", `lang` will be "en".
+                    _, lang = info.filename.rsplit('.', maxsplit=1)
+
+                    filename = f'{entry.basename}.{lang}.gz'
+                    temp_dest = os.path.join(temp_extracted, filename)
+                    data_dest = os.path.join(path, filename)
+
+                    # Extract the file from the zip archive into the temporary directory, compress
+                    # it while we're at it.
+                    with archive.open(info) as fin, gzip.open(temp_dest, 'wb') as fout:
+                        copyfileobj(fin, fout)
+
+                    # Keep a list of extracted files, and where they eventually need to go to
+                    files.append((temp_dest, data_dest))
+
+            # Once we know all files extracted as expected, move them to their permanent place.
+            for temp_path, dest_path in files:
+                os.rename(temp_path, dest_path)
 
 
 class EntryDownload:
-    entry: Entry
+    entry: RemoteEntry
+    _child: Optional[Process]
 
-    def __init__(self, entry:Entry):
+    def __init__(self, entry:RemoteEntry):
         self.entry = entry
         self._child = None
     
     def start(self):
-        self._child = get_dataset(self.entry, DOWNLOAD_PATH)
+        self._child = Process(target=get_dataset, args=(self.entry, DOWNLOAD_PATH))
+        self._child.start()
+
+    def run(self):
+        self.start()
+        assert self._child is not None
+        self._child.join()
 
     def cancel(self):
-        if self._child and self._child.returncode is None:
+        if self._child and self._child.exitcode is None:
             self._child.kill()
 
     @property
     def state(self):
         if not self._child:
             return DownloadState.PENDING
-        elif self._child.returncode is None:
+        elif self._child.exitcode is None:
             return DownloadState.DOWNLOADING
-        elif self._child.returncode == 0:
+        elif self._child.exitcode == 0:
             return DownloadState.DOWNLOADED
-        elif self._child.returncode > 0:
+        elif self._child.exitcode > 0:
             return DownloadState.FAILED
         else:
             return DownloadState.CANCELLED
@@ -107,7 +144,7 @@ class Downloader:
             thread.start()
             self.threads.append(thread)
 
-    def download(self, entry:Entry) -> EntryDownload:
+    def download(self, entry:RemoteEntry) -> EntryDownload:
         download = EntryDownload(entry=entry)
         self.queue.put(download)
         return download
@@ -118,8 +155,7 @@ class Downloader:
             entry = queue.get()
             if not entry:
                 break
-            entry.start()
-            entry._child.wait()
+            entry.run()
 
 
 class EntryDownloadView(BaseModel):
@@ -127,61 +163,99 @@ class EntryDownloadView(BaseModel):
     state: DownloadState
 
 
+class OpusAPI:
+    endpoint: str
+
+    _datasets: Dict[int,Entry] = {}
+
+    def __init__(self, endpoint):
+        self.endpoint = endpoint
+        self._datasets = {}
+
+    def languages(self, lang1: Optional[str] = None) -> List[str]:
+        query = {'languages': 'True'}
+
+        if lang1 is not None:
+            query['source'] = lang1
+
+        with urlopen(f'{self.endpoint}?{urlencode(query)}') as fh:
+            return json.load(fh).get('languages', [])
+
+    def get_dataset(self, id:int) -> Entry:
+        return self._datasets[id]
+
+    def find_datasets(self, lang1:str, lang2:str) -> List[Entry]:
+        query = {
+            'source': lang1,
+            'target': lang2,
+            'preprocessing': 'moses'
+        }
+        
+        with urlopen(f'{self.endpoint}?{urlencode(query)}') as fh:
+            datasets = [cast_entry(entry) for entry in json.load(fh).get('corpora', [])]
+
+        # FIXME dirty hack to keep a local copy to be able to do id based lookup
+        # Related: https://github.com/Helsinki-NLP/OPUS-API/issues/3
+        for dataset in datasets:
+            self._datasets[dataset.id] = dataset
+
+        return datasets
+
+
 app = FastAPI()
 
-downloads: Dict[str, EntryDownload] = {}
+api = OpusAPI('https://opus.nlpl.eu/opusapi/')
+
+downloads: Dict[int,EntryDownload] = {}
 
 downloader = Downloader(2)
 
+datasets_by_id: Dict[int, Entry] = {}
 
-def find_local_paths(entry: mtdata.entry.Entry) -> Set[str]:
-    return set(
-        filename
-        for data_root in [os.path.dirname(DATA_PATH), DOWNLOAD_PATH]
-        for lang in entry.did.langs
-        for filename in iglob(os.path.join(data_root, f'{entry.did!s}.{lang.lang}.gz'), recursive=True)
+def cast_entry(data) -> Entry:
+    entry = Entry(
+        id=int(data['id']),
+        corpus=str(data['corpus']),
+        version=str(data['version']),
+        pairs=int(data['alignment_pairs']) if data.get('alignment_pairs') != '' else None,
+        size=int(data['size']) * 1024, # FIXME file size but do we care?
+        langs=(data['source'], data['target']), # FIXME these are messy OPUS-API lang codes :(
     )
 
+    paths = set(
+        filename
+        for data_root in [os.path.dirname(DATA_PATH), DOWNLOAD_PATH]
+        for lang in cast(Tuple[str,str], entry.langs)
+        for filename in iglob(os.path.join(data_root, f'{entry.basename}.{lang}.gz'), recursive=True)
+    )
 
-def cast_entry(entry, **kwargs) -> Entry:
-    args = dict(
-        id = str(entry.did),
-        group = entry.did.group,
-        name = entry.did.name,
-        version = entry.did.version,
-        langs = [lang.lang for lang in entry.did.langs],
-        cite = entry.cite,
-        **kwargs)
+    # Print search paths
+    # print('\n'.join(
+    #     filename
+    #     for data_root in [os.path.dirname(DATA_PATH), DOWNLOAD_PATH]
+    #     for lang in cast(Tuple[str,str], entry.langs)
+    #     for filename in [os.path.join(data_root, f'{entry.basename}.{lang}.gz')]
+    # ))
 
-    paths = find_local_paths(entry)
     if paths:
         return LocalEntry(
-            **args,
-            paths=paths,
-            size=sum(os.stat(path).st_size for path in paths))
+            **entry.__dict__,
+            paths=paths)
     else:
         return RemoteEntry(
-            **args,
-            url=entry.url)
+            **entry.__dict__,
+            url=str(data['url']))
 
 
 @app.get("/languages/")
 @app.get("/languages/{lang1}")
-def list_languages(lang1:Optional[str] = None) -> Iterable[str]:
-   langs: set[str] = set()
-   filter_lang = bcp47(lang1) if lang1 is not None else None
-   for entry in Index.get_instance().get_entries():
-       if filter_lang is not None and filter_lang not in entry.did.langs:
-           continue
-       langs.update(*entry.did.langs)
-   return sorted(lang for lang in langs if lang is not None)
+def list_languages(lang1:Optional[str] = None) -> List[str]:
+    return sorted(api.languages(lang1))
 
 
 @app.get("/by-language/{langs}")
 def list_datasets(langs:str) -> Iterable[Entry]:
-    return dedupe_datasests(
-        cast_entry(entry) for entry in get_entries(lang_pair(langs))
-    )
+    return api.find_datasets(*langs.split('-'))
 
 
 @app.get('/downloads/')
@@ -203,12 +277,11 @@ def batch_add_downloads(datasets: List[EntryRef]) -> Iterable[EntryDownloadView]
         if dataset.id not in downloads)
 
     entries = [
-        cast_entry(entry)
-        for entry in Index.get_instance().get_entries()
-        if str(entry.did) in needles
+        api.get_dataset(id) for id in needles
     ]
 
     for entry in entries:
+        assert isinstance(entry, RemoteEntry)
         downloads[entry.id] = downloader.download(entry)
 
     return list_downloads()
@@ -229,46 +302,3 @@ def cancel_download(dataset_id:str) -> EntryDownloadView:
         entry = download.entry,
         state = download.state
     )
-
-
-def http_request_head(url):
-    request = Request(url, method='HEAD')
-    with urlopen(request) as fh:
-        return fh.headers
-
-
-@app.get('/datasets/{dataset_id}')
-async def get_dataset_details(dataset_id:str) -> RemoteEntry:
-    key = DatasetId.parse(dataset_id)
-    dataset = Index.get_instance().entries[key]
-    
-    if isinstance(dataset.url, str):
-        urls = [dataset.url]
-    else:
-        urls = list(dataset.url)
-
-    requests = await asyncio.gather(*(asyncio.to_thread(http_request_head, url) for url in urls))
-
-    # Some sites, like ELRC-share, don't return a proper response at all...
-    size = sum(
-        int(headers.get('content-length'))
-        for headers in requests
-        if 'content-length' in headers and not headers.get('content-type', '').startswith('text/html')
-    )
-    
-    return cast_entry(dataset, size=size)
-
-
-def dedupe_datasests(datasets: Iterable[Entry]) -> Iterable[Entry]:
-    """Mtdata contains a multitude a datasets that have many different versions
-    (eg europarl). In the vast majority of the cases we ONLY EVER want the
-    latest version
-    """
-    datadict: Dict[str, List[Entry]] = defaultdict(list)
-    for entry in datasets:
-        datadict[entry.name].append(entry)
-    # Sort by version and return one per name
-    return [
-        sorted(entrylist, key=lambda t: t.version, reverse=True)[0]
-        for entrylist in datadict.values()
-    ]

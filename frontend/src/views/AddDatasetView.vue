@@ -43,7 +43,7 @@ const trgLangs = computed(() => {
 });
 
 const srcLangOptions = computed(() => {
-	const intl = new Intl.DisplayNames([], {type:'language'});
+	const intl = new Intl.DisplayNames([], {type: 'language', languageDisplay: 'standard'});
 	return (srcLangs.value || []).map(lang => {
 		try {
 			return {lang, label: `${intl.of(lang)} (${lang})`};
@@ -54,7 +54,7 @@ const srcLangOptions = computed(() => {
 });
 
 const trgLangOptions = computed(() => {
-	const intl = new Intl.DisplayNames([], {type:'language'});
+	const intl = new Intl.DisplayNames([], {type: 'language', languageDisplay: 'standard'});
 	return (trgLangs.value || []).map(lang => {
 		try {
 			return {lang, label: `${intl.of(lang)} (${lang})`};
@@ -200,6 +200,8 @@ async function requestDownloadSelection(datasets) {
 	});
 }
 
+const countFormat = new Intl.NumberFormat();
+
 </script>
 
 <template>
@@ -230,19 +232,21 @@ async function requestDownloadSelection(datasets) {
 		<div class="dataset-list">
 			<div class="dataset" v-for="dataset in datasets" :key="dataset.id" :id="`did-${dataset.id}`">
 				<div class="dataset-name">
-					<h3 class="dataset-title">{{ dataset.name }}</h3>
+					<h3 class="dataset-title"><a :href="`https://opus.nlpl.eu/${dataset.corpus}-${dataset.version}.php`" target="_blank">{{ dataset.corpus }}</a></h3>
 					<button class="download-dataset-button" @click="download(dataset)" :disabled="dataset.id in downloads || 'paths' in dataset">
 						Download
 						<DownloadCloudIcon class="download-icon"/>
 					</button>
 				</div>
 				<dl class="metadata-dataset">
-					<dt>Group</dt>
-					<dd title="Group">{{ dataset.group }}</dd>
+					<dt>Version</dt>
+					<dd title="Version">{{ dataset.version }}</dd>
 					<dt>Languages</dt>
-					<dd title="Languages">{{ dataset.langs.join('-') }}</dd>
+					<dd title="Languages">{{ dataset.langs.join('→') }}</dd>
+					<dt>Pairs</dt>
+					<dd title="Sentence pairs">{{ dataset.pairs ? countFormat.format(dataset.pairs) : '' }}</dd>
 					<dt>Size</dt>
-					<dd tile="Download size">{{ dataset.size ? formatSize(dataset.size) : '' }}</dd>
+					<dd title="Download size">{{ dataset.size ? formatSize(dataset.size) : '' }}</dd>
 				</dl>
 			</div>
 		</div>
@@ -250,7 +254,7 @@ async function requestDownloadSelection(datasets) {
 			<details class="downloads-popup">
 				<summary><h2>Downloads</h2></summary>
 				<ul>
-					<li v-for="download in downloads" :key="download.entry.id">{{ download.entry.name }} <em>{{ download.state }}</em></li>
+					<li v-for="download in downloads" :key="download.entry.id">{{ download.entry.corpus }} <em>{{ download.state }}</em></li>
 				</ul>
 			</details>
 		</Teleport>

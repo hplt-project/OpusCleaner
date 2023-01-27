@@ -72,7 +72,7 @@ function languageName(lang) {
 const gutter = ref();
 
 onUpdated(() => {
-	if (gutter.value.hidden = !isShowingDiff)
+	if (gutter.value.hidden = !isShowingDiff.value)
 		 return;
 
 	const viewHeight = outputElement.value.clientHeight;

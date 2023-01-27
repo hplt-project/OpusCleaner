@@ -21,6 +21,8 @@ const multiDragKey = navigator.platform.match(/^(Mac|iPhone$)/) ? 'Meta' : 'Cont
 
 const SampleStep = Symbol('SampleStep');
 
+const FETCH_SAMPLE_DELAY = 1000;
+
 
 const {dataset} = defineProps({
 	dataset: Object
@@ -61,24 +63,19 @@ const original = computed(() => {
 	return samples.value.length > 0 ? samples.value[0] : null;
 });
 
-// Fetch sample once, and every time any of the related variables change
-// which is either filterSteps or the dataset.
-watchEffect(async (onCleanup) => {
-	const abortController = new AbortController();
-	onCleanup(() => abortController.abort());
-	
+async function fetchSample(dataset, steps, {signal}) {
 	isFetchingSamples.value = true;
 	samples.value = [];
 
 	try {
 		const response = stream(`/api/datasets/${encodeURIComponent(dataset.name)}/sample`, {
 			method: 'POST',
-			signal: abortController.signal,
+			signal,
 			headers: {
 				'Content-Type': 'application/json',
 				'Accept': 'application/json',
 			},
-			body: JSON.stringify(filterSteps.steps.value, null, 2)
+			body: JSON.stringify(steps, null, 2)
 		});
 
 		for await (let sample of response) {
@@ -89,6 +86,28 @@ watchEffect(async (onCleanup) => {
 			throw err;
 	} finally {
 		isFetchingSamples.value = false;
+	}
+}
+
+// Fetch sample once, and every time any of the related variables change
+// which is either filterSteps or the dataset.
+watchEffect((onCleanup) => {
+	const fetch = () => {
+		const abortController = new AbortController();
+		onCleanup(() => abortController.abort());
+		fetchSample(dataset, filterSteps.steps.value, abortController)
+	};
+
+	// First time we fetch, we fetch without delay. In all other cases, we delay
+	// to "batch" multiple changes when someone is editing the filters. An
+	// essential side effect of this is that the first time the watcher is run
+	// the dependencies are correctly tracked since they don't occur inside a
+	// async callback (all dependencies are touched before the first `await`).
+	if (samples.value.length === 0) {
+		fetch()
+	} else {
+		const timeout = setTimeout(fetch, FETCH_SAMPLE_DELAY);
+		onCleanup(() => clearTimeout(timeout));
 	}
 });
 

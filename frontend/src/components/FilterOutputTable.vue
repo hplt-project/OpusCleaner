@@ -165,7 +165,8 @@ onUpdated(() => {
 	flex: 1 1 auto;
 	overflow-y: auto;
 
-	display: flex;
+	display: flex; /* to get table + gutter side by side */
+	align-items: flex-start; /* table should not stretch vertically if too small */
 }
 
 .sample table {

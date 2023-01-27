@@ -213,6 +213,7 @@ onUpdated(() => {
 	width: 50%;
 	padding: 0.25em 0.5em;
 	vertical-align: top;
+	word-wrap: break-word;
 }
 
 .sample tr:nth-child(2n) td {

@@ -241,7 +241,7 @@ const filterIsOpen = new class {
 
 		<div class="filter-container">
 			<div class="filter-input">
-				<VueSelect :filter="filterFilters" :options="filters" placeholder="Search filters…">
+				<VueSelect :filter="filterFilters" :options="filters" label="name" placeholder="Search filters…" v-on:option:selected="addFilterStep">
 					<template #option="{ name, description }">
 						<div class="filter-search-result" :title="description">
 							{{ name }}<br>

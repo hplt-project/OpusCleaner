@@ -22,3 +22,11 @@ export function getFilters() {
 
 	return filters;
 }
+
+export function filterDefinition(filterStep) {
+	return filters.value.find(filter => filter.name === filterStep.filter);
+}
+
+export function filterRequiresLanguage(filterStep) {
+	return filterDefinition(filterStep)?.type == 'monolingual';
+}

@@ -1,0 +1,18 @@
+.import-data-button {
+	display: flex;
+	align-items: center;
+	border: none;
+	border-radius: 3px;
+	height: 40px;
+	padding: 0 30px;
+	background-color: #17223d;
+	color: #e4960e;
+	font-size: 18px;
+
+	text-decoration: none;
+	line-height: 40px;
+}
+
+.import-data-icon {
+	margin-left: 5px;
+}

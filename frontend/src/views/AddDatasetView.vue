@@ -2,6 +2,27 @@
 import {ref, reactive, computed, watch, onMounted} from 'vue';
 import { Interval } from '../interval.js';
 import { formatSize } from '../format.js';
+import VueSelect from 'vue-select';
+import {DownloadCloudIcon} from 'vue3-feather';
+
+import 'vue-select/dist/vue-select.css';
+
+const SORT_ORDER_OPTIONS = [
+	{
+		label: 'Corpus name',
+		compare: (a, b) => a.corpus.localeCompare(b.corpus)
+	},
+	{
+		label: 'Download size',
+		compare: (a, b) => b.size - a.size
+	},
+	{
+		label: 'Sentence pairs',
+		compare: (a, b) => b.pairs - a.pairs
+	}
+];
+
+const sortOrder = ref(SORT_ORDER_OPTIONS[0]);
 
 const loading = ref(0);
 
@@ -10,6 +31,14 @@ const languages = new Map();
 
 // Datasets by language
 const cache = new Map();
+
+const nameFilter = ref("");
+
+const latestOnly = ref(true);
+
+const includeMonolingual = ref(true);
+
+const includeBilingual = ref(true);
 
 const srcLang = ref();
 
@@ -32,6 +61,28 @@ const trgLangs = computed(() => {
 	return languages.get(srcLang.value).value; // reactive, so will update once fetch() finishes
 });
 
+const srcLangOptions = computed(() => {
+	const intl = new Intl.DisplayNames([], {type: 'language', languageDisplay: 'standard'});
+	return (srcLangs.value || []).map(lang => {
+		try {
+			return {lang, label: `${intl.of(lang)} (${lang})`};
+		} catch (RangeError) {
+			return {lang, label: lang};
+		}
+	})
+});
+
+const trgLangOptions = computed(() => {
+	const intl = new Intl.DisplayNames([], {type: 'language', languageDisplay: 'standard'});
+	return (trgLangs.value || []).map(lang => {
+		try {
+			return {lang, label: `${intl.of(lang)} (${lang})`};
+		} catch (RangeError) {
+			return {lang, label: lang};
+		}
+	})
+});
+
 const datasets = computed(() => {
 	if (!srcLang.value || !trgLang.value)
 		return [];
@@ -40,15 +91,41 @@ const datasets = computed(() => {
 	if (!cache.has(key)) {
 		const list = ref([]);
 		cache.set(key, list);
+		// Fetches actual list async, but the cache entry is available immediately.
 		fetchDatasets(srcLang.value, trgLang.value).then(datasets => {
 			list.value = datasets;
 		})
 	}
 
-	return cache.get(key).value;
-});
+	// cache contains refs, so this computed() is called again once the data
+	// is actually fetched.
+	let datasets = cache.get(key).value;
 
-const selection = ref([]); // List of datasets to download
+	if (nameFilter.value.length > 0)
+		datasets = datasets.filter(({corpus, group}) => {
+			return corpus.toLowerCase().indexOf(nameFilter.value.toLowerCase()) !== -1;
+		});
+
+	datasets = datasets.filter(dataset => {
+		if (dataset.langs.length > 1)
+			return includeBilingual.value;
+		else
+			return includeMonolingual.value;
+	});
+
+	if (latestOnly.value) {
+		datasets = Array.from(datasets.reduce((latest, dataset) => {
+			if (!latest.has(dataset.corpus) || latest.get(dataset.corpus).version < dataset.version)
+				latest.set(dataset.corpus, dataset);
+
+			return latest
+		}, new Map()).values());
+	}
+
+	datasets.sort(sortOrder.value.compare);
+
+	return datasets;
+});
 
 const downloads = reactive({});
 
@@ -91,30 +168,11 @@ function castDownloadListToMap(list) {
 	return Object.fromEntries(list.map(download => [download.entry.id, download]));
 }
 
-function downloadSelection() {
-	requestDownloadSelection(selection.value).then(update => {
+function download(dataset) {
+	requestDownloadSelection([dataset]).then(update => {
 		Object.assign(downloads, castDownloadListToMap(update));
 	});
-	selection.value = [];
 }
-
-const sizeRequests = new Map();
-
-watch(datasets, (datasets) => {
-	datasets.forEach(dataset => {
-		if (dataset.size)
-			return;
-
-		if (!sizeRequests.has(dataset.id))
-			sizeRequests.set(dataset.id,
-				fetch(`/api/download/datasets/${encodeURIComponent(dataset.id)}`)
-					.then(response => response.json()))
-
-		sizeRequests.get(dataset.id).then(remote => {
-			Object.assign(dataset, remote);
-		});
-	})
-})
 
 async function fetchJSON(url, options) {
 	try {
@@ -155,118 +213,185 @@ async function requestDownloadSelection(datasets) {
 
 const countFormat = new Intl.NumberFormat();
 
-const langFormat = new Intl.DisplayNames([], {type: 'language', languageDisplay: 'standard'});
-
-function formatLang(lang) {
-	try {
-		return `${langFormat.of(lang)} (${lang})`;
-	} catch {
-		return lang; /* not all codes returned by OPUS-API are languages, some are just numbers, some are made up */
-	}
-}
-
 </script>
 
 <template>
 	<div class="downloader">
-		<div class="filter-controls">
+		<h1 class="datasets-catalogue-title">
+			Datasets catalogue
+			<small><em>TODO</em> datasets</small>
+		</h1>
+		<div class="search-inputs">
 			<label>
-				Source
-				<select v-model="srcLang">
-					<option v-for="lang in srcLangs" :key="lang" :value="lang">{{ formatLang(lang) }}</option>
-				</select>
+				<input type="search" placeholder="Search dataset…" v-model="nameFilter">
+			</label>
+			<label class="search-button" :class="{'checked': includeMonolingual}">
+				<input type="checkbox" v-model="includeMonolingual">
+				Monolingual
+			</label>
+			<label class="search-button" :class="{'checked': includeBilingual}">
+				<input type="checkbox" v-model="includeBilingual">
+				Bilingual
+			</label>
+			<label class="search-button" :class="{'checked': latestOnly}">
+				<input type="checkbox" v-model="latestOnly">
+				Latest only
 			</label>
 			<label>
-				Target
-				<select v-model="trgLang">
-					<option v-for="lang in trgLangs" :key="lang" :value="lang">{{ formatLang(lang) }}</option>
-				</select>
+				<VueSelect v-model="srcLang" :options="srcLangOptions" :reduce="({lang}) => lang" placeholder="Origin language" />
+			</label>
+			<label>
+				<VueSelect v-model="trgLang" :options="trgLangOptions" :reduce="({lang}) => lang" placeholder="Target language" />
+			</label>
+			<label>
+				<VueSelect v-model="sortOrder" :options="SORT_ORDER_OPTIONS" placeholder="Sort order" />
 			</label>
 		</div>
 		<div class="dataset-list">
-			<table>
-				<thead>
-					<tr>
-						<th class="col-checkbox"></th>
-						<th class="col-corpus" title="Corpus">Corpus</th>
-						<th class="col-version" title="Version of dataset (only latest versions are shown)">Version</th>
-						<th class="col-languages" title="Languages in this particular download">Languages</th>
-						<th class="col-pairs" title="Number of sentence pairs">Sentences</th>
-						<th class="col-filesize" title="File size">Size</th>
-					</tr>
-				</thead>
-				<tbody>
-					<tr v-for="dataset in datasets" :key="dataset.id" :id="`did-${dataset.id}`">
-						<td class="col-checkbox" :title="dataset.url"><input type="checkbox" v-model="selection" :value="dataset" :disabled="dataset.id in downloads || 'paths' in dataset"></td>
-						<td class="col-name"><a :href="`https://opus.nlpl.eu/${dataset.corpus}-${dataset.version}.php`" target="_blank">{{ dataset.corpus }}</a></td>
-						<td class="col-version">{{ dataset.version }}</td>
-						<td class="col-languages">{{ dataset.langs.join(' → ') }}</td>
-						<td class="col-pairs">{{ dataset.pairs ? countFormat.format(dataset.pairs) : '' }}</td>
-						<td class="col-filesize">{{ dataset.size ? formatSize(dataset.size) : '' }}</td>
-					</tr>
-				</tbody>
-			</table>
+			<div class="dataset" v-for="dataset in datasets" :key="dataset.id" :id="`did-${dataset.id}`">
+				<div class="dataset-name">
+					<h3 class="dataset-title"><a :href="`https://opus.nlpl.eu/${dataset.corpus}-${dataset.version}.php`" target="_blank">{{ dataset.corpus }}</a></h3>
+					<button class="download-dataset-button" @click="download(dataset)" :disabled="dataset.id in downloads || 'paths' in dataset">
+						Download
+						<DownloadCloudIcon class="download-icon"/>
+					</button>
+				</div>
+				<dl class="metadata-dataset">
+					<dt>Version</dt>
+					<dd title="Version">{{ dataset.version }}</dd>
+					<dt>Languages</dt>
+					<dd title="Languages">{{ dataset.langs.join('→') }}</dd>
+					<dt>Pairs</dt>
+					<dd title="Sentence pairs">{{ dataset.pairs ? countFormat.format(dataset.pairs) : '' }}</dd>
+					<dt>Size</dt>
+					<dd title="Download size">{{ dataset.size ? formatSize(dataset.size) : '' }}</dd>
+				</dl>
+			</div>
 		</div>
-		<div class="dataset-selection">
-			<h2>Downloads</h2>
-			<ul>
-				<li v-for="download in downloads" :key="download.entry.id">{{ download.entry.corpus }} <em>{{ download.state }}</em></li>
-			</ul>
-			<h2>Shopping cart</h2>
-			<ul>
-				<li v-for="dataset in selection" :key="dataset.id">{{ dataset.corpus }} <small>{{ dataset.version }}</small></li>
-			</ul>
-			<button @click="downloadSelection">Download</button>
-		</div>
+		<Teleport to=".navbar">
+			<details class="downloads-popup">
+				<summary><h2>Downloads</h2></summary>
+				<ul>
+					<li v-for="download in downloads" :key="download.entry.id">{{ download.entry.corpus }} <em>{{ download.state }}</em></li>
+				</ul>
+			</details>
+		</Teleport>
 	</div>
 </template>
 
 <style scoped>
-.downloader {
-	flex: 1;
+
+.datasets-catalogue-title {
+	font-size: 20px;
+	color: #182231;
+	text-transform: uppercase;
 	display: flex;
-	flex-direction: row;
-	overflow: hidden;
+	align-items: baseline;
 }
 
-.downloader > * {
-	padding: 1em;
+.datasets-catalogue-title small {
+	display: inline-block;
+	border-left: 1px solid currentColor;
+	margin-left: 10px;
+	padding-left: 10px;
 }
 
-.downloader > *:not(:first-child) {
-	border-left: 1px solid #ccc;
+.datasets-catalogue-title span {
+	font-size: 16px;
+	font-weight: lighter;
 }
 
-.filter-controls {
-	flex: 0 0 200px;
+.search-inputs {
+	margin: 10px 0 20px 0;
 }
 
-.filter-controls label {
-	display: block;
+.search-button {
+	color: #182231;
+	border: none;
+	border-radius: 2px;
+	display: inline-block;
+	line-height: 28px;
+	height: 28px;
+	padding: 0 8px;
+	margin: 0 2px;
+	cursor: pointer;
+	background-color: #dbe5e6;
+}
+
+.search-button.checked {
+	background-color: #e4960e;
+}
+
+.search-button input {
+	display: none;
+}
+
+.search-inputs input {
+	height: 28px;
+	border-radius: 3px;
+}
+
+.search-inputs input::placeholder {
+	padding-left: 5px;
+}
+
+.search-inputs .v-select {
+	display: inline-block;
+	width: 180px;
+	height: 28px;
+	border-radius: 3px;
 }
 
 .dataset-list {
-	flex: 1;
-	overflow: auto;
-	white-space: nowrap;
+	display: grid;
+	grid-template-columns: repeat(auto-fill,minmax(400px, 1fr));
+	row-gap: 20px;
+	column-gap: 20px;
 }
 
-.dataset-list > table {
-	width: 100%;
+.dataset {
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	background-color: #dbe5e6;
+	border-radius: 5px;
+	padding: 20px;
+	height: 120px;
 }
 
-.dataset-list .col-filesize,
-.dataset-list .col-pairs {
-	text-align: right;
+.dataset-name {
+	display: flex;
+	justify-content: space-between;
+}
+.dataset-title {
+	font-size: 26px;
 }
 
-.dataset-list thead th {
-	text-align: left;
+.metadata-dataset dt {
+	display: none;
 }
 
-.dataset-selection {
-	flex: 0 0 300px;
-	overflow: auto;
+.metadata-dataset dd {
+	display: inline;
+	margin-right: 20px;
 }
 
+.download-dataset-button {
+	display: flex;
+	align-items: center;
+	width: 100px;
+	padding: 2px 8px;
+	border: none;
+	border-radius: 2px;
+	background-color: #dfbd79;
+	cursor: pointer;
+}
+
+.download-dataset-button:disabled {
+	cursor: default;
+}
+
+.download-icon {
+	margin-left: 5px;
+}
 </style>

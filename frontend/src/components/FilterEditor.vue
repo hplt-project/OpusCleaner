@@ -414,6 +414,8 @@ const filterIsOpen = new class {
 
 .filter .filter-name {
 	flex: 2;
+	text-overflow: ellipsis;
+	overflow: hidden;
 }
 
 .filter .filter-type {

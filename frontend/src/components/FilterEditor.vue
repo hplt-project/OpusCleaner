@@ -5,7 +5,7 @@ import {ref, computed, watch, watchEffect, onMounted, onUnmounted, readonly} fro
 import draggable from 'vuedraggable';
 import {stream} from '../stream.js';
 import { getFilters, filterRequiresLanguage } from '../store/filters.js';
-import { getFilterSteps } from '../store/filtersteps.js';
+import { getFilterSteps, defaultValue } from '../store/filtersteps.js';
 import { formatNumberSuffix } from '../format.js';
 import Checkbox from '../components/Checkbox.vue';
 import SegmentedControl from '../components/SegmentedControl.vue';
@@ -15,6 +15,7 @@ import {Edit3Icon, TagIcon, PlusIcon, MinusIcon, RotateCcwIcon, RotateCwIcon} fr
 import { getUniqueId } from '../hacks.js';
 import VueSelect from 'vue-select';
 import 'vue-select/dist/vue-select.css';
+
 
 const multiDragKey = navigator.platform.match(/^(Mac|iPhone$)/) ? 'Meta' : 'Control';
 
@@ -377,13 +378,6 @@ const filterIsOpen = new class {
 .filter-steps {
 	flex: 1 0 auto;
 	overflow-y: auto;
-}
-
-/* Bit of space for dragging & dropping */
-.filter-steps::after {
-	content: '';
-	display: block;
-	height: 4em;
 }
 
 .filters.display-separately {

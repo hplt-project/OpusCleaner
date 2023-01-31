@@ -1,10 +1,12 @@
 <template>
 	<Teleport to="body">
 		<div class="modal-wrapper">
-			<div class="overlay" @click="router.back()"></div>
+			<div class="overlay" @click="close()"></div>
 			<div class="modal">
-				<!-- you can use v-bind to pass down all props -->
-				<component :is="component" v-bind="$attrs"/>
+				<button class="close-button icon-button" title="Close" @click="close()"><XIcon/></button>
+				<div class="modal-content">
+					<component :is="component" v-bind="$attrs"/>
+				</div>
 			</div>
 		</div>
 	</Teleport>
@@ -13,6 +15,7 @@
 <script setup>
 import { shallowRef, watch, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
+import { XIcon } from 'vue3-feather';
 
 function isESModule(obj) {
 	return obj.__esModule || obj[Symbol.toStringTag] === 'Module';
@@ -42,16 +45,26 @@ watch(props.component, async (val, old, onCleanup) => {
 
 const router = useRouter();
 
+function close() {
+	router.back()
+}
+
 function keyListener(e) {
 	if (e.keyCode === 27) {
-		router.back()
+		close()
 		e.preventDefault();
 	}
 }
 
-onMounted(() => document.body.addEventListener('keyup', keyListener));
+onMounted(() => {
+	document.body.addEventListener('keyup', keyListener)
+	document.body.style.overflow = 'hidden';
+});
 
-onUnmounted(() => document.body.removeEventListener('keyup', keyListener));
+onUnmounted(() => {
+	document.body.removeEventListener('keyup', keyListener)
+	document.body.style.overflow = '';
+});
 
 </script>
 
@@ -71,10 +84,15 @@ onUnmounted(() => document.body.removeEventListener('keyup', keyListener));
 	top: 50%;
 	transform: translate(-50%, -50%);
 	background-color: white;
-	padding: 5em;
+	padding: 4em;
 	border: 1px solid #ccc;
 	border-radius: 1em;
 	box-shadow: 0 0 1em #00000033;
+}
+
+.modal-content {
+	max-height: calc(100vh - 2*4em - 2*2em);
+	overflow-y: auto;
 }
 
 .overlay {
@@ -83,5 +101,11 @@ onUnmounted(() => document.body.removeEventListener('keyup', keyListener));
 	width: 100vw;
 	height: 100vh;
 	background-color: #00000055;
+}
+
+.close-button {
+	position: absolute;
+	top: 1em;
+	right: 1em;
 }
 </style>

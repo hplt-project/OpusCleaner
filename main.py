@@ -166,6 +166,11 @@ class FilterPipeline(BaseModel):
     filters: List[FilterStep]
 
 
+class FilterPipelinePatch(BaseModel):
+    """A list of changes to a filter pipeline (used when updating filters)"""
+    filters: List[FilterStep]
+
+
 def list_filters(path) -> Iterable[Filter]:
     for filename in glob(path, recursive=True):
         try:
@@ -425,25 +430,9 @@ async def api_get_filtered_sample(name:str, filters:List[FilterStep]) -> AsyncIt
     return stream_jsonl(get_sample(name, filters))
 
 
-@app.get('/api/datasets/{name:path}/configuration.json')
-def api_get_dataset_filters(name:str) -> List[FilterStep]:
-    if not os.path.exists(filter_configuration_path(name)):
-        return []
-
-    with open(filter_configuration_path(name), 'r') as fh:
-        data = json.load(fh)
-        try:
-            return parse_obj_as(FilterPipeline, data).filters
-        except ValidationError:
-            # Backwards compatibility
-            return parse_obj_as(List[FilterStep], data)
-
-
-@app.post('/api/datasets/{name:path}/configuration.json')
-def api_update_dataset_filters(name:str, filters:List[FilterStep]):
+def make_pipeline(name, filters=[]):
     columns = list_datasets(DATA_PATH)[name]
-
-    pipeline = FilterPipeline(
+    return FilterPipeline(
         version=1,
         files=[file.name
             for _, file in
@@ -452,6 +441,30 @@ def api_update_dataset_filters(name:str, filters:List[FilterStep]):
         filters=filters
     )
 
+
+@app.get('/api/datasets/{name:path}/configuration.json')
+def api_get_dataset_filters(name:str) -> List[FilterStep]:
+
+    if not os.path.exists(filter_configuration_path(name)):
+        return make_pipeline(name)
+
+    with open(filter_configuration_path(name), 'r') as fh:
+        data = json.load(fh)
+        try:
+            return parse_obj_as(FilterPipeline, data)
+        except ValidationError:
+            try:
+                # Backwards compatibility
+                return make_pipeline(name, parse_obj_as(List[FilterStep], data))
+            except ValidationError:
+                # Last resort case
+                return make_pipeline(name)
+
+
+
+@app.patch('/api/datasets/{name:path}/configuration.json')
+def api_update_dataset_filters(name:str, patch:FilterPipelinePatch):
+    pipeline = make_pipeline(name, patch.filters)
     with open(filter_configuration_path(name), 'w') as fh:
         return json.dump(pipeline.dict(), fh, indent=2)
 

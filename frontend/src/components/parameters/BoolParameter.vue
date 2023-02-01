@@ -6,5 +6,10 @@ export default {
 </script>
 
 <template>
-	<input type="checkbox" :value="modelValue" @input="$emit('update:modelValue', $event.target.value)">
+  <slot/>
+	<input
+    type="checkbox"
+    v-bind="$attrs"
+    v-bind:value="modelValue"
+    v-on:input="$emit('update:modelValue', $event.target.value)"/>
 </template>

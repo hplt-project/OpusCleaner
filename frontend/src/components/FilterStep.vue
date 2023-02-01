@@ -46,7 +46,6 @@ const uid = getUniqueId();
 				</select>
 			</div>
 			<div v-for="(parameter, name) in filterDefinition(modelValue)?.parameters || {}" v-bind:key="name">
-				<label :for="`step-${uid}-${name}`">{{ name }}</label>
 				<component
 					:is="ParameterComponents[parameter.type]"
 					v-bind:id="`step-${uid}-${name}`"
@@ -58,7 +57,9 @@ const uid = getUniqueId();
 							...modelValue.parameters,
 							[name]: $event
 						}
-					})"/>
+					})">
+						<label :for="`step-${uid}-${name}`">{{ name }}</label>
+					</component>
 				<small v-if="parameter.help" class="property-list-description">{{parameter.help}}</small>
 			</div>
 			<footer>
@@ -67,7 +68,3 @@ const uid = getUniqueId();
 		</details>
 	</li>
 </template>
-
-<style scoped>
-@import '../css/property-list.css';
-</style>

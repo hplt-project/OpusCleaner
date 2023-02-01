@@ -3,6 +3,7 @@ import IntParameter from './IntParameter.vue';
 import FloatParameter from './FloatParameter.vue';
 import StringParameter from './StringParameter.vue';
 import BoolParameter from './BoolParameter.vue';
+import {getUniqueId} from '../../hacks.js';
 
 const ParameterComponents = {
 	'int': IntParameter,
@@ -15,18 +16,23 @@ defineProps(['parameter', 'modelValue']);
 
 defineEmits(['update:modelValue']);
 
+const uid = getUniqueId();
+
 </script>
 
 <template>
-	<fieldset>
+	<fieldset class="property-list">
+		<legend><slot/></legend>
 		<div v-for="(parameter, index) in parameter.parameters || []" :key="index">
 			<component
+				:id="`tuple-${uid}-${index}`"
 				:is="ParameterComponents[parameter.type]"
 				:parameter="parameter"
 				:modelValue="modelValue[index]"
 				@update:modelValue="$emit('update:modelValue', [...modelValue.slice(0, index), $event, ...modelValue.slice(index+1)])"
-			></component>
-			<small v-if="parameter.help" class="property-list-description">{{parameter.help}}</small>
+			>
+				<label v-if="parameter.help" :for="`tuple-${uid}-${index}`">{{parameter.help}}</label>
+			</component>
 		</div>
 	</fieldset>
 </template>

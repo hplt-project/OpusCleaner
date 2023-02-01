@@ -6,11 +6,13 @@ export default {
 </script>
 
 <template>
+	<slot/>
 	<input
 		type="number"
-		:value="modelValue"
-		@input="$emit('update:modelValue', $event.target.value)"
-		:min="parameter.min"
-		:max="parameter.max"
-		:step="0.1">
+		v-bind="$attrs"
+		v-bind:value="modelValue"
+		v-on:input="$emit('update:modelValue', $event.target.value)"
+		v-bind:min="parameter.min"
+		v-bind:max="parameter.max"
+		v-bind:step="0.1">
 </template>

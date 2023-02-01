@@ -61,6 +61,10 @@ details.property-list[open] > summary::before {
 	margin-left: 0.5em;
 }
 
+.property-list > * > fieldset {
+	flex: 1 0 100%;
+}
+
 .property-list > * > .property-list-description {
 	flex: 1 0 100%;
 }

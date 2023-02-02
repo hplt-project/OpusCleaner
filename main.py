@@ -223,6 +223,11 @@ class FilterPipeline(BaseModel):
     filters: List[FilterStep]
 
 
+class FilterPipelinePatch(BaseModel):
+    """A list of changes to a filter pipeline (used when updating filters)"""
+    filters: List[FilterStep]
+
+
 def list_filters(paths) -> Iterable[Filter]:
     for path in paths.split(':'):
         for filename in glob(path, recursive=True):
@@ -235,7 +240,6 @@ def list_filters(paths) -> Iterable[Filter]:
                     yield parse_obj_as(Filter, {**defaults, **json.load(fh)})
             except Exception as e:
                 print(f"Could not parse {filename}: {e}", file=sys.stderr)
-
 
 
 FILTERS: Dict[str,Filter] = {}
@@ -498,18 +502,43 @@ async def api_get_filtered_sample(name:str, filters:List[FilterStep]) -> AsyncIt
     return stream_jsonl(get_sample(name, filters))
 
 
+def make_pipeline(name, filters=[]):
+    columns = list_datasets(DATA_PATH)[name]
+    return FilterPipeline(
+        version=1,
+        files=[file.name
+            for _, file in
+            sorted(columns.items(), key=lambda pair: pair[0])
+        ],
+        filters=filters
+    )
+
+
 @app.get('/api/datasets/{name:path}/configuration.json')
 def api_get_dataset_filters(name:str) -> List[FilterStep]:
+
     if not os.path.exists(filter_configuration_path(name)):
-        return []
+        return make_pipeline(name)
 
     with open(filter_configuration_path(name), 'r') as fh:
         data = json.load(fh)
         try:
-            return parse_obj_as(FilterPipeline, data).filters
+            return parse_obj_as(FilterPipeline, data)
         except ValidationError:
-            # Backwards compatibility
-            return parse_obj_as(List[FilterStep], data)
+            try:
+                # Backwards compatibility
+                return make_pipeline(name, parse_obj_as(List[FilterStep], data))
+            except ValidationError:
+                # Last resort case
+                return make_pipeline(name)
+
+
+
+@app.patch('/api/datasets/{name:path}/configuration.json')
+def api_update_dataset_filters(name:str, patch:FilterPipelinePatch):
+    pipeline = make_pipeline(name, patch.filters)
+    with open(filter_configuration_path(name), 'w') as fh:
+        return json.dump(pipeline.dict(), fh, indent=2)
 
 
 def select_filter_steps(pattern: str, pipeline: FilterPipeline) -> List[Dict[str,Dict]]:
@@ -575,22 +604,6 @@ def api_get_dataset_filters_as_openfilter(name:str) -> List[FilterStep]:
         input_files = output_files
 
     return Response(yaml.safe_dump(opusfilter_config, sort_keys=False), media_type='application/yaml')
-
-@app.post('/api/datasets/{name:path}/configuration.json')
-def api_update_dataset_filters(name:str, filters:List[FilterStep]):
-    columns = list_datasets(DATA_PATH)[name]
-
-    pipeline = FilterPipeline(
-        version=1,
-        files=[file.name
-            for _, file in
-            sorted(columns.items(), key=lambda pair: pair[0])
-        ],
-        filters=filters
-    )
-
-    with open(filter_configuration_path(name), 'w') as fh:
-        return json.dump(pipeline.dict(), fh, indent=2)
 
 
 @app.get('/api/filters/')

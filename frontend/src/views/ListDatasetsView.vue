@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue';
-import { RouterLink } from 'vue-router';
+import { RouterLink, RouterView } from 'vue-router';
 import { getDatasets } from '../store/datasets.js';
 import { getFilterSteps } from '../store/filtersteps.js';
 import { getCategoriesForDataset } from '../store/categories.js';
@@ -46,7 +46,7 @@ function languages(dataset) {
 						{{ getFilterSteps(dataset).steps.value.length }}
 					</td>
 					<td>
-						<RouterLink class="icon-button" title="Show filter yaml" :to="{}"><CodeIcon/></RouterLink>
+						<RouterLink class="icon-button" title="Show filter yaml" :to="{name: 'edit-filters-yaml', params: {datasetName: dataset.name}}"><CodeIcon/></RouterLink>
 						<RouterLink class="icon-button" title="Edit filters" :to="{name: 'edit-filters', params: {datasetName: dataset.name}}"><FilterIcon/></RouterLink>
 						<RouterLink class="icon-button" title="Show dataset statistics" :to="{}"><PieChartIcon/></RouterLink>
 					</td>
@@ -58,6 +58,7 @@ function languages(dataset) {
 			<p>No datasets yet. Click on the import data button on the right to get started.</p>
 			<p class="credits">Image by <a href="https://www.freepik.com/free-vector/no-data-concept-illustration_8961448.htm" target="_blank">storyset on Freepik</a>.</p>
 		</div>
+		<RouterView/><!-- for modals -->
 	</div>
 </template>
 

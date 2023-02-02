@@ -1,4 +1,5 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
+import Modal from '../components/Modal.vue';
 
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
@@ -6,7 +7,17 @@ const router = createRouter({
     {
       path: '/',
       name: 'list-datasets',
-      component: () => import('../views/ListDatasetsView.vue')
+      component: () => import('../views/ListDatasetsView.vue'),
+      children: [
+        {
+          name: 'edit-filters-yaml',
+          path: '/datasets/:datasetName/configuration.yaml',
+          component: Modal,
+          props: {
+            component: () => import('../views/EditFiltersYamlView.vue')
+          }
+        }
+      ]
     },
     {
       path: '/datasets/:datasetName/configuration',

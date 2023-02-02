@@ -1,4 +1,4 @@
-import { ref, toRaw, readonly, reactive, computed, watch } from 'vue';
+import { ref, toRaw, readonly, reactive, computed, watch, shallowReactive } from 'vue';
 import { cyrb53 } from '../hash.js';
 import { getUniqueId } from '../hacks.js';
 
@@ -7,6 +7,10 @@ const FILTERSTEP_SAVE_DELAY = 1500;
 // Configuration (steps) per dataset
 const configurations = new Map();
 
+/**
+ * TODO: All this faffing about trying to make `.steps` only modifiable through
+ * `restore()` and `update()` really makes this thing unpleasant to use.
+ */
 class FilterStepsList {
 	#steps = ref([]); // List of step configurations
 	steps = readonly(this.#steps);
@@ -62,37 +66,43 @@ function hashFilterSteps(configuration) {
 	return cyrb53(JSON.stringify(configuration));
 }
 
-export function getFilterSteps(dataset) {
+export function getPipeline(dataset) {
 	if (!configurations.has(dataset.name)) {
-		const entry = new FilterStepsList();
+		const entry = shallowReactive({
+			version: null,
+			files: [],
+			filters: new FilterStepsList()
+		});
 
 		configurations.set(dataset.name, entry);
 
-		fetchFilterSteps(dataset).then(configuration => {
-			entry.restore(configuration.map(step => ({...step, id: getUniqueId()})));
-			entry.serverHash.value = entry.clientHash.value;
+		fetchFilterSteps(dataset).then(pipeline => {
+			entry.version = pipeline.version;
+			entry.files.splice(0, entry.files.length, pipeline.files);
+			entry.filters.restore(pipeline.filters.map(step => ({...step, id: getUniqueId()})));
+			entry.filters.serverHash.value = entry.filters.clientHash.value;
 
-			watch(entry.clientHash, (newHash, oldHash, onCleanup) => {
-				if (newHash === entry.serverHash.value)
+			watch(entry.filters.clientHash, (newHash, oldHash, onCleanup) => {
+				if (newHash === entry.filters.serverHash.value)
 					return;
 
 				// Delay saving a bit for new changes so we don't hammer the API
 				const delay = setTimeout(async () => {
-					console.assert(entry.isModified.value, 'filtersteps configuration is marked as not-modified');
-					console.assert(entry.clientHash.value === newHash, 'hash changed after watch() but onCleanup was not called');
-					console.assert(newHash === hashFilterSteps(entry.steps.value), 'newHash does not match the hash for the current filtersteps configuration');
+					console.assert(entry.filters.isModified.value, 'filtersteps configuration is marked as not-modified');
+					console.assert(entry.filters.clientHash.value === newHash, 'hash changed after watch() but onCleanup was not called');
+					console.assert(newHash === hashFilterSteps(entry.filters.steps.value), 'newHash does not match the hash for the current filtersteps configuration');
 					
 					const response = await fetch(`/api/datasets/${encodeURIComponent(dataset.name)}/configuration.json`, {
-						method: 'POST',
+						method: 'PATCH',
 						headers: {
 							'Content-Type': 'application/json',
 							'Accept': 'application/json'
 						},
-						body: JSON.stringify(entry.steps.value, null, 2)
+						body: JSON.stringify({filters: entry.filters.steps.value}, null, 2)
 					});
 
 					if (response.ok)
-						entry.serverHash.value = newHash;
+						entry.filters.serverHash.value = newHash;
 				}, FILTERSTEP_SAVE_DELAY);
 
 				onCleanup(() => clearTimeout(delay));
@@ -101,4 +111,8 @@ export function getFilterSteps(dataset) {
 	}
 
 	return configurations.get(dataset.name);
+}
+
+export function getFilterSteps(dataset) {
+	return getPipeline(dataset).filters;
 }

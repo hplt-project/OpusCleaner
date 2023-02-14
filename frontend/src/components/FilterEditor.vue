@@ -79,7 +79,8 @@ async function fetchSample(dataset, steps, {signal}) {
 		});
 
 		for await (let sample of response) {
-			samples.value.push(readonly(sample));
+			if (!signal.aborted)
+				samples.value.push(readonly(sample));
 		}
 	} catch (err) {
 		if (err.toString().indexOf('The operation was aborted') === -1 && err.toString().indexOf('The user aborted a request') === -1)
@@ -90,8 +91,9 @@ async function fetchSample(dataset, steps, {signal}) {
 }
 
 // Fetch sample once, and every time any of the related variables change
-// which is either filterSteps or the dataset.
-watchEffect((onCleanup) => {
+// which is either filterSteps or the dataset. Explicitly not watching `samples`
+// as that changes async thanks to this and would cause issues.
+watch([filterSteps.steps, dataset], (val, prev, onCleanup) => {
 	const fetch = () => {
 		const abortController = new AbortController();
 		onCleanup(() => abortController.abort());
@@ -109,6 +111,8 @@ watchEffect((onCleanup) => {
 		const timeout = setTimeout(fetch, FETCH_SAMPLE_DELAY);
 		onCleanup(() => clearTimeout(timeout));
 	}
+}, {
+	immediate: true, // Run on initialisation as well
 });
 
 function createFilterStep(filter) {

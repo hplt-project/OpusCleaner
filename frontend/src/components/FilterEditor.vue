@@ -82,7 +82,7 @@ async function fetchSample(dataset, steps, {signal}) {
 			samples.value.push(readonly(sample));
 		}
 	} catch (err) {
-		if (err.toString().indexOf('The operation was aborted') === -1)
+		if (err.toString().indexOf('The operation was aborted') === -1 && err.toString().indexOf('The user aborted a request') === -1)
 			throw err;
 	} finally {
 		isFetchingSamples.value = false;

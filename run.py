@@ -203,6 +203,17 @@ class Pipeline:
     def __init__(self, filters: Dict[str,Dict], languages: List[str], pipeline: List[Dict]):
         self.steps: List[PipelineStep] = []
 
+        # Make sure the path to the python binary (and the installed utils)
+        # is in the PATH variable. If you load a virtualenv this happens by
+        # default, but if you call it with the virtualenv's python binary 
+        # directly it wont.
+        pyenv_bin_path = os.path.dirname(sys.executable)
+        os_env_bin_paths = os.environ.get('PATH', '').split(os.pathsep)
+        self.env: Optional[Dict[str,str]] = {
+            **os.environ,
+            'PATH': os.pathsep.join([pyenv_bin_path] + os_env_bin_paths)
+        } if pyenv_bin_path not in os_env_bin_paths else None
+
         # Assert we have all filters we need
         assert set(step['filter'] for step in pipeline['filters']) - set(filters.keys()) == set()
 
@@ -237,6 +248,7 @@ class Pipeline:
                 stdout=stdout if is_last_step and not tee else PIPE,
                 stderr=PIPE,
                 cwd=step.basedir,
+                env=self.env,
                 shell=True)
 
             # Close our reference to the previous child, now taken over by the next child

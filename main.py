@@ -388,11 +388,23 @@ async def exec_filter_step(filter_step: FilterStep, langs: List[str], input: byt
 
     print(command, file=sys.stderr)
 
+    # Make sure the path to the python binary (and the installed utils)
+    # is in the PATH variable. If you load a virtualenv this happens by
+    # default, but if you call it with the virtualenv's python binary 
+    # directly it wont.
+    pyenv_bin_path = os.path.dirname(sys.executable)
+    os_env_bin_paths = os.environ.get('PATH', '').split(os.pathsep)
+    filter_env = {
+        **os.environ,
+        'PATH': os.pathsep.join([pyenv_bin_path] + os_env_bin_paths)
+    } if pyenv_bin_path not in os_env_bin_paths else None
+    
     p_filter = await asyncio.create_subprocess_shell(command,
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
-        cwd=filter_definition.basedir)
+        cwd=filter_definition.basedir,
+        env=filter_env)
 
     # Check exit codes, testing most obvious problems first.
     return await p_filter.communicate(input=input)

@@ -78,7 +78,7 @@ export function getPipeline(dataset) {
 
 		fetchFilterSteps(dataset).then(pipeline => {
 			entry.version = pipeline.version;
-			entry.files.splice(0, entry.files.length, pipeline.files);
+			entry.files.splice(0, entry.files.length, ...pipeline.files);
 			entry.filters.restore(pipeline.filters.map(step => ({...step, id: getUniqueId()})));
 			entry.filters.serverHash.value = entry.filters.clientHash.value;
 

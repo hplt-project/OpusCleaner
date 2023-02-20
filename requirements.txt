@@ -1,5 +1,7 @@
 anyio==3.6.1
 asgiref==3.5.2
+bifixer
+bicleaner
 blessed==1.19.1
 certifi==2022.6.15
 charset-normalizer==2.0.12
@@ -12,6 +14,7 @@ h11==0.13.0
 hanziconv==0.3.2
 httptools==0.4.0
 idna==3.3
+kenlm
 laserembeddings[ja,zh]==1.1.2
 latexcodec==2.0.1
 more-itertools==8.14.0

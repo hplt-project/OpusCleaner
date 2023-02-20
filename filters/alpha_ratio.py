@@ -33,6 +33,11 @@ trg_lang: Optional[str], ratio_words_trg: float, ratio_alpha_trg: float,\
         if src_lang in CHARS:
             src_toks = src.split()
             src_len = len(src_toks)
+            if src_len==0:
+                if debug:
+                    stderr.write(f'EMPTY_SRC\t{src}\t{trg}\n')
+                continue
+
             num_words = sum(
                 [1 if re.match(CHARS[src_lang], t, re.IGNORECASE) else 0 for t in src_toks])
             if num_words / float(src_len) < ratio_words_src:
@@ -49,6 +54,11 @@ trg_lang: Optional[str], ratio_words_trg: float, ratio_alpha_trg: float,\
         if trg is not None and trg_lang in CHARS:
             trg_toks = trg.split()
             trg_len = len(trg_toks)
+            if trg_len==0:
+                if debug:
+                    stderr.write(f'EMPTY_TRG\t{src}\t{trg}\n')
+                continue
+
             num_words = sum(
                 [1 if re.match(CHARS[trg_lang], t, re.IGNORECASE) else 0 for t in trg_toks])
             if num_words / float(trg_len) < ratio_words_trg:

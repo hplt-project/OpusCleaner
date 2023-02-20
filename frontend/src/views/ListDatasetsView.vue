@@ -11,7 +11,13 @@ import NoDatasetImage from '../assets/data-cuate.svg';
 function languages(dataset) {
 	const keys = Object.keys(dataset?.columns || {});
 	const intl = new Intl.DisplayNames([], {type:'language'});
-	return keys.map(lang => intl.of(lang));
+	return keys.map(lang => {
+		try {
+			return intl.of(lang.replace('_', '-'));
+		} catch (e) {
+			return lang;
+		}
+	});
 }
 
 </script>

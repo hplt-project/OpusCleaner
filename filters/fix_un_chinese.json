@@ -1,0 +1,6 @@
+{
+    "description": "It converts English fullstops into Chinese ones, as well as converting final comma into Chinese fullstop.",
+    "type": "monolingual",
+    "command": "./fix_un_chinese.py",
+    "parameters": {}
+}

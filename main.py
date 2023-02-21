@@ -553,14 +553,6 @@ def api_update_dataset_filters(name:str, patch:FilterPipelinePatch):
         return json.dump(pipeline.dict(), fh, indent=2)
 
 
-def select_filter_steps(pattern: str, pipeline: FilterPipeline) -> List[Dict[str,Dict]]:
-    return [
-        {str(re.search(pattern, FILTERS[step.filter].command).group(1)): step.parameters}
-        for step in pipeline.filters
-        if re.search(pattern, FILTERS[step.filter].command) is not None
-    ]
-
-
 @app.get('/api/datasets/{name:path}/configuration-for-opusfilter.yaml')
 def api_get_dataset_filters_as_openfilter(name:str) -> List[FilterStep]:
     if not os.path.exists(filter_configuration_path(name)):
@@ -577,7 +569,37 @@ def api_get_dataset_filters_as_openfilter(name:str) -> List[FilterStep]:
 
     input_files = pipeline.files
     
-    preprocess_steps = select_filter_steps(r'\bopusfilter\.preprocessors\.(\w+)\b', pipeline)
+    preprocess_steps = []
+
+    filter_steps = []
+
+    for step in pipeline.filters:
+        if (match := re.search(r'\bopusfilter\.preprocessors\.(\w+)\b', FILTERS[step.filter].command)):
+            preprocess_steps.append({
+                match.group(1): step.parameters
+            })
+        elif (match := re.search(r'\bopusfilter\.filters\.(\w+)\b', FILTERS[step.filter].command)):
+            filter_steps.append({
+                match.group(1): step.parameters
+            })
+        elif FILTERS[step.filter].type == FilterType.BILINGUAL:
+            filter_steps.append({
+                'OpusCleanerFilter': {
+                    'filter': step.filter,
+                    'parameters': step.parameters
+                },
+                'module': 'opuscleaner.opusfilter_compat'
+            })
+        elif FILTERS[step.filter].type == FilterType.MONOLINGUAL:
+            filter_steps.append({
+                'OpusCleanerFilter': {
+                    'filter': step.filter,
+                    'parameters': step.parameters
+                },
+                'module': 'opuscleaner.opusfilter_compat'
+            })
+        else:
+            raise ValueError(f'Cannot convert "{step.filter}" to opusfilter configuration')
 
     if preprocess_steps:
         output_files = [
@@ -586,7 +608,7 @@ def api_get_dataset_filters_as_openfilter(name:str) -> List[FilterStep]:
         ]
 
         opusfilter_config['steps'].append({
-            'type': 'filter',
+            'type': 'preprocess',
             'parameters': {
                 'inputs': input_files,
                 'outputs': output_files,
@@ -595,8 +617,6 @@ def api_get_dataset_filters_as_openfilter(name:str) -> List[FilterStep]:
         })
 
         input_files = output_files
-
-    filter_steps = select_filter_steps(r'\bopusfilter\.filters\.(\w+)\b', pipeline)
 
     if filter_steps:
         output_files = [

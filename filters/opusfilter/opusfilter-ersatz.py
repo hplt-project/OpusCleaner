@@ -1,30 +1,17 @@
 #!/usr/bin/env python3
-import sys
+import argparse
+import importlib
+import itertools
+import logging
 import os
+import sys
+import warnings
 
 # Prevent searching for modules in the filters/ directory (like langid)
 del sys.path[0]
 
-import importlib
-import importlib.util
+import opusfilter
 import yaml
-import itertools
-import argparse
-import logging
-import warnings
-
-def lazy_import(name):
-	spec = importlib.util.find_spec(name)
-	if not spec:
-		raise ImportError(name)
-	loader = importlib.util.LazyLoader(spec.loader)
-	spec.loader = loader
-	module = importlib.util.module_from_spec(spec)
-	sys.modules[name] = module
-	loader.exec_module(module)
-	return module
-
-opusfilter = lazy_import('opusfilter')
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--quiet', '-q', action='store_true')

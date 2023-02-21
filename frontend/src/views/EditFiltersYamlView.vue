@@ -1,35 +1,15 @@
 <template>
-	<pre><code>{{ yaml }}</code></pre>
+	<pre><code>{{ code }}</code></pre>
 </template>
 
 <script setup>
-import {watchEffect, ref, unref} from 'vue';
 import {useRoute} from 'vue-router';
+import {fetched} from '../hacks.js';
 
 const route = useRoute();
 
-function fetched(fn) {
-	const val = ref();
-
-	watchEffect((onCleanup) => {
-		const fetcher = (url, options) => {
-			const abort = new AbortController();
-			onCleanup(() => abort.abort());
-
-			const signal = abort.signal;
-			return fetch(url, {...options, signal});
-		};
-
-		Promise.resolve(fn(fetcher)).then(out => {
-			val.value = out
-		});
-	});
-
-	return val;
-}
-
-const yaml = fetched(async (fetch) => {
-	const response = await fetch(`/api/datasets/${encodeURIComponent(route.params.datasetName)}/configuration-for-opusfilter.yaml`);
+const code = fetched(async (fetch) => {
+	const response = await fetch(`/api/datasets/${encodeURIComponent(route.params.datasetName)}/${encodeURIComponent(route.params.format)}`);
 	return await response.text()
 });
 

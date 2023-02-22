@@ -20,5 +20,5 @@ files=`find $1 -type f`
 for file in $files; do
     myfileout=`sed "s#${1}##g" <<< "${file}"`
     echo "Deduplicating ${myfileout} ..."
-    cat ${file} | ./hash-seg.py | ./superdedup.py | cut -f 1,2 > ${2}/${myfileout}
+    cat ${file} | ./hash-seg.py -a | ./superdedup.py | cut -f 1,2 > ${2}/${myfileout}
 done

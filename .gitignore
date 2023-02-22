@@ -32,3 +32,6 @@ coverage
 *__pycache__*
 .env
 placeholders/mappings.yml
+
+# Pickled dedup dictionaries
+*.pickle

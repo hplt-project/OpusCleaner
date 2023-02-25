@@ -4,24 +4,24 @@ a dataset filtering pipeline created by empty-train in their own process and
 links them together through pipes. Can read from stdin but by default reads
 the dataset from the same folder as the pipeline configuration file.
 """
-import sys
-import os
 import argparse
 import json
+import os
+import shlex
 import signal
-from shutil import copyfileobj
-from shlex import quote
-from glob import glob
-from queue import Queue, SimpleQueue
-from threading import Thread
-from subprocess import Popen, PIPE
-from typing import Dict, List, Any, BinaryIO, Optional, TypeVar, Iterable, Tuple, NamedTuple, Union
-from pprint import pprint
-from tempfile import NamedTemporaryFile, TemporaryDirectory
+import sys
 import traceback
+from glob import glob
+from pprint import pprint
+from queue import Queue, SimpleQueue
+from shlex import quote
+from shutil import copyfileobj
+from subprocess import Popen, PIPE
+from tempfile import NamedTemporaryFile, TemporaryDirectory
+from threading import Thread
+from typing import Dict, List, Any, BinaryIO, Optional, TypeVar, Iterable, Tuple, NamedTuple, Union
 
-
-COL_PY = os.path.join(os.path.dirname(__file__), 'col.py')
+from .config import COL_PY
 
 
 T = TypeVar("T")
@@ -212,7 +212,7 @@ class Pipeline:
                 command = filter_definition['command']
             elif filter_definition['type'] == 'monolingual':
                 column = languages.index(step['language'])
-                command = f'{COL_PY} {column} {filter_definition["command"]}'
+                command = f'{" ".join(map(shlex.quote, COL_PY))} {column} {filter_definition["command"]}'
             else:
                 raise NotImplementedError()
 

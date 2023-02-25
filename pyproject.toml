@@ -23,7 +23,11 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: CPython",
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
-dynamic = ["version", "dependencies"]
+dynamic = [
+  "version",
+  "dependencies",
+  "optional-dependencies"
+]
 
 [project.scripts]
 opuscleaner-server = "opuscleaner.server:main"
@@ -70,6 +74,9 @@ code = "frontend"
 
 [tool.hatch.metadata.hooks.requirements_txt]
 files = ["requirements.txt"]
+
+[tool.hatch.metadata.hooks.requirements_txt.optional-dependencies]
+filters = ["requirements-filters.txt"]
 
 [tool.coverage.run]
 branch = true

@@ -427,7 +427,7 @@ def run_parallel(pipeline:Pipeline, stdin:BinaryIO, stdout:BinaryIO, *, parallel
     merger.join()
 
 
-def main(argv):
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--filters', '-f', type=str, default='./filters', help='Path to directory with filter specifications')
     parser.add_argument('--input', '-i', type=argparse.FileType('rb'), help='Input tsv. If unspecified input files are read from filter json; use - to read from stdin')
@@ -440,7 +440,7 @@ def main(argv):
     parser.add_argument('pipeline', metavar='PIPELINE', type=argparse.FileType('r'), help='Pipeline steps specification file, e.g. *.filters.json')
     parser.add_argument('languages', metavar='LANG', type=str, nargs='*', help='Language codes of the columns in the input TSV. Only used when --input is set')
 
-    args = parser.parse_args(argv)
+    args = parser.parse_args()
 
     # default search path for the data files is next to the configuration file
     # which is the default save location for empty-train.
@@ -539,4 +539,4 @@ def main(argv):
 
 
 if __name__ == '__main__':
-    main(sys.argv[1:])
+    main()

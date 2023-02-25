@@ -32,3 +32,8 @@ coverage
 *__pycache__*
 .env
 placeholders/mappings.yml
+*.sublime-workspace
+*.sublime-project
+*.whl
+.venv
+.vscode

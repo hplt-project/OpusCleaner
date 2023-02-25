@@ -29,11 +29,11 @@ from pprint import pprint
 from warnings import warn
 
 
-from datasets import list_datasets, Path
-from download import app as download_app
-from categories import app as categories_app
-from config import DATA_PATH, FILTER_PATH, COL_PY, SAMPLE_PY, SAMPLE_SIZE
-from sample import sample
+from .datasets import list_datasets, Path
+from .download import app as download_app
+from .categories import app as categories_app
+from .config import DATA_PATH, FILTER_PATH, COL_PY, SAMPLE_PY, SAMPLE_SIZE
+from .sample import sample
 
 import mimetypes
 mimetypes.add_type('application/javascript', '.js')
@@ -488,7 +488,7 @@ app.mount('/api/categories/', categories_app)
 
 def main_serve(args):
     import uvicorn
-    uvicorn.run(f'main:app', port=args.port, reload=args.reload, log_level='info')
+    uvicorn.run(f'opuscleaner.server:app', port=args.port, reload=args.reload, log_level='info')
 
 
 async def sample_all_datasets(args):
@@ -519,7 +519,7 @@ def main_list_commands(args):
     sys.exit(1)
 
 
-if __name__ == '__main__':
+def main(argv=sys.argv):
     import argparse
 
     parser = argparse.ArgumentParser(description='Fill up those seats on your empty train.')

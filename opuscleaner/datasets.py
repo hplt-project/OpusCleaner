@@ -41,7 +41,12 @@ def list_datasets(path) -> Dict[str,Dict[str,Path]]:
         if len(files) > 1
     }
 
-if __name__ == '__main__':
+
+def main():
     import sys
     import pprint
     pprint.pprint(list_datasets(sys.argv[1]))
+
+
+if __name__ == '__main__':
+    main()

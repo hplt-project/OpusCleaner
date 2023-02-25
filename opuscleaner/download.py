@@ -26,7 +26,7 @@ from zipfile import ZipFile
 from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException
 
-from config import DATA_PATH, DOWNLOAD_PATH
+from .config import DATA_PATH, DOWNLOAD_PATH
 
 
 class EntryRef(BaseModel):

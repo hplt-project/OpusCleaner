@@ -1,5 +1,5 @@
-# Empty-train
-Empty train is a machine translation/language model data cleaner and training scheduler. The Training scheduler has moved to [empty-trainer](https://github.com/hplt-project/empty-trainer).
+# OpusCleaner
+OpusCleaner is a machine translation/language model data cleaner and training scheduler. The Training scheduler has moved to [empty-trainer](https://github.com/hplt-project/empty-trainer).
 
 ## Cleaner
 The cleaner bit takes care of downloading and cleaning multiple different datasets and preparing them for translation.
@@ -34,23 +34,42 @@ Compare the dataset at different stages of filtering to see what the impact is o
 ```sh
 python3 -m venv .env
 bash --init-file .env/bin/activate
-pip install -r requirements.txt
+pip install -e .
 
 cd frontend
 npm clean-install
 npm run build
 cd ..
-
-./main.py serve --reload
 ```
 
+Link the frontend build folder into opuscleaner. Normally this is done during packaging but when opuscleaner is installed as an editable package, this doesn't happen.
+
+```sh
+ln -s ../frontend/dist opuscleaner/frontend
+```
+
+Finally you can run `opuscleaner-server` as normal. The `--reload` option will cause it to restart when any of the python files change.
+
+```sh
+opuscleaner-server --reload
+```
+
+Then go to http://127.0.0.1:8000/ for the "interface" or http://127.0.0.1:8000/docs for the API.
+
+### Frontend development
+
 If you're doing frontend development, try also running:
+
 ```sh
 cd frontend
 npm run dev
 ```
 
-This will put vite in hot-reloading mode for easier javascript dev. All api requests will be proxied to the `main.py serve` running in 8000.
+Then go to http://127.0.0.1:5173/ for the "interface".
+
+This will put vite in hot-reloading mode for easier Javascript dev. All API requests will be proxied to the python server running in 8000, which is why you need to run both at the same time.
+
+## Filters
 
 If you want to use LASER, you will also need to download its assets:
 
@@ -58,7 +77,9 @@ If you want to use LASER, you will also need to download its assets:
 python -m laserembeddings download-models
 ```
 
-Then go to http://127.0.0.1:8000/ for the "interface" or http://127.0.0.1:8000/docs for the API.
+## Packaging
+
+Run `pip wheel .` to build & package OpusCleaner. Packaging is done through hatch, see the `pyproject.toml` and `build_frontend.py` files for details. You'll need to have a recent version of `node` and `npm` in your `PATH` for this to work.
 
 # Acknowledgements
 

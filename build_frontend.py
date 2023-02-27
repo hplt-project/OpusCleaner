@@ -35,6 +35,3 @@ class CustomBuildHook(BuildHookInterface):
             path: os.path.join('/opuscleaner/frontend/', path.removeprefix(dist_path).lstrip('/')) for
             path in output
         })
-
-        # raise Exception(pformat(build_data))
-

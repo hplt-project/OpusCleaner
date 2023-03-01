@@ -76,7 +76,7 @@ code = "frontend"
 files = ["requirements.txt"]
 
 [tool.hatch.metadata.hooks.requirements_txt.optional-dependencies]
-filters = ["requirements-filters.txt"]
+all = ["requirements-all.txt"]
 
 [tool.coverage.run]
 branch = true

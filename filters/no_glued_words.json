@@ -1,0 +1,9 @@
+{
+    "description": "Filter segments if lines have multiple glued words",
+    "command": "./no_glued_words.py",
+    "type": "bilingual",
+    "parameters":
+    {
+        
+    }
+}

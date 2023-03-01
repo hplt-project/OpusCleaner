@@ -1,0 +1,18 @@
+{
+    "description": "Removes lines with average word lengths between specified min and max values",
+    "command": "./avg_word_length.py --min-avg-length $MIN_AVG_LENGTH --max-avg-length $MAX_AVG_LENGTH",
+    "type": "bilingual",
+    "parameters":
+    {
+        "MAX_AVG_LENGTH":
+        {
+            "type": "int",
+            "default": 20
+        },
+        "MIN_AVG_LENGTH":
+        {
+            "type": "int",
+            "default": 2
+        }
+    }
+}

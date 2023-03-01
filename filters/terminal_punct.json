@@ -1,0 +1,14 @@
+{
+    "description": "Filter segments based on penalty score with respecct to co-occurrence of terminal punctuation masrks ('.', '…', '?', '!')",
+    "command": "./terminal_punct.py --threshold $THRESHOLD",
+    "type": "bilingual",
+    "parameters":
+    {
+        "THRESHOLD":
+        {
+            "type": "float",
+            "default": -2,
+            "help": "Increasing the threshold will make the filter more permissive"
+        }
+    }
+}

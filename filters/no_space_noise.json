@@ -1,0 +1,9 @@
+{
+    "description": "Filter segments if lines have space noise",
+    "command": "./no_space_noise.py",
+    "type": "bilingual",
+    "parameters":
+    {
+        
+    }
+}

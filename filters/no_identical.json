@@ -1,0 +1,9 @@
+{
+    "description": "Removes identical lines between src and trg",
+    "command": "./no_identical.py",
+    "type": "bilingual",
+    "parameters":
+    {
+        
+    }
+}

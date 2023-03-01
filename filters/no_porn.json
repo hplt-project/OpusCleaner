@@ -1,0 +1,24 @@
+{
+    "description": "Filter segments containing explicit language",
+    "command": "./no_porn.py --src-lang $SRC_LANG --trg-lang $TRG_LANG --command $COMMAND",
+    "type": "bilingual",
+    "parameters":
+    {
+        "SRC_LANG":
+        {
+            "type": "str",
+            "default": "en"
+        },
+        "TRG_LANG":
+        {
+            "type": "str",
+            "default": "en"
+        },
+        "COMMAND":
+        {
+            "type": "str",
+            "default": "",
+            "help": "Inserting a command will use ToolWrapper instead of MosesTokenizer."
+        }
+    }
+}

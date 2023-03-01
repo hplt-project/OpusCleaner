@@ -1,0 +1,150 @@
+{
+    "description": "Filter segments based on specified Bicleaner hardrules",
+    "command": "./bicleaner_all_hardrules.py --debug $DEBUG --source_lang $SRC_LANG --target_lang $TRG_LANG --metadata $METADATA ${NO_PORN:+--no_porn} ${NO_WRONG_LANG:+--no_wrong_language} --not_too_short $MIN_SHORT --not_too_long $MAX_LONG --lm_threshold $LM_THRESHOLD ${NO_EMPTY:+--no_empty} ${NO_IDENTICAL:+--no_identical} --length_ratio $LENGTH_RATIO ${NO_EMPTY:+--no_empty} --no_literals $NO_LITERALS ${NO_ONLY_SYMBOLS:+--no_only_symbols} ${NO_ONLY_NUMBERS:+--no_only_numbers} ${NO_URLS:+--no_urls} ${NO_BREADCRUMBS:+--no_breadcrumbs} ${NO_GLUED_WORDS:+--no_glued_words} ${NO_REPEATED_WORDS:+--no_repeated_words} ${NO_UNICODE_NOISE:+--no_unicode_noise} ${NO_SPACE_NOISE:+--no_space_noise} ${NO_PAREN:+--no_paren} ${NO_ESCAPED_UNICODE:+--no_escaped_unicode} ${NO_BAD_ENCODING:+--no_bad_encoding} ${NO_TITLES:+--no_titles} ${NO_NUMBER_INCONSISTENCIES:+--no_number_inconsistencies} ${NO_SCRIPT_INCONSISTENCIES:+--no_script_inconsistencies}",
+    "type": "bilingual",
+    "parameters":
+    {
+        "SRC_LANG":
+        {
+            "type": "str",
+            "default": "en",
+            "help": "Left column language code. E.g. 'en' for English."
+        },
+        "TRG_LANG":
+        {
+            "type": "str",
+            "default": "en",
+            "help": "Right column language code. E.g. 'fr' for French."
+        },
+        "METADATA":
+        {
+            "type": "str",
+            "default": "models/l1-l2/l1-l2.yaml",
+            "help": "When using no_porn or lm_filter, this metadata needs to be set to the correct path of the Bicleaner model .yaml: https://github.com/bitextor/bicleaner-data/releases/tag/v1.5"
+        },
+        "NO_PORN":
+        {
+            "type": "bool",
+            "default": false
+        },
+        "LM_THRESHOLD":
+        {
+            "type": "float",
+            "default": -1,
+            "help": "When set, it will use the lm_filter filter. Default: 0.5"
+        },
+        "NO_EMPTY":
+        {
+            "type": "bool",
+            "default": false
+        },
+        "MAX_LONG":
+        {
+            "type": "float",
+            "default": -1, 
+            "help": "When set, it will use the not_too_long filter. Default: 1024 (characters)"
+        },
+        "MIN_SHORT":
+        {
+            "type": "float",
+            "default": -1, 
+            "help": "When set, it will use the not_too_short filter. Default: 3 (words)"
+        },
+        "LENGTH_RATIO":
+        {
+            "type": "float",
+            "default": -1,
+            "help": "When set, it will use the length_ratio filter. Default: 2.0"
+        },
+        "NO_IDENTICAL":
+        {
+            "type": "bool",
+            "default": false
+        },
+        "NO_LITERALS":
+        {
+            "type": "str",
+            "default": "",
+            "help": "Default values: \"Re:\",\"{{\", \"%s\", \"}}\", \"+++\", \"***\", '=\"'"
+        },
+        "NO_ONLY_SYMBOLS":
+        {
+            "type": "bool",
+            "default": false
+        },
+        "NO_ONLY_NUMBERS":
+        {
+            "type": "bool",
+            "default": false
+        },
+        "NO_URLS":
+        {
+            "type": "bool",
+            "default": false
+        },
+        "NO_BREADCRUMBS":
+        {
+            "type": "bool",
+            "default": false
+        },
+        "NO_GLUED_WORDS":
+        {
+            "type": "bool",
+            "default": false
+        },
+        "NO_REPEATED_WORDS":
+        {
+            "type": "bool",
+            "default": false
+        },
+        "NO_UNICODE_NOISE":
+        {
+            "type": "bool",
+            "default": false
+        },
+        "NO_SPACE_NOISE":
+        {
+            "type": "bool",
+            "default": false
+        },
+        "NO_PAREN":
+        {
+            "type": "bool",
+            "default": false
+        },
+        "NO_ESCAPED_UNICODE":
+        {
+            "type": "bool",
+            "default": false
+        },
+        "NO_BAD_ENCODING":
+        {
+            "type": "bool",
+            "default": false
+        },
+        "NO_TITLES":
+        {
+            "type": "bool",
+            "default": false
+        },
+        "NO_NUMBER_INCONSISTENCIES":
+        {
+            "type": "bool",
+            "default": false
+        },
+        "NO_SCRIPT_INCONSISTENCIES":
+        {
+            "type": "bool",
+            "default": false
+        },
+        "NO_WRONG_LANG":
+        {
+            "type": "bool",
+            "default": false
+        },
+        "DEBUG":
+        {
+            "type": "bool"
+        }
+    }
+}

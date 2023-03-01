@@ -1,2 +1,4 @@
 fastapi==0.78.0
 uvicorn==0.20.0
+PyYAML==6.0
+xxhash==3.0.0

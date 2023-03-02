@@ -216,7 +216,7 @@ def open_cache(path: Optional[str]) -> Cache:
 		return Cache()
 
 
-if __name__ == '__main__':
+def main():
 	parser = argparse.ArgumentParser(description=__doc__)
 	parser.add_argument('threshold', type=float, help='Threshold (b) to compare score to.')
 	parser.add_argument('scorer', type=str, nargs='+', help='Scorer program (a) and arguments.')
@@ -263,3 +263,7 @@ if __name__ == '__main__':
 		sys.stderr.close()
 		retval = child.wait()
 		sys.exit(retval)
+
+
+if __name__ == '__main__':
+	main()

@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
+import argparse
 import random
 import subprocess
+import sys
+
+from contextlib import ExitStack, contextmanager
+from itertools import count
 from math import exp, log, floor
+from typing import IO, Iterator
 from typing import TypeVar, Iterable, Iterator, Generic, List, Tuple
 
 
@@ -91,34 +97,30 @@ def sample(k:int, iterable:Iterable[T], sort=False) -> Iterable[Iterable[T]]:
 	yield tailer.tail
 
 
-if __name__ == '__main__':
-	import sys
-	import argparse
-	from itertools import count
-	from contextlib import ExitStack, contextmanager
-	from typing import IO, Iterator
+@contextmanager
+def gunzip(path):
+	"""Like gzip.open(), but using external gzip process which for some reason
+	is a lot faster on macOS."""
+	with subprocess.Popen(['gzip', '-cd', path], stdout=subprocess.PIPE) as proc:
+		assert proc.stdout is not None
+		yield proc.stdout
+		if proc.wait() != 0:
+			raise RuntimeError(f'gzip returned error code {proc.returncode}')
 
-	@contextmanager
-	def gunzip(path):
-		"""Like gzip.open(), but using external gzip process which for some reason
-		is a lot faster on macOS."""
-		with subprocess.Popen(['gzip', '-cd', path], stdout=subprocess.PIPE) as proc:
-			assert proc.stdout is not None
-			yield proc.stdout
-			if proc.wait() != 0:
-				raise RuntimeError(f'gzip returned error code {proc.returncode}')
 
-	def magic_open_or_stdin(ctx:ExitStack, path:str) -> IO[bytes]:
-		# TODO ideally we would look at the magic bytes, but that would entail
-		# consuming the input file partially and then I can't pass the complete
-		# file onto gzip afterwards
-		if path.endswith('.gz'):
-			return ctx.enter_context(gunzip(path))
-		elif path == '-':
-			return sys.stdin.buffer
-		else:
-			return ctx.enter_context(open(path, 'rb'))
+def magic_open_or_stdin(ctx:ExitStack, path:str) -> IO[bytes]:
+	# TODO ideally we would look at the magic bytes, but that would entail
+	# consuming the input file partially and then I can't pass the complete
+	# file onto gzip afterwards
+	if path.endswith('.gz'):
+		return ctx.enter_context(gunzip(path))
+	elif path == '-':
+		return sys.stdin.buffer
+	else:
+		return ctx.enter_context(open(path, 'rb'))
 
+
+def main():
 	parser = argparse.ArgumentParser(description="Take a file's head, tail and a random sample from the rest.")
 	parser.add_argument('-n', dest='lines', type=int, default=10, help="number of lines for each section of the sample")
 	parser.add_argument('-d', dest='delimiter', type=str, default="\\t", help="column delimiter. Defaults to \\t.")
@@ -144,3 +146,7 @@ if __name__ == '__main__':
 					sys.stdout.buffer.write(entry.rstrip(b"\n"))
 				sys.stdout.buffer.write(b"\n")
 			sys.stdout.buffer.flush()
+
+
+if __name__ == '__main__':
+	main()

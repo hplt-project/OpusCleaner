@@ -1,43 +1,52 @@
 #!/usr/bin/env python3
-import os
+import asyncio
 import gzip
-from shlex import quote
-import sys
+import hashlib
+import json
+import os
 import re
-from typing import NamedTuple, Optional, Iterable, TypeVar, Union, Literal, Any, AsyncIterator, Awaitable, cast, IO, List, Dict, Tuple
+import shlex
+import subprocess
+import sys
+import traceback
 from contextlib import ExitStack
+from enum import Enum
+from glob import glob
 from itertools import chain, zip_longest
-from pydantic import BaseModel, parse_obj_as, validator, ValidationError
+from pprint import pprint
+from shlex import quote
+from shutil import copyfileobj
+from tempfile import TemporaryFile
+from typing import NamedTuple, Optional, Iterable, TypeVar, Union, Literal, Any, AsyncIterator, Awaitable, cast, IO, List, Dict, Tuple
+from warnings import warn
+
 from fastapi import FastAPI, HTTPException
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse, StreamingResponse, HTMLResponse
 from fastapi.encoders import jsonable_encoder
-import anyio
+from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, parse_obj_as, validator, ValidationError
 from starlette.datastructures import URL
 from starlette.exceptions import HTTPException
 from starlette.responses import FileResponse, RedirectResponse, Response
 from starlette.types import Scope
-from enum import Enum
-import asyncio
-import json
-import subprocess
-import hashlib
-import yaml
-from glob import glob
-from tempfile import TemporaryFile
-from shutil import copyfileobj
-from pprint import pprint
-from warnings import warn
-from copy import deepcopy
 
-from datasets import list_datasets, Path
-from download import app as download_app
-from categories import app as categories_app
-from config import DATA_PATH, FILTER_PATH, COL_PY, SAMPLE_PY, SAMPLE_SIZE
-from sample import sample
+from .categories import app as categories_app
+from .config import DATA_PATH, FILTER_PATH, COL_PY, SAMPLE_PY, SAMPLE_SIZE
+from .datasets import list_datasets, Path
+from .download import app as download_app
+from .sample import sample
 
 import mimetypes
 mimetypes.add_type('application/javascript', '.js')
+
+
+FRONTEND_PATH = next(iter(path
+    for path in [
+        os.path.join(os.path.dirname(__file__), 'frontend'),
+        os.path.join(os.path.dirname(__file__), '../frontend/dist'),
+    ]
+    if os.path.exists(path)
+))
 
 
 class File(BaseModel):
@@ -229,7 +238,7 @@ class FilterPipelinePatch(BaseModel):
 
 
 def list_filters(paths) -> Iterable[Filter]:
-    for path in paths.split(':'):
+    for path in paths.split(os.pathsep):
         for filename in glob(path, recursive=True):
             try:
                 with open(filename) as fh:
@@ -291,7 +300,7 @@ async def compute_sample(name:str, columns:List[Tuple[str,Path]]):
     langs = [lang for lang, _ in columns]
     with TemporaryFile() as tempfile:  # type: ignore[name-defined]
         proc = await asyncio.subprocess.create_subprocess_exec(
-            SAMPLE_PY,
+            *SAMPLE_PY,
             '-n', str(SAMPLE_SIZE),
             *[str(file.resolve()) for _, file in columns],
             stdout=tempfile,
@@ -371,7 +380,7 @@ async def exec_filter_step(filter_step: FilterStep, langs: List[str], input: byt
             command = filter_definition.command
     elif filter_definition.type == FilterType.MONOLINGUAL:
         column = langs.index(none_throws(filter_step.language))
-        command = f'{COL_PY} {column} {filter_definition.command}'
+        command = f'{" ".join(map(shlex.quote, COL_PY))} {column} {filter_definition.command}'
     else:
         raise NotImplementedError()
 
@@ -649,7 +658,7 @@ def redirect_to_interface():
     return RedirectResponse('/frontend/index.html')
 
 
-app.mount('/frontend/', StaticFiles(directory='frontend/dist', html=True), name='static')
+app.mount('/frontend/', StaticFiles(directory=FRONTEND_PATH, html=True), name='static')
 
 app.mount('/api/download/', download_app)
 
@@ -657,7 +666,7 @@ app.mount('/api/categories/', categories_app)
 
 def main_serve(args):
     import uvicorn
-    uvicorn.run(f'main:app', port=args.port, reload=args.reload, log_level='info')
+    uvicorn.run(f'opuscleaner.server:app', port=args.port, reload=args.reload, log_level='info')
 
 
 async def sample_all_datasets(args):
@@ -688,7 +697,7 @@ def main_list_commands(args):
     sys.exit(1)
 
 
-if __name__ == '__main__':
+def main(argv=sys.argv):
     import argparse
 
     parser = argparse.ArgumentParser(description='Fill up those seats on your empty train.')

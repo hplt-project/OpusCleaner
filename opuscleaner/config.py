@@ -1,4 +1,5 @@
 import os
+import sys
 
 # Path to data files. Expects to find files named `$DATASET.$LANG.gz`.
 DATA_PATH = os.getenv('DATA_PATH', 'data/train-parts/*.*.gz')
@@ -18,18 +19,20 @@ DEFAULT_CATEGORIES = [
 DOWNLOAD_PATH = 'data/train-parts'
 
 # glob expression that looks for the filter files. Unfortunately you can't use
-# commas and {} in this expression. TODO: fix that, you should be able to name
-# multiple paths.
-FILTER_PATH = 'filters/*.json:filters/*/*.json'
+# commas and {} in this expression.
+FILTER_PATH = os.pathsep.join([
+	'filters/**/*.json',
+	os.path.join(os.path.dirname(__file__), 'filters/**/*.json')
+])
 
 # col.py is used to apply a monolingual filter to a bilingual dataset. Needs
 # to be absolute since filters can run from different cwds.
-COL_PY = os.path.abspath('./col.py')
+COL_PY = [sys.executable, '-m', 'opuscleaner.col']
 
 # Program used to derive a sample from the dataset. Will be called like
 # `./sample.py -n $SAMPLE_SIZE ...file-per-lang.gz`. Absolute because filters
 # can specify their own `cwd`.
-SAMPLE_PY = os.path.abspath('./sample.py')
+SAMPLE_PY = [sys.executable, '-m', 'opuscleaner.sample']
 
 # Size of each of the three sections (head, random sample of middle, tail) of
 # the dataset sample that we operate on.

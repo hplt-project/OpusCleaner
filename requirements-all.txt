@@ -1,0 +1,11 @@
+bifixer
+bicleaner
+fasttext
+fugashi[unidic-lite]==1.1.2
+hanziconv==0.3.2
+laserembeddings[ja,zh]==1.1.2
+pycld2==0.41
+sacremoses
+spacy-pkuseg
+more_itertools
+requests

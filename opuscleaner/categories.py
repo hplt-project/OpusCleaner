@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel, parse_obj_as, validator
 from typing import List, Dict, TextIO, cast
 
-from config import CATEGORIES_PATH, DATA_PATH, DEFAULT_CATEGORIES
+from .config import CATEGORIES_PATH, DATA_PATH, DEFAULT_CATEGORIES
 
 
 class Category(BaseModel):

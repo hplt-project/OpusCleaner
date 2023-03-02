@@ -1,7 +1,7 @@
 {
     "type": "bilingual",
     "description": "Pre-filtering step for bicleaner",
-    "command": "../threshold.py --eq 1 bicleaner-hardrules -s $LANG1 -t $LANG2 ${DISABLE_HARDRULES:+--disable_hardrules} ${DISABLE_LM_FILTER:+--disable_lm_filter} ${DISABLE_PORN_REMOVAL:+--disable_porn_removal} ${DISABLE_MINIMAL_LENGTH:+--disable_minimal_length} --scol 1 --tcol 2 --processes 1 - -",
+    "command": "../threshold.py --eq 1 bicleaner-hardrules -s $LANG1 -t $LANG2 ${DISABLE_LM_FILTER:+--disable_lm_filter} ${DISABLE_PORN_REMOVAL:+--disable_porn_removal} ${DISABLE_MINIMAL_LENGTH:+--disable_minimal_length} --scol 1 --tcol 2 --score_only --processes 1",
     "parameters":
     {
         "LANG1":
@@ -17,12 +17,6 @@
             "type": "float",
             "default": 0.5,
             "help": "Threshold for language model fluency scoring. All sentence pairs whose LM fluency score falls below the threshold are removed (classifier score set to 0)"
-        },
-        "DISABLE_HARDRULES":
-        {
-            "type": "bool",
-            "default": false,
-            "help": "Disables the bicleaner_hardrules filtering (only bicleaner_classify is applied)"
         },
         "DISABLE_LM_FILTER":
         {

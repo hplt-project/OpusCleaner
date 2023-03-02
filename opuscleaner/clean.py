@@ -4,24 +4,24 @@ a dataset filtering pipeline created by empty-train in their own process and
 links them together through pipes. Can read from stdin but by default reads
 the dataset from the same folder as the pipeline configuration file.
 """
-import sys
-import os
 import argparse
 import json
+import os
+import shlex
 import signal
-from shutil import copyfileobj
-from shlex import quote
-from glob import glob
-from queue import Queue, SimpleQueue
-from threading import Thread
-from subprocess import Popen, PIPE
-from typing import Dict, List, Any, BinaryIO, Optional, TypeVar, Iterable, Tuple, NamedTuple, Union
-from pprint import pprint
-from tempfile import NamedTemporaryFile, TemporaryDirectory
+import sys
 import traceback
+from glob import glob
+from pprint import pprint
+from queue import Queue, SimpleQueue
+from shlex import quote
+from shutil import copyfileobj
+from subprocess import Popen, PIPE
+from tempfile import NamedTemporaryFile, TemporaryDirectory
+from threading import Thread
+from typing import Dict, List, Any, BinaryIO, Optional, TypeVar, Iterable, Tuple, NamedTuple, Union
 
-
-COL_PY = os.path.join(os.path.dirname(__file__), 'col.py')
+from .config import COL_PY
 
 
 T = TypeVar("T")
@@ -212,7 +212,7 @@ class Pipeline:
                 command = filter_definition['command']
             elif filter_definition['type'] == 'monolingual':
                 column = languages.index(step['language'])
-                command = f'{COL_PY} {column} {filter_definition["command"]}'
+                command = f'{" ".join(map(shlex.quote, COL_PY))} {column} {filter_definition["command"]}'
             else:
                 raise NotImplementedError()
 
@@ -427,7 +427,7 @@ def run_parallel(pipeline:Pipeline, stdin:BinaryIO, stdout:BinaryIO, *, parallel
     merger.join()
 
 
-def main(argv):
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--filters', '-f', type=str, default='./filters', help='Path to directory with filter specifications')
     parser.add_argument('--input', '-i', type=argparse.FileType('rb'), help='Input tsv. If unspecified input files are read from filter json; use - to read from stdin')
@@ -440,7 +440,7 @@ def main(argv):
     parser.add_argument('pipeline', metavar='PIPELINE', type=argparse.FileType('r'), help='Pipeline steps specification file, e.g. *.filters.json')
     parser.add_argument('languages', metavar='LANG', type=str, nargs='*', help='Language codes of the columns in the input TSV. Only used when --input is set')
 
-    args = parser.parse_args(argv)
+    args = parser.parse_args()
 
     # default search path for the data files is next to the configuration file
     # which is the default save location for empty-train.
@@ -539,4 +539,4 @@ def main(argv):
 
 
 if __name__ == '__main__':
-    main(sys.argv[1:])
+    main()

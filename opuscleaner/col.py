@@ -50,7 +50,7 @@ def merge(column, queue, fin, fout):
 		fin.close()
 
 
-if __name__ == '__main__':
+def main():
 	column = int(sys.argv[1])
 
 	child = Popen(sys.argv[2:], stdin=PIPE, stdout=PIPE)
@@ -73,3 +73,7 @@ if __name__ == '__main__':
 		# end up with a zombie
 		retval = child.wait()
 		sys.exit(retval)
+
+
+if __name__ == '__main__':
+	main()

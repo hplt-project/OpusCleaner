@@ -53,8 +53,7 @@ jobs:
         run: python -m cibuildwheel --output-dir wheelhouse
         env:
           # Disable npm build in the custom build hook
-          CIBW_ENVIRONMENT: HATCH_BUILD_HOOK_ENABLE=0
-
+          CIBW_ENVIRONMENT: HATCH_BUILD_HOOK_ENABLE_CUSTOM=false
 
       - uses: actions/upload-artifact@v3
         with:
@@ -77,6 +76,8 @@ jobs:
       
       - name: Build sdist
         run: pipx run build --sdist
+        env:
+          HATCH_BUILD_HOOK_ENABLE_CUSTOM: 'false'
 
       - uses: actions/upload-artifact@v3
         with:

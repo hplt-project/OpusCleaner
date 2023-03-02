@@ -42,12 +42,6 @@ npm run build
 cd ..
 ```
 
-Link the frontend build folder into opuscleaner. Normally this is done during packaging but when opuscleaner is installed as an editable package, this doesn't happen.
-
-```sh
-ln -s ../frontend/dist opuscleaner/frontend
-```
-
 Finally you can run `opuscleaner-server` as normal. The `--reload` option will cause it to restart when any of the python files change.
 
 ```sh

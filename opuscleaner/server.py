@@ -40,6 +40,15 @@ import mimetypes
 mimetypes.add_type('application/javascript', '.js')
 
 
+FRONTEND_PATH = next(iter(path
+    for path in [
+        os.path.join(os.path.dirname(__file__), 'frontend'),
+        os.path.join(os.path.dirname(__file__), '../frontend/dist'),
+    ]
+    if os.path.exists(path)
+))
+
+
 class File(BaseModel):
     path: str
     size: int
@@ -481,7 +490,7 @@ def redirect_to_interface():
     return RedirectResponse('/frontend/index.html')
 
 
-app.mount('/frontend/', StaticFiles(directory=os.path.join(os.path.dirname(__file__), 'frontend'), html=True), name='static')
+app.mount('/frontend/', StaticFiles(directory=FRONTEND_PATH, html=True), name='static')
 
 app.mount('/api/download/', download_app)
 

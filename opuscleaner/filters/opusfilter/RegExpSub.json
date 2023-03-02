@@ -1,0 +1,34 @@
+{
+    "type": "bilingual",
+    "name": "opus.RegExpSub",
+    "description": "Apply regular expression substitutions",
+    "command": "./opusfilter-ersatz.py --quiet opusfilter.preprocessors.RegExpSub \"$PARAMETERS_AS_YAML\"",
+    "parameters": {
+        "patterns": {
+            "type": "list",
+            "parameter": {
+                "type": "tuple",
+                "parameters": [
+                    {
+                        "type": "str",
+                        "help": "pattern"
+                    },
+                    {
+                        "type": "str",
+                        "help": "replacement"
+                    },
+                    {
+                        "type": "int",
+                        "help": "count (0 = substitute all)",
+                        "default": 0
+                    },
+                    {
+                        "type": "str",
+                        "help": "flags",
+                        "default": "I"
+                    }
+                ]
+            }
+        }
+    }
+}

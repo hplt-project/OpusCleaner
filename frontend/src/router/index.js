@@ -11,10 +11,11 @@ const router = createRouter({
       children: [
         {
           name: 'edit-filters-yaml',
-          path: '/datasets/:datasetName/configuration.yaml',
+          path: '/datasets/:datasetName/:format',
           component: Modal,
           props: {
-            component: () => import('../views/EditFiltersYamlView.vue')
+            component: () => import('../views/EditFiltersYamlView.vue'),
+            format: 'configuration-for-opusfilter.yaml'
           }
         }
       ]

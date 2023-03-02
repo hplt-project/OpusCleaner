@@ -52,7 +52,7 @@ function languages(dataset) {
 						{{ getFilterSteps(dataset).steps.value.length }}
 					</td>
 					<td>
-						<RouterLink class="icon-button" title="Show filter yaml" :to="{name: 'edit-filters-yaml', params: {datasetName: dataset.name}}"><CodeIcon/></RouterLink>
+						<RouterLink class="icon-button" title="Show filter yaml" :to="{name: 'edit-filters-yaml', params: {datasetName: dataset.name, format: 'configuration-for-opusfilter.yaml'}}"><CodeIcon/></RouterLink>
 						<RouterLink class="icon-button" title="Edit filters" :to="{name: 'edit-filters', params: {datasetName: dataset.name}}"><FilterIcon/></RouterLink>
 						<RouterLink class="icon-button" title="Show dataset statistics" :to="{}"><PieChartIcon/></RouterLink>
 					</td>

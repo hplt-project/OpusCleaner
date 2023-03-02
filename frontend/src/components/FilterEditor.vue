@@ -5,7 +5,7 @@ import {ref, computed, watch, watchEffect, onMounted, onUnmounted, readonly} fro
 import draggable from 'vuedraggable';
 import {stream} from '../stream.js';
 import { getFilters, filterRequiresLanguage } from '../store/filters.js';
-import { getFilterSteps } from '../store/filtersteps.js';
+import { getFilterSteps, defaultValue } from '../store/filtersteps.js';
 import { formatNumberSuffix } from '../format.js';
 import Checkbox from '../components/Checkbox.vue';
 import SegmentedControl from '../components/SegmentedControl.vue';
@@ -120,7 +120,7 @@ function createFilterStep(filter) {
 		id: getUniqueId(),
 		filter: filter.name,
 		language: filterRequiresLanguage({filter:filter.name}) ? languages.value[0] : null,
-		parameters: Object.fromEntries(Object.entries(filter.parameters).map(([key, parameter]) => [key, parameter.default]))
+		parameters: Object.fromEntries(Object.entries(filter.parameters).map(([key, parameter]) => [key, defaultValue(parameter)]))
 	}
 }
 
@@ -418,6 +418,8 @@ const filterIsOpen = new class {
 
 .filter .filter-name {
 	flex: 2;
+	text-overflow: ellipsis;
+	overflow: hidden;
 }
 
 .filter .filter-type {

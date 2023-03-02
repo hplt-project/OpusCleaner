@@ -20,6 +20,7 @@ from tempfile import TemporaryFile
 from typing import NamedTuple, Optional, Iterable, TypeVar, Union, Literal, Any, AsyncIterator, Awaitable, cast, IO, List, Dict, Tuple
 from warnings import warn
 
+import yaml
 from fastapi import FastAPI, HTTPException
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import RedirectResponse, StreamingResponse
@@ -68,8 +69,11 @@ class FilterParameterBase(BaseModel):
     type: str
     help: Optional[str]
 
-    def export(self, value: Any) -> str:
+    def export(self, value: Any) -> Any:
         return str(value)
+
+    def default_factory(self) -> Any:
+        return None
 
 
 class FilterParameterFloat(FilterParameterBase):
@@ -78,6 +82,9 @@ class FilterParameterFloat(FilterParameterBase):
     max: Optional[float]
     default: Optional[float]
 
+    def export(self, value: Any) -> Any:
+        return float(value)
+
 
 class FilterParameterInt(FilterParameterBase):
     type: Literal["int"]
@@ -85,13 +92,16 @@ class FilterParameterInt(FilterParameterBase):
     max: Optional[int]
     default: Optional[int]
 
+    def export(self, value: Any) -> Any:
+        return int(value)
+
 
 class FilterParameterBool(FilterParameterBase):
     type: Literal["bool"]
     default: Optional[bool]
 
-    def export(self, value: Any) -> str:
-        return "1" if value else ""
+    def export(self, value: Any) -> Any:
+        return bool(value)
 
 
 class FilterParameterStr(FilterParameterBase):
@@ -99,13 +109,60 @@ class FilterParameterStr(FilterParameterBase):
     default: Optional[str]
     allowed_values: Optional[List[str]]
 
+    def export(self, value: Any) -> Any:
+        # TODO: validate against allowed_values?
+        return super().export(value)
+
+    def default_factory(self) -> Any:
+        return ''
+
+
+class FilterParameterList(FilterParameterBase):
+    type: Literal["list"]
+    parameter: "FilterParameter"
+    default: Optional[List]
+
+    def export(self, value: Any) -> Any:
+        return [
+            self.parameter.export(item)
+            for item in value
+        ]
+
+    def default_factory(self) -> Any:
+        return []
+
+
+class FilterParameterTuple(FilterParameterBase):
+    type: Literal["tuple"]
+    parameters: List["FilterParameter"]
+    default: Optional[List]
+
+    # TODO: Add validator that checks if len(default) == len(parameters)
+
+    def export(self, value: Any) -> Any:
+        return tuple(
+            parameter.export(val)
+            for parameter, val in zip(self.parameters, value)
+        )
+
+    def default_factory(self) -> Any:
+        return [
+            parameter.default_factory()
+            for parameter in self.parameters
+        ]
+
 
 FilterParameter = Union[
     FilterParameterFloat,
     FilterParameterInt,
     FilterParameterBool,
-    FilterParameterStr
+    FilterParameterStr,
+    FilterParameterList,
+    FilterParameterTuple
 ]
+
+FilterParameterList.update_forward_refs()
+FilterParameterTuple.update_forward_refs()
 
 
 class Filter(BaseModel):
@@ -146,7 +203,7 @@ class FilterStep(BaseModel):
                 warn(f"Missing filter parameters: {' '.join(missing_keys)}")
                 # Just add their default values in that case.
                 parameters |= {
-                    key: parameter.default
+                    key: parameter.default if hasattr(parameter, 'default') and parameter.default is not None else parameter.default_factory()
                     for key, parameter in FILTERS[values['filter']].parameters.items()
                     if key in missing_keys
                 }
@@ -181,18 +238,18 @@ class FilterPipelinePatch(BaseModel):
     filters: List[FilterStep]
 
 
-def list_filters(path) -> Iterable[Filter]:
-    for filename in glob(path, recursive=True):
-        try:
-            with open(filename) as fh:
-                defaults = {
-                    "name": os.path.splitext(os.path.basename(filename))[0],
-                    "basedir": os.path.dirname(filename)
-                }
-                yield parse_obj_as(Filter, {**defaults, **json.load(fh)})
-        except Exception as e:
-            print(f"Could not parse {filename}: {e}", file=sys.stderr)
-
+def list_filters(paths) -> Iterable[Filter]:
+    for path in paths.split(os.pathsep):
+        for filename in glob(path, recursive=True):
+            try:
+                with open(filename) as fh:
+                    defaults = {
+                        "name": os.path.splitext(os.path.basename(filename))[0],
+                        "basedir": os.path.dirname(filename)
+                    }
+                    yield parse_obj_as(Filter, {**defaults, **json.load(fh)})
+            except Exception as e:
+                print(f"Could not parse {filename}: {e}", file=sys.stderr)
 
 
 FILTERS: Dict[str,Filter] = {}
@@ -306,6 +363,17 @@ def cache_hash(obj: Any, seed: bytes = bytes()) -> bytes:
     return impl.digest()
 
 
+def format_shell(val: Any) -> str:
+    if isinstance(val, bool):
+        return '1' if val else ''
+    elif isinstance(val, tuple):
+        raise NotImplementedError()
+    elif isinstance(val, list):
+        raise NotImplementedError()
+    else:
+        return str(val)
+
+
 async def exec_filter_step(filter_step: FilterStep, langs: List[str], input: bytes) -> Tuple[bytes,bytes]:
     filter_definition = FILTERS[filter_step.filter]
 
@@ -317,20 +385,36 @@ async def exec_filter_step(filter_step: FilterStep, langs: List[str], input: byt
     else:
         raise NotImplementedError()
 
-    params = {name: props.export(filter_step.parameters[name])
-              for name, props in filter_definition.parameters.items()}
-
-    if params:
-        vars_setter = '; '.join(f"{k}={quote(v)}" for k, v in params.items())
-        command = f'{vars_setter}; {command}'
+    if filter_definition.parameters:
+        params = {
+            name: props.export(filter_step.parameters[name])
+            for name, props in filter_definition.parameters.items()
+        }
+        if 'PARAMETERS_AS_YAML' in command:
+            command = f'PARAMETERS_AS_YAML={quote(yaml.safe_dump(params))}; {command}'
+        else:
+            vars_setter = '; '.join(f"{k}={quote(format_shell(v))}" for k, v in params.items())
+            command = f'{vars_setter}; {command}'
 
     print(command, file=sys.stderr)
 
+    # Make sure the path to the python binary (and the installed utils)
+    # is in the PATH variable. If you load a virtualenv this happens by
+    # default, but if you call it with the virtualenv's python binary 
+    # directly it wont.
+    pyenv_bin_path = os.path.dirname(sys.executable)
+    os_env_bin_paths = os.environ.get('PATH', '').split(os.pathsep)
+    filter_env = {
+        **os.environ,
+        'PATH': os.pathsep.join([pyenv_bin_path] + os_env_bin_paths)
+    } if pyenv_bin_path not in os_env_bin_paths else None
+    
     p_filter = await asyncio.create_subprocess_shell(command,
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
-        cwd=filter_definition.basedir)
+        cwd=filter_definition.basedir,
+        env=filter_env)
 
     # Check exit codes, testing most obvious problems first.
     return await p_filter.communicate(input=input)
@@ -477,6 +561,91 @@ def api_update_dataset_filters(name:str, patch:FilterPipelinePatch):
     pipeline = make_pipeline(name, patch.filters)
     with open(filter_configuration_path(name), 'w') as fh:
         return json.dump(pipeline.dict(), fh, indent=2)
+
+
+@app.get('/api/datasets/{name:path}/configuration-for-opusfilter.yaml')
+def api_get_dataset_filters_as_openfilter(name:str) -> List[FilterStep]:
+    if not os.path.exists(filter_configuration_path(name)):
+        return []
+
+    with open(filter_configuration_path(name), 'r') as fh:
+        data = json.load(fh)
+
+    pipeline = parse_obj_as(FilterPipeline, data)
+
+    opusfilter_config = {
+        'steps': []
+    }
+
+    input_files = pipeline.files
+    
+    preprocess_steps = []
+
+    filter_steps = []
+
+    for step in pipeline.filters:
+        if (match := re.search(r'\bopusfilter\.preprocessors\.(\w+)\b', FILTERS[step.filter].command)):
+            preprocess_steps.append({
+                match.group(1): step.parameters
+            })
+        elif (match := re.search(r'\bopusfilter\.filters\.(\w+)\b', FILTERS[step.filter].command)):
+            filter_steps.append({
+                match.group(1): step.parameters
+            })
+        elif FILTERS[step.filter].type == FilterType.BILINGUAL:
+            filter_steps.append({
+                'OpusCleanerFilter': {
+                    'filter': step.filter,
+                    'parameters': step.parameters
+                },
+                'module': 'opuscleaner.opusfilter_compat'
+            })
+        elif FILTERS[step.filter].type == FilterType.MONOLINGUAL:
+            filter_steps.append({
+                'OpusCleanerFilter': {
+                    'filter': step.filter,
+                    'parameters': step.parameters
+                },
+                'module': 'opuscleaner.opusfilter_compat'
+            })
+        else:
+            raise ValueError(f'Cannot convert "{step.filter}" to opusfilter configuration')
+
+    if preprocess_steps:
+        output_files = [
+            os.path.join(os.path.dirname(file), 'preprocessed.' + os.path.basename(file))
+            for file in pipeline.files
+        ]
+
+        opusfilter_config['steps'].append({
+            'type': 'preprocess',
+            'parameters': {
+                'inputs': input_files,
+                'outputs': output_files,
+                'preprocessors': preprocess_steps
+            }
+        })
+
+        input_files = output_files
+
+    if filter_steps:
+        output_files = [
+            os.path.join(os.path.dirname(file), 'filtered.' + os.path.basename(file))
+            for file in pipeline.files
+        ]
+
+        opusfilter_config['steps'].append({
+            'type': 'filter',
+            'parameters': {
+                'inputs': input_files,
+                'outputs': output_files,
+                'filters': filter_steps
+            }
+        })
+
+        input_files = output_files
+
+    return Response(yaml.safe_dump(opusfilter_config, sort_keys=False), media_type='application/yaml')
 
 
 @app.get('/api/filters/')

@@ -116,3 +116,16 @@ export function getPipeline(dataset) {
 export function getFilterSteps(dataset) {
 	return getPipeline(dataset).filters;
 }
+
+export function defaultValue(parameter) {
+	switch (parameter.type) {
+		case 'tuple':
+			return parameter.parameters.map(parameter => defaultValue(parameter));
+		case 'list':
+			return [];
+		case 'str':
+			return '';
+		default:
+			return parameter.default
+	}
+}

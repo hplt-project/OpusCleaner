@@ -27,8 +27,8 @@ Compare the dataset at different stages of filtering to see what the impact is o
 
 
 ### Paths
-- `data/train-parts` is scanned for datasets
-- `filters` should contain filter json (but that's not implemented yet, right now it just has a hard-coded `FILTERS` dict in code)
+- `data/train-parts` is scanned for datasets. You can change this by setting the `DATA_PATH` environment variable, the default is `data/train-parts/*.*.gz`.
+- `filters` should contain filter json files. You can change the `FILTER_PATH` environment variable, the default is `<PYTHON_PACKAGE>/filters/*.json`.
 
 ### Installation for development
 ```sh

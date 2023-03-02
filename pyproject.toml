@@ -64,10 +64,12 @@ exclude = [
   "/placeholders",
   "/build_frontend.py"
 ]
+artifacts = [
+  "/frontend/dist/*"
+]
 
-[tool.hatch.build.hooks.custom]
-path = "build_frontend.py"
-code = "frontend"
+[tool.hatch.build.sources]
+"/frontend/dist" = "/opuscleaner/frontend"
 
 [tool.hatch.metadata.hooks.requirements_txt]
 files = ["requirements.txt"]

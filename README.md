@@ -73,7 +73,7 @@ python -m laserembeddings download-models
 
 ## Packaging
 
-Run `pip wheel .` to build & package OpusCleaner. Packaging is done through hatch, see the `pyproject.toml` and `build_frontend.py` files for details. You'll need to have a recent version of `node` and `npm` in your `PATH` for this to work.
+Run `npm build` in the `frontend/` directory first, and then run `hatch build .` in the project directory to build the wheel and source distribution.
 
 # Acknowledgements
 

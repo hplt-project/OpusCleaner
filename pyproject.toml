@@ -65,9 +65,6 @@ exclude = [
   "/build_frontend.py"
 ]
 
-[tool.hatch.build.sources]
-"frontend/dist" = "opuscleaner/frontend"
-
 [tool.hatch.build.hooks.custom]
 path = "build_frontend.py"
 code = "frontend"

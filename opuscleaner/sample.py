@@ -8,13 +8,13 @@ from contextlib import ExitStack, contextmanager
 from itertools import count
 from math import exp, log, floor
 from typing import IO, Iterator
-from typing import TypeVar, Iterable, Iterator, Generic, List, Tuple
+from typing import TypeVar, Iterable, Iterator, Generic, List, Tuple, IO
 
 
 T = TypeVar('T')
 
 
-def reservoir_sample(k:int, it:Iterable[T], *, rand: random.Random = random._inst, sort=False) -> List[T]:
+def reservoir_sample(k:int, it:Iterable[T], *, rand:random.Random = random._inst, sort:bool=False) -> List[T]:
 	"""Take k samples from iterable by reading from start to end. If sort is
 	True, it will return the selected samples in the order they appeared in.
 	"""
@@ -82,7 +82,7 @@ class Tailer(Iterable[T]):
 		return self.sample[(self.i % len(self.sample)):] + self.sample[0:(self.i % len(self.sample))]
 
 
-def sample(k:int, iterable:Iterable[T], sort=False) -> Iterable[Iterable[T]]:
+def sample(k:int, iterable:Iterable[T], sort:bool=False) -> Iterable[Iterable[T]]:
 	"""Take `k` items from the start, the end and the middle from `iterable`. If
 	`sort` is True, the items in the middle will be in the order they appeared
 	in."""
@@ -98,7 +98,7 @@ def sample(k:int, iterable:Iterable[T], sort=False) -> Iterable[Iterable[T]]:
 
 
 @contextmanager
-def gunzip(path):
+def gunzip(path:str) -> Iterator[IO[bytes]]:
 	"""Like gzip.open(), but using external gzip process which for some reason
 	is a lot faster on macOS."""
 	with subprocess.Popen(['gzip', '-cd', path], stdout=subprocess.PIPE) as proc:
@@ -120,7 +120,7 @@ def magic_open_or_stdin(ctx:ExitStack, path:str) -> IO[bytes]:
 		return ctx.enter_context(open(path, 'rb'))
 
 
-def main():
+def main() -> None:
 	parser = argparse.ArgumentParser(description="Take a file's head, tail and a random sample from the rest.")
 	parser.add_argument('-n', dest='lines', type=int, default=10, help="number of lines for each section of the sample")
 	parser.add_argument('-d', dest='delimiter', type=str, default="\\t", help="column delimiter. Defaults to \\t.")

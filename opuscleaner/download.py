@@ -7,7 +7,7 @@ import json
 import gzip
 from glob import iglob
 from itertools import chain
-from typing import Iterable, Dict, List, Optional, Set, Union, Tuple, cast
+from typing import Iterable, Dict, List, Optional, Set, Union, Tuple, cast, Any
 from enum import Enum
 from queue import SimpleQueue
 from subprocess import Popen, PIPE
@@ -61,7 +61,7 @@ class DownloadState(Enum):
     FAILED = 'failed'
 
 
-def get_dataset(entry: RemoteEntry, path: str):
+def get_dataset(entry:RemoteEntry, path:str) -> None:
     # List of extensions of the expected files, e.g. `.en-mt.mt` and `.en-mt.en`.
     suffixes = [f'.{"-".join(entry.langs)}.{lang}' for lang in entry.langs]
 
@@ -107,21 +107,21 @@ class EntryDownload:
         self.entry = entry
         self._child = None
     
-    def start(self):
+    def start(self) -> None:
         self._child = Process(target=get_dataset, args=(self.entry, DOWNLOAD_PATH))
         self._child.start()
 
-    def run(self):
+    def run(self) -> None:
         self.start()
         assert self._child is not None
         self._child.join()
 
-    def cancel(self):
+    def cancel(self) -> None:
         if self._child and self._child.exitcode is None:
             self._child.kill()
 
     @property
-    def state(self):
+    def state(self) -> DownloadState:
         if not self._child:
             return DownloadState.PENDING
         elif self._child.exitcode is None:
@@ -134,10 +134,13 @@ class EntryDownload:
             return DownloadState.CANCELLED
 
 
+DownloadQueue = SimpleQueue[Optional[EntryDownload]]
+
+
 class Downloader:
     def __init__(self, workers:int):
-        self.queue = SimpleQueue()
-        self.threads = []
+        self.queue: DownloadQueue = SimpleQueue()
+        self.threads: List[Thread] = []
 
         for _ in range(workers):
             thread = Thread(target=self.__class__.worker_thread, args=[self.queue], daemon=True)
@@ -150,7 +153,7 @@ class Downloader:
         return download
 
     @staticmethod
-    def worker_thread(queue):
+    def worker_thread(queue:DownloadQueue) -> None:
         while True:
             entry = queue.get()
             if not entry:
@@ -168,7 +171,7 @@ class OpusAPI:
 
     _datasets: Dict[int,Entry] = {}
 
-    def __init__(self, endpoint):
+    def __init__(self, endpoint:str):
         self.endpoint = endpoint
         self._datasets = {}
 
@@ -179,7 +182,7 @@ class OpusAPI:
             query['source'] = lang1
 
         with urlopen(f'{self.endpoint}?{urlencode(query)}') as fh:
-            return json.load(fh).get('languages', [])
+            return [str(lang) for lang in json.load(fh).get('languages', [])]
 
     def get_dataset(self, id:int) -> Entry:
         return self._datasets[id]
@@ -212,7 +215,7 @@ downloader = Downloader(2)
 
 datasets_by_id: Dict[int, Entry] = {}
 
-def cast_entry(data) -> Entry:
+def cast_entry(data:Dict[str,Any]) -> Entry:
     entry = Entry(
         id=int(data['id']),
         corpus=str(data['corpus']),
@@ -225,7 +228,7 @@ def cast_entry(data) -> Entry:
     paths = set(
         filename
         for data_root in [os.path.dirname(DATA_PATH), DOWNLOAD_PATH]
-        for lang in cast(Tuple[str,str], entry.langs)
+        for lang in entry.langs
         for filename in iglob(os.path.join(data_root, f'{entry.basename}.{lang}.gz'), recursive=True)
     )
 
@@ -288,7 +291,7 @@ def batch_add_downloads(datasets: List[EntryRef]) -> Iterable[EntryDownloadView]
 
 
 @app.delete('/downloads/{dataset_id}')
-def cancel_download(dataset_id:str) -> EntryDownloadView:
+def cancel_download(dataset_id:int) -> EntryDownloadView:
     """Cancel a download. Removes it from the queue, does not kill the process
     if download is already happening.
     """

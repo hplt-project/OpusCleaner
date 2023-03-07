@@ -1,25 +1,23 @@
 #!/usr/bin/env python3
 """Lists datasets given a directory. It works by scanning the directory and looking for gz files."""
 import os
-import glob
+from functools import wraps
+from glob import glob
 from itertools import groupby
-from pathlib import Path
+from pathlib import Path as Path
 from typing import Iterable, Dict
 
 
-def _glob(*args, **kwargs) -> Iterable[Path]:
-    for entry in glob.glob(*args, **kwargs):
-        yield Path(entry)
-
-
-def list_datasets(path) -> Dict[str,Dict[str,Path]]:
+def list_datasets(path:str) -> Dict[str,Dict[str,Path]]:
     """Lists datasets given a directory. Scans the directories and returns a dictionary of the
     datasets encoutered. Dictionary looks like {dataset_name : { lang: path}}"""
     root = Path(path.split('*')[0])
 
+    entries = (Path(entry) for entry in glob(path, recursive=True))
+
     files = [
         entry
-        for entry in _glob(path, recursive=True)
+        for entry in entries
         if entry.is_file()
         and entry.name.endswith('.gz')
         and not entry.name.startswith('.')
@@ -42,7 +40,7 @@ def list_datasets(path) -> Dict[str,Dict[str,Path]]:
     }
 
 
-def main():
+def main() -> None:
     import sys
     import pprint
     pprint.pprint(list_datasets(sys.argv[1]))

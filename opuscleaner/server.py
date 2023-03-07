@@ -5,7 +5,6 @@ import hashlib
 import json
 import os
 import re
-import shlex
 import subprocess
 import sys
 import traceback
@@ -14,10 +13,9 @@ from enum import Enum
 from glob import glob
 from itertools import chain, zip_longest
 from pprint import pprint
-from shlex import quote
 from shutil import copyfileobj
 from tempfile import TemporaryFile
-from typing import NamedTuple, Optional, Iterable, TypeVar, Union, Literal, Any, AsyncIterator, Awaitable, cast, IO, List, Dict, Tuple
+from typing import NamedTuple, Optional, Iterable, TypeVar, Union, Literal, Any, AsyncIterator, Awaitable, cast, IO, List, Dict, Tuple, AsyncIterator
 from warnings import warn
 
 import yaml
@@ -27,15 +25,17 @@ from fastapi.responses import RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, parse_obj_as, validator, ValidationError
 from starlette.datastructures import URL
-from starlette.exceptions import HTTPException
 from starlette.responses import FileResponse, RedirectResponse, Response
 from starlette.types import Scope
 
+from ._util import none_throws
 from .categories import app as categories_app
 from .config import DATA_PATH, FILTER_PATH, COL_PY, SAMPLE_PY, SAMPLE_SIZE
 from .datasets import list_datasets, Path
 from .download import app as download_app
+from .filters import filter_context, filter_format_command, get_filter, get_filters, FilterType, FilterStep, FilterPipeline
 from .sample import sample
+
 
 import mimetypes
 mimetypes.add_type('application/javascript', '.js')
@@ -60,218 +60,12 @@ class Dataset(BaseModel):
     columns: Dict[str,File]
 
 
-class FilterType(Enum):
-    BILINGUAL = "bilingual"
-    MONOLINGUAL = "monolingual"
-
-
-class FilterParameterBase(BaseModel):
-    type: str
-    help: Optional[str]
-
-    def export(self, value: Any) -> Any:
-        return str(value)
-
-    def default_factory(self) -> Any:
-        return None
-
-
-class FilterParameterFloat(FilterParameterBase):
-    type: Literal["float"]
-    min: Optional[float]
-    max: Optional[float]
-    default: Optional[float]
-
-    def export(self, value: Any) -> Any:
-        return float(value)
-
-
-class FilterParameterInt(FilterParameterBase):
-    type: Literal["int"]
-    min: Optional[int]
-    max: Optional[int]
-    default: Optional[int]
-
-    def export(self, value: Any) -> Any:
-        return int(value)
-
-
-class FilterParameterBool(FilterParameterBase):
-    type: Literal["bool"]
-    default: Optional[bool]
-
-    def export(self, value: Any) -> Any:
-        return bool(value)
-
-
-class FilterParameterStr(FilterParameterBase):
-    type: Literal["str"]
-    default: Optional[str]
-    allowed_values: Optional[List[str]]
-
-    def export(self, value: Any) -> Any:
-        # TODO: validate against allowed_values?
-        return super().export(value)
-
-    def default_factory(self) -> Any:
-        return ''
-
-
-class FilterParameterList(FilterParameterBase):
-    type: Literal["list"]
-    parameter: "FilterParameter"
-    default: Optional[List]
-
-    def export(self, value: Any) -> Any:
-        return [
-            self.parameter.export(item)
-            for item in value
-        ]
-
-    def default_factory(self) -> Any:
-        return []
-
-
-class FilterParameterTuple(FilterParameterBase):
-    type: Literal["tuple"]
-    parameters: List["FilterParameter"]
-    default: Optional[List]
-
-    # TODO: Add validator that checks if len(default) == len(parameters)
-
-    def export(self, value: Any) -> Any:
-        return tuple(
-            parameter.export(val)
-            for parameter, val in zip(self.parameters, value)
-        )
-
-    def default_factory(self) -> Any:
-        return [
-            parameter.default_factory()
-            for parameter in self.parameters
-        ]
-
-
-FilterParameter = Union[
-    FilterParameterFloat,
-    FilterParameterInt,
-    FilterParameterBool,
-    FilterParameterStr,
-    FilterParameterList,
-    FilterParameterTuple
-]
-
-FilterParameterList.update_forward_refs()
-FilterParameterTuple.update_forward_refs()
-
-
-class Filter(BaseModel):
-    type: FilterType
-    name: str # comes from filename by default
-    description: Optional[str]
-    command: str
-    basedir: Optional[str] # same as .json file by default
-    parameters: Dict[str,FilterParameter]
-
-    @validator('parameters')
-    def check_keys(cls, parameters):
-        for var_name in parameters.keys():
-            if not re.match(r"^[a-zA-Z_][a-zA-Z_0-9]*$", var_name):
-                raise ValueError(f"Parameter name is not a valid bash variable: {var_name}")
-        return parameters
-
-
-class FilterStep(BaseModel):
-    filter: str
-    parameters: Dict[str,Any]
-    language: Optional[str]
-
-    @validator('filter')
-    def check_filter(cls, filter):
-        if filter not in FILTERS:
-            raise ValueError(f'Unknown filter `{filter}`')
-        return filter
-
-    @validator('parameters')
-    def check_parameters(cls, parameters, values, **kwargs):
-        if 'filter' in values:
-            required = set(FILTERS[values['filter']].parameters.keys())
-            provided = set(parameters.keys())
-
-            missing_keys = required - provided
-            if missing_keys:
-                warn(f"Missing filter parameters: {' '.join(missing_keys)}")
-                # Just add their default values in that case.
-                parameters |= {
-                    key: parameter.default if hasattr(parameter, 'default') and parameter.default is not None else parameter.default_factory()
-                    for key, parameter in FILTERS[values['filter']].parameters.items()
-                    if key in missing_keys
-                }
-            
-            superfluous_keys = provided - required
-            if superfluous_keys:
-                warn(f"Provided parameters not supported by the filter: {' '.join(superfluous_keys)}")
-                # Not doing anything though, might be that we have just loaded an
-                # old version of the filter definition and we don't want to lose
-                # any of these keys.
-
-        return parameters
-
-    @validator('language', always=True)
-    def check_language_is_provided(cls, language, values, **kwargs):
-        if 'filter' in values:
-            if FILTERS[values['filter']].type == FilterType.BILINGUAL and language is not None:
-                raise ValueError('Cannot `language` attribute for a bilingual filter')
-            elif FILTERS[values['filter']].type == FilterType.MONOLINGUAL and language is None:
-                raise ValueError('`language` attribute required for a monolingual filter')
-        return language
-
-
-class FilterPipeline(BaseModel):
-    version: Literal[1]
-    files: List[str]
-    filters: List[FilterStep]
-
-
 class FilterPipelinePatch(BaseModel):
     """A list of changes to a filter pipeline (used when updating filters)"""
     filters: List[FilterStep]
 
 
-def list_filters(paths) -> Iterable[Filter]:
-    for path in paths.split(os.pathsep):
-        for filename in glob(path, recursive=True):
-            try:
-                with open(filename) as fh:
-                    defaults = {
-                        "name": os.path.splitext(os.path.basename(filename))[0],
-                        "basedir": os.path.dirname(filename)
-                    }
-                    yield parse_obj_as(Filter, {**defaults, **json.load(fh)})
-            except Exception as e:
-                print(f"Could not parse {filename}: {e}", file=sys.stderr)
-
-
-FILTERS: Dict[str,Filter] = {}
-
-def reload_filters():
-    global FILTERS
-    FILTERS = {definition.name: definition for definition in list_filters(FILTER_PATH)}
-
-reload_filters()
-
-
-T = TypeVar("T")
-
-def none_throws(optional: Optional[T], message: str = "Unexpected `None`") -> T:
-    """Convert an optional to its value. Raises an `AssertionError` if the
-    value is `None`"""
-    if optional is None:
-        raise AssertionError(message)
-    return optional
-
-
-def dataset_path(name:str, template:str):
+def dataset_path(name:str, template:str) -> str:
     # TODO: fix this hack to get the file path from the name this is silly we
     # should just use get_dataset(name).path or something
     root = DATA_PATH.split('*')[0]
@@ -288,7 +82,7 @@ def dataset_path(name:str, template:str):
     return os.path.join(root, template.format(filename))
 
 
-def sample_path(name:str, langs: Iterable[str]):
+def sample_path(name:str, langs:Iterable[str]) -> str:
     languages = '.'.join(sorted(langs))
     return dataset_path(name, f'.sample.{{}}.{languages}')
 
@@ -297,9 +91,9 @@ def filter_configuration_path(name:str) -> str:
     return dataset_path(name, '{}.filters.json')
 
 
-async def compute_sample(name:str, columns:List[Tuple[str,Path]]):
+async def compute_sample(name:str, columns:List[Tuple[str,Path]]) -> None:
     langs = [lang for lang, _ in columns]
-    with TemporaryFile() as tempfile:  # type: ignore[name-defined]
+    with TemporaryFile() as tempfile:
         proc = await asyncio.subprocess.create_subprocess_exec(
             *SAMPLE_PY,
             '-n', str(SAMPLE_SIZE),
@@ -318,7 +112,7 @@ async def compute_sample(name:str, columns:List[Tuple[str,Path]]):
             copyfileobj(tempfile, fdest)
 
 
-async def get_dataset_sample(name, columns) -> Tuple[bytes,bytes]:
+async def get_dataset_sample(name:str, columns:List[Tuple[str,Path]]) -> Tuple[bytes,bytes]:
     langs = [lang for lang, _ in columns]
 
     if not os.path.exists(sample_path(name, langs)):
@@ -375,28 +169,9 @@ def format_shell(val: Any) -> str:
 
 
 async def exec_filter_step(filter_step: FilterStep, langs: List[str], input: bytes) -> Tuple[bytes,bytes]:
-    filter_definition = FILTERS[filter_step.filter]
+    filter_definition = get_filter(filter_step.filter)
 
-    if filter_definition.type == FilterType.BILINGUAL:
-            command = filter_definition.command
-    elif filter_definition.type == FilterType.MONOLINGUAL:
-        column = langs.index(none_throws(filter_step.language))
-        command = f'{" ".join(map(shlex.quote, COL_PY))} {column} {filter_definition.command}'
-    else:
-        raise NotImplementedError()
-
-    if filter_definition.parameters:
-        params = {
-            name: props.export(filter_step.parameters[name])
-            for name, props in filter_definition.parameters.items()
-        }
-        if 'PARAMETERS_AS_YAML' in command:
-            command = f'PARAMETERS_AS_YAML={quote(yaml.safe_dump(params))}; {command}'
-        else:
-            vars_setter = '; '.join(f"{k}={quote(format_shell(v))}" for k, v in params.items())
-            command = f'{vars_setter}; {command}'
-
-    print(command, file=sys.stderr)
+    command = filter_format_command(filter_definition, filter_step, langs)
 
     # Make sure the path to the python binary (and the installed utils)
     # is in the PATH variable. If you load a virtualenv this happens by
@@ -420,7 +195,7 @@ async def exec_filter_step(filter_step: FilterStep, langs: List[str], input: byt
     return await p_filter.communicate(input=input)
 
 
-def cancel_cached_tasks(name:str, offset:int):
+def cancel_cached_tasks(name:str, offset:int) -> None:
     for entry in sample_cache[name][offset:]:
         entry.future.cancel()
     del sample_cache[name][offset:]
@@ -450,7 +225,7 @@ async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[Filter
     yield FilterOutput(langs, sample)
 
     for i, filter_step in enumerate(filters, start=1):
-        filter_definition = FILTERS[filter_step.filter]
+        filter_definition = get_filter(filter_step.filter)
 
         checksum = cache_hash(jsonable_encoder(filter_step),
             cache_hash(jsonable_encoder(filter_definition),
@@ -479,7 +254,7 @@ async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[Filter
         cancel_cached_tasks(name, len(filters) + 1)
 
 
-def stream_jsonl(iterable):
+def stream_jsonl(iterable:AsyncIterator[Any]) -> StreamingResponse:
     return StreamingResponse(
         (
             json.dumps(jsonable_encoder(line), separators=(',', ':')).encode() + b"\n"
@@ -515,16 +290,16 @@ def api_get_dataset(name:str) -> Dataset:
 
 
 @app.get('/api/datasets/{name:path}/sample')
-async def api_get_sample(name:str) -> AsyncIterator[FilterOutput]:
+async def api_get_sample(name:str) -> Response:
     return stream_jsonl(get_sample(name, []))
 
 
 @app.post('/api/datasets/{name:path}/sample')
-async def api_get_filtered_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[FilterOutput]:
+async def api_get_filtered_sample(name:str, filters:List[FilterStep]) -> Response:
     return stream_jsonl(get_sample(name, filters))
 
 
-def make_pipeline(name, filters=[]):
+def make_pipeline(name:str, filters:List[FilterStep] = []) -> FilterPipeline:
     columns = list_datasets(DATA_PATH)[name]
     return FilterPipeline(
         version=1,
@@ -537,7 +312,7 @@ def make_pipeline(name, filters=[]):
 
 
 @app.get('/api/datasets/{name:path}/configuration.json')
-def api_get_dataset_filters(name:str) -> List[FilterStep]:
+def api_get_dataset_filters(name:str) -> FilterPipeline:
 
     if not os.path.exists(filter_configuration_path(name)):
         return make_pipeline(name)
@@ -564,16 +339,16 @@ def api_update_dataset_filters(name:str, patch:FilterPipelinePatch):
 
 
 @app.get('/api/datasets/{name:path}/configuration-for-opusfilter.yaml')
-def api_get_dataset_filters_as_openfilter(name:str) -> List[FilterStep]:
+def api_get_dataset_filters_as_openfilter(name:str) -> Response:
     if not os.path.exists(filter_configuration_path(name)):
-        return []
+        raise HTTPException(status_code=404, detail='Dataset not found')
 
     with open(filter_configuration_path(name), 'r') as fh:
         data = json.load(fh)
 
     pipeline = parse_obj_as(FilterPipeline, data)
 
-    opusfilter_config = {
+    opusfilter_config: Dict[str,Any] = {
         'steps': []
     }
 
@@ -581,18 +356,18 @@ def api_get_dataset_filters_as_openfilter(name:str) -> List[FilterStep]:
     
     preprocess_steps = []
 
-    filter_steps = []
+    filter_steps: List[Dict[str,Any]] = []
 
     for step in pipeline.filters:
-        if (match := re.search(r'\bopusfilter\.preprocessors\.(\w+)\b', FILTERS[step.filter].command)):
+        if (match := re.search(r'\bopusfilter\.preprocessors\.(\w+)\b', get_filter(step.filter).command)):
             preprocess_steps.append({
-                match.group(1): step.parameters
+                str(match.group(1)): step.parameters
             })
-        elif (match := re.search(r'\bopusfilter\.filters\.(\w+)\b', FILTERS[step.filter].command)):
+        elif (match := re.search(r'\bopusfilter\.filters\.(\w+)\b', get_filter(step.filter).command)):
             filter_steps.append({
-                match.group(1): step.parameters
+                str(match.group(1)): step.parameters
             })
-        elif FILTERS[step.filter].type == FilterType.BILINGUAL:
+        elif get_filter(step.filter).type == FilterType.BILINGUAL:
             filter_steps.append({
                 'OpusCleanerFilter': {
                     'filter': step.filter,
@@ -600,7 +375,7 @@ def api_get_dataset_filters_as_openfilter(name:str) -> List[FilterStep]:
                 },
                 'module': 'opuscleaner.opusfilter_compat'
             })
-        elif FILTERS[step.filter].type == FilterType.MONOLINGUAL:
+        elif get_filter(step.filter).type == FilterType.MONOLINGUAL:
             filter_steps.append({
                 'OpusCleanerFilter': {
                     'filter': step.filter,
@@ -648,10 +423,14 @@ def api_get_dataset_filters_as_openfilter(name:str) -> List[FilterStep]:
     return Response(yaml.safe_dump(opusfilter_config, sort_keys=False), media_type='application/yaml')
 
 
+app_context = ExitStack()
+
+
 @app.get('/api/filters/')
 def api_get_filters():
-    reload_filters()
-    return FILTERS
+    app_context.close() # unloads old filter definitions
+    app_context.enter_context(filter_context(FILTER_PATH))
+    return get_filters()
 
 
 @app.get('/')
@@ -714,4 +493,7 @@ def main(argv=sys.argv):
     parser_sample.set_defaults(func=main_sample)
 
     args = parser.parse_args()
-    args.func(args)
+
+    with app_context:
+        app_context.enter_context(filter_context(FILTER_PATH))
+        args.func(args)

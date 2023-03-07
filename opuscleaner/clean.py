@@ -11,6 +11,7 @@ import shlex
 import signal
 import sys
 import traceback
+from contextlib import ExitStack
 from glob import glob
 from pprint import pprint
 from queue import Queue, SimpleQueue
@@ -21,42 +22,28 @@ from tempfile import NamedTemporaryFile, TemporaryDirectory
 from threading import Thread
 from typing import Dict, List, Any, BinaryIO, Optional, TypeVar, Iterable, Tuple, NamedTuple, Union
 
-from .config import COL_PY
+from pydantic import parse_obj_as
+
+from .config import COL_PY, FILTER_PATH
+from .filters import list_filters, filter_context, filter_format_command, Filter, FilterStep, FilterPipeline
+from ._util import none_throws
 
 
-T = TypeVar("T")
+# Queue for printing lines to stdout or stderr. None means end of input.
+PrintQueue = SimpleQueue[Union[None,bytes]]
 
-def none_throws(optional: Optional[T], message: str = "Unexpected `None`") -> T:
-    if optional is None:
-        raise AssertionError(message)
-    return optional
+# Control queue for communicating the return code of a child back to the parent.
+ControlQueue = SimpleQueue[Tuple[int,int]]
 
+# Batches to be processed. tuple[batch index,batch path]. None means end of input.
+# Using a Queue here to limit the maximum capacity.
+BatchQueue = Queue[Union[None,Tuple[int,str]]]
 
-def encode_env(type_name: str, value: Any) -> str:
-    if type_name == 'bool':
-        return '1' if value else ''
-    else:
-        return str(value)
-
-
-def list_filters(paths: str) -> Iterable[dict]:
-    """Scans all files matching the path pattern and attempts to parse them as
-    filter json definitions.
-    """
-    for path in paths.split(':'):
-        for filename in glob(path, recursive=True):
-            try:
-                with open(filename) as fh:
-                    defaults = {
-                        "name": os.path.splitext(os.path.basename(filename))[0],
-                        "basedir": os.path.dirname(filename)
-                    }
-                    yield {**defaults, **json.load(fh)}
-            except Exception as e:
-                print(f"Could not parse {filename}: {e}", file=sys.stderr)
+# Batches to be merged. Same format as BatchQueue
+MergeQueue = SimpleQueue[Union[None,Tuple[int,str]]]
 
 
-def babysit_child(n: int, child: Popen, name: str, print_queue: SimpleQueue, ctrl_queue: SimpleQueue):
+def babysit_child(n: int, child: Popen, name: str, print_queue: PrintQueue, ctrl_queue: ControlQueue) -> None:
     """Thread that looks after a child process and passes (and prefixes) all of
     its stderr to a queue. It will tell the parent thread about the end of the
     child through the ctrl_queue.
@@ -73,7 +60,7 @@ def babysit_child(n: int, child: Popen, name: str, print_queue: SimpleQueue, ctr
     ctrl_queue.put((n, child.returncode))
 
 
-def print_lines(queue: SimpleQueue, fout: BinaryIO):
+def print_lines(queue: PrintQueue, fout: BinaryIO) -> None:
     """Thread that prints stderr lines from all the children to stderr in an
     orderly fashion.
     """
@@ -114,15 +101,15 @@ class ProcessPipeline:
     """Context manager for spawning and babysitting child processes that are
     siblings connected by their pipes.
     """
-    ctrl_queue: SimpleQueue
+    ctrl_queue: ControlQueue
 
-    print_queue: SimpleQueue
+    print_queue: PrintQueue
 
     environ: Dict[str,str]
 
     children: List[Child]
 
-    def __init__(self, print_queue: SimpleQueue, *, env:Dict[str,str]={}):
+    def __init__(self, print_queue: PrintQueue, *, env:Dict[str,str]={}):
         self.ctrl_queue = SimpleQueue()
         self.print_queue = print_queue
         self.environ = dict(env)
@@ -143,10 +130,10 @@ class ProcessPipeline:
         self.children.append(Child(name, child, thread))
         return child
 
-    def __enter__(self):
+    def __enter__(self) -> 'ProcessPipeline':
         return self
 
-    def __exit__(self, err_type, err_inst, err_trace):
+    def __exit__(self, err_type, err_inst, err_trace) -> None:
         # Wait for the children to exit, and depending on their retval exit early
         running_children = len(self.children)
 
@@ -173,7 +160,7 @@ class ProcessPipeline:
 
         # If supported, print usage for each child?
         if False and os.path.isdir('/proc'):
-            for child in children:
+            for child in self.children:
                 with open(f'/proc/{child.process.pid}/stat', 'r') as fh:
                     sys.stderr.write(child.name + "\t")
                     sys.stderr.write(fh.readline())
@@ -200,7 +187,7 @@ class PipelineStep(NamedTuple):
 
 
 class Pipeline:
-    def __init__(self, filters: Dict[str,Dict], languages: List[str], pipeline: List[Dict]):
+    def __init__(self, filters:Dict[str,Filter], languages: List[str], pipeline: FilterPipeline):
         self.steps: List[PipelineStep] = []
 
         # Make sure the path to the python binary (and the installed utils)
@@ -215,34 +202,26 @@ class Pipeline:
         } if pyenv_bin_path not in os_env_bin_paths else None
 
         # Assert we have all filters we need
-        assert set(step['filter'] for step in pipeline['filters']) - set(filters.keys()) == set()
+        assert set(step.filter for step in pipeline.filters) - set(filters.keys()) == set()
 
-        for step in pipeline['filters']:
-            filter_definition = filters[step['filter']]
-            
-            if filter_definition['type'] == 'bilingual':
-                command = filter_definition['command']
-            elif filter_definition['type'] == 'monolingual':
-                column = languages.index(step['language'])
-                command = f'{" ".join(map(shlex.quote, COL_PY))} {column} {filter_definition["command"]}'
-            else:
-                raise NotImplementedError()
+        # Make sure the path to the python binary (and the installed utils)
+        # is in the PATH variable. If you load a virtualenv this happens by
+        # default, but if you call it with the virtualenv's python binary 
+        # directly it wont.
+        pyenv_bin_path = os.path.dirname(sys.executable)
+        os_env_bin_paths = os.environ.get('PATH', '').split(os.pathsep)
+        self.env: Optional[Dict[str,str]] = {
+            **os.environ,
+            'PATH': os.pathsep.join([pyenv_bin_path] + os_env_bin_paths)
+        } if pyenv_bin_path not in os_env_bin_paths else None
 
-            # List of k=v shell variable definitions
-            filter_params = [
-                '{}={}'.format(name, quote(encode_env(props['type'], step['parameters'].get(name, props.get('default', None)))))
-                for name, props in filter_definition['parameters'].items()
-            ]
+        for step in pipeline.filters:
+            filter_def = filters[step.filter]
+            command_str = filter_format_command(filter_def, step, languages)
+            self.steps.append(PipelineStep(command_str, filter_def.basedir))
 
-            # Command, prefixed by variable definitions so they get expanded
-            # correctly in the command bit.
-            command_str = '; '.join(filter_params + [command])
-
-            self.steps.append(PipelineStep(command_str, filter_definition['basedir']))
-
-    def run(self, pool:ProcessPipeline, stdin:BinaryIO, stdout:BinaryIO, *, tee:bool=False, basename:str=""):
+    def run(self, pool:ProcessPipeline, stdin:BinaryIO, stdout:BinaryIO, *, tee:bool=False, basename:str="") -> None:
         for i, (is_last_step, step) in enumerate(mark_last(self.steps)):
-        
             child = pool.start(f'step {i}', step.command,
                 stdin=stdin,
                 stdout=stdout if is_last_step and not tee else PIPE,
@@ -273,7 +252,7 @@ class Pipeline:
                 stdin = none_throws(tee_child.stdout)
 
 
-def split_input(print_queue:SimpleQueue, parallel: int, batch_queue: Queue, batch_size:int, stdin:BinaryIO):
+def split_input(print_queue:PrintQueue, parallel: int, batch_queue: BatchQueue, batch_size:int, stdin:BinaryIO) -> None:
     """Reads data from `stdin` and splits it into chunks of `batch_size` lines.
     These chunks are stored in temporary files, whose filenames are put onto
     `batch_queue`.
@@ -314,7 +293,7 @@ def split_input(print_queue:SimpleQueue, parallel: int, batch_queue: Queue, batc
             batch_queue.put(None)
 
 
-def run_pipeline(print_queue:SimpleQueue, batch_queue: Queue, merge_queue: SimpleQueue, pipeline: Pipeline):
+def run_pipeline(print_queue:PrintQueue, batch_queue:BatchQueue, merge_queue:MergeQueue, pipeline:Pipeline) -> None:
     """Receives an input filename from `batch_queue`, and once that has been processed
     with `pipeline`, it will post the output filename to `merge_queue`.
 
@@ -360,7 +339,7 @@ def run_pipeline(print_queue:SimpleQueue, batch_queue: Queue, merge_queue: Simpl
         merge_queue.put(None)
 
 
-def merge_output(print_queue:SimpleQueue, parallel: int, merge_queue: SimpleQueue, stdout:BinaryIO):
+def merge_output(print_queue:PrintQueue, parallel:int, merge_queue:MergeQueue, stdout:BinaryIO) -> None:
     """Takes batch filenames and numbers from `merge_queue` and will concatenate
     files in the order of the batches. If batches arrive out of order, it will
     wait for the next in order batch to arrive before continuing to concatenate.
@@ -400,10 +379,10 @@ def merge_output(print_queue:SimpleQueue, parallel: int, merge_queue: SimpleQueu
             pending_batches[batch_index] = filename
 
 
-def run_parallel(pipeline:Pipeline, stdin:BinaryIO, stdout:BinaryIO, *, parallel:int, batch_size:int, print_queue: SimpleQueue):
-    batch_queue = Queue(parallel * 2)
+def run_parallel(pipeline:Pipeline, stdin:BinaryIO, stdout:BinaryIO, *, parallel:int, batch_size:int, print_queue: PrintQueue) -> None:
+    batch_queue: BatchQueue = Queue(parallel * 2)
 
-    merge_queue = SimpleQueue()
+    merge_queue: MergeQueue = SimpleQueue()
 
     # Splits stdin into files of `batch_size` lines, and puts those on `batch_queue`
     splitter = Thread(target=split_input, args=[print_queue, parallel, batch_queue, batch_size, stdin])
@@ -440,9 +419,9 @@ def run_parallel(pipeline:Pipeline, stdin:BinaryIO, stdout:BinaryIO, *, parallel
     merger.join()
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument('--filters', '-f', type=str, default='filters/*.json:filters/*/*.json', help='Path to directory with filter specifications')
+    parser.add_argument('--filters', '-f', type=str, default=FILTER_PATH, help='Path to directory with filter specifications')
     parser.add_argument('--input', '-i', type=argparse.FileType('rb'), help='Input tsv. If unspecified input files are read from filter json; use - to read from stdin')
     parser.add_argument('--output', '-o', type=argparse.FileType('wb'), default=sys.stdout.buffer, help='Output tsv (defaults to stdout)')
     parser.add_argument('--basedir', '-b', type=str, help='Directory to look for data files when --input is not used (defaults to same as input pipeline file)')
@@ -463,13 +442,15 @@ def main():
     if args.input is not None and not args.languages:
         parser.error('When --input is specified, each colum\'s LANG has to be specified as well.')
 
-    pipeline_config = json.load(args.pipeline)
-
     # load all filter definitions (we need to, to get their name)
-    FILTERS = {
-        definition['name']: definition
+    filters = {
+        definition.name: definition
         for definition in list_filters(args.filters)
     }
+
+    # filter_context() provides the filters to the validators in FilterPipeline
+    with filter_context(filters):
+        pipeline_config = parse_obj_as(FilterPipeline, json.load(args.pipeline))
 
     # Queue filled by the babysitters with the stderr of the children, consumed
     # by `print_lines()` to prevent racing on stderr.
@@ -481,12 +462,12 @@ def main():
     print_thread.start()
 
     # Order of columns. Matches datasets.py:list_datasets(path)
-    languages: List[str] = args.languages if args.input else [filename.rsplit('.', 2)[1] for filename in pipeline_config['files']]
+    languages: List[str] = args.languages if args.input else [filename.rsplit('.', 2)[1] for filename in pipeline_config.files]
 
     # Directory plus basename to write debug (`--tee`) files to
-    basename: str = 'stdin' if args.input else os.path.commonprefix(pipeline_config['files']).rstrip('.')
+    basename: str = 'stdin' if args.input else os.path.commonprefix(pipeline_config.files).rstrip('.')
 
-    pipeline = Pipeline(FILTERS, languages, pipeline_config)
+    pipeline = Pipeline(filters, languages, pipeline_config)
 
     # Input for next child
     stdin: BinaryIO
@@ -508,7 +489,7 @@ def main():
                         stdout=PIPE,
                         stderr=PIPE,
                         cwd=args.basedir)
-                    for filename in pipeline_config['files']
+                    for filename in pipeline_config.files
                 ]
 
                 fds = [none_throws(gunzip.stdout).fileno() for gunzip in gunzips]

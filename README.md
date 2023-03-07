@@ -1,5 +1,5 @@
 # OpusCleaner
-OpusCleaner is a machine translation/language model data cleaner and training scheduler. The Training scheduler has moved to [empty-trainer](https://github.com/hplt-project/empty-trainer).
+OpusCleaner is a machine translation/language model data cleaner and training scheduler. The Training scheduler has moved to [OpusTrainer](https://github.com/hplt-project/OpusTrainer).
 
 ## Cleaner
 The cleaner bit takes care of downloading and cleaning multiple different datasets and preparing them for translation.

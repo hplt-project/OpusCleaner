@@ -121,7 +121,7 @@ class ProcessPipeline:
             'env': {
                 **os.environ,
                 **self.environ,
-                **kwargs.get('env', dict())
+                **(kwargs.get('env') or dict())
             }
         })
         n = len(self.children)
@@ -437,7 +437,7 @@ def main() -> None:
     # default search path for the data files is next to the configuration file
     # which is the default save location for empty-train.
     if not args.basedir:
-        args.basedir = os.path.dirname(args.pipeline.name)
+        args.basedir = os.path.dirname(args.pipeline.name) or os.getcwd()
 
     if args.input is not None and not args.languages:
         parser.error('When --input is specified, each colum\'s LANG has to be specified as well.')

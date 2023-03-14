@@ -428,8 +428,15 @@ app_context = ExitStack()
 
 @app.get('/api/filters/')
 def api_get_filters():
-    app_context.close() # unloads old filter definitions
-    app_context.enter_context(filter_context(FILTER_PATH))
+    # TODO: Disabled this here because of a race condition where if you reload
+    # the filter editor page, it will reload the filters while trying to filter
+    # the sample on that page, and the sample filtering might fail due to it
+    # missing filters because _FILTERS is empty? I don't fully understand it
+    # because there is no time between .close() and .enter_context() for the
+    # async filtering computation function above to run. Maybe fastapi is
+    # secretly running tasks in their own threads!? Hence todo understand.
+    # app_context.close() # unloads old filter definitions
+    # app_context.enter_context(filter_context(FILTER_PATH))
     return get_filters()
 
 

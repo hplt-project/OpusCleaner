@@ -27,12 +27,12 @@ FILTER_PATH = os.pathsep.join([
 
 # col.py is used to apply a monolingual filter to a bilingual dataset. Needs
 # to be absolute since filters can run from different cwds.
-COL_PY = [sys.executable, '-m', 'opuscleaner.col']
+COL_PY = [sys.executable, os.path.join(os.path.dirname(__file__), 'col.py')]
 
 # Program used to derive a sample from the dataset. Will be called like
 # `./sample.py -n $SAMPLE_SIZE ...file-per-lang.gz`. Absolute because filters
 # can specify their own `cwd`.
-SAMPLE_PY = [sys.executable, '-m', 'opuscleaner.sample']
+SAMPLE_PY = [sys.executable, os.path.join(os.path.dirname(__file__), 'sample.py')]
 
 # Size of each of the three sections (head, random sample of middle, tail) of
 # the dataset sample that we operate on.

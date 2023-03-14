@@ -497,3 +497,6 @@ def main(argv=sys.argv):
     with app_context:
         app_context.enter_context(filter_context(FILTER_PATH))
         args.func(args)
+
+if __name__ == '__main__':
+    main()

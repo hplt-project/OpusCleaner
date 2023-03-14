@@ -11,8 +11,8 @@ from warnings import warn
 import yaml
 from pydantic import BaseModel, parse_obj_as, validator
 
-from .config import COL_PY
-from ._util import none_throws
+from opuscleaner.config import COL_PY
+from opuscleaner._util import none_throws
 
 
 class FilterType(Enum):

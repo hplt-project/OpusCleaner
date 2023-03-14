@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel, parse_obj_as, validator
 from typing import Any, List, Dict, TextIO, cast
 
-from .config import CATEGORIES_PATH, DATA_PATH, DEFAULT_CATEGORIES
+from opuscleaner.config import CATEGORIES_PATH, DATA_PATH, DEFAULT_CATEGORIES
 
 
 class Category(BaseModel):

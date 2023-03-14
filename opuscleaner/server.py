@@ -28,13 +28,13 @@ from starlette.datastructures import URL
 from starlette.responses import FileResponse, RedirectResponse, Response
 from starlette.types import Scope
 
-from ._util import none_throws
-from .categories import app as categories_app
-from .config import DATA_PATH, FILTER_PATH, COL_PY, SAMPLE_PY, SAMPLE_SIZE
-from .datasets import list_datasets, Path
-from .download import app as download_app
-from .filters import filter_context, filter_format_command, get_filter, get_filters, FilterType, FilterStep, FilterPipeline
-from .sample import sample
+from opuscleaner._util import none_throws
+from opuscleaner.categories import app as categories_app
+from opuscleaner.config import DATA_PATH, FILTER_PATH, COL_PY, SAMPLE_PY, SAMPLE_SIZE
+from opuscleaner.datasets import list_datasets, Path
+from opuscleaner.download import app as download_app
+from opuscleaner.filters import filter_context, filter_format_command, get_filter, get_filters, FilterType, FilterStep, FilterPipeline
+from opuscleaner.sample import sample
 
 
 import mimetypes

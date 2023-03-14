@@ -24,9 +24,9 @@ from typing import Dict, List, Any, BinaryIO, Optional, TypeVar, Iterable, Tuple
 
 from pydantic import parse_obj_as
 
-from .config import COL_PY, FILTER_PATH
-from .filters import list_filters, filter_context, filter_format_command, Filter, FilterStep, FilterPipeline
-from ._util import none_throws
+from opuscleaner.config import COL_PY, FILTER_PATH
+from opuscleaner.filters import list_filters, filter_context, filter_format_command, Filter, FilterStep, FilterPipeline
+from opuscleaner._util import none_throws
 
 
 # Queue for printing lines to stdout or stderr. None means end of input.

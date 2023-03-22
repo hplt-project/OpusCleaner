@@ -17,6 +17,10 @@ const props = defineProps({
 	displayAsRows: {
 		type: Boolean,
 		default: false
+	},
+	displayWhitespace: {
+		type: Boolean,
+		default: false
 	}
 });
 
@@ -110,6 +114,23 @@ const resizeObserver = new ResizeObserver(renderGutter);
 onMounted(() => resizeObserver.observe(outputElement.value));
 onBeforeUnmount(() => resizeObserver.unobserve(outputElement.value));
 
+const replacements = {
+	"\u00A0": "␣", // no-break space
+	"\u202F": "␣", // narrow no-break space
+	"\u2007": "␣", // figure space
+	"\u2060": "␣", // word joiner
+	" ": "·" // normal space
+};
+
+const replacementsExpr = new RegExp(Object.keys(replacements).join('|'), 'g');
+
+function transform(text) {
+	if (!props.displayWhitespace)
+		return text;
+
+	return text.replace(replacementsExpr, (match) => replacements[match]);
+}
+
 </script>
 
 <template>
@@ -135,10 +156,10 @@ onBeforeUnmount(() => resizeObserver.unobserve(outputElement.value));
 						<tr v-for="(entry, j) in chunk.value" :key="`${i}:${j}`" :class="{'added':chunk.added, 'removed':chunk.removed, 'changed':chunk.changed}">
 							<td v-for="lang in props.languages" :key="lang" :lang="lang">
 								<template v-if="chunk.changed">
-									<InlineDiff class="inline-diff" :current="entry[lang]" :previous="chunk.differences[j].previous[lang]"/>
+									<InlineDiff class="inline-diff" :current="transform(entry[lang])" :previous="transform(chunk.differences[j].previous[lang])"/>
 								</template>
 								<template v-else>
-									{{entry[lang]}}
+									{{transform(entry[lang])}}
 								</template>
 							</td>
 						</tr>
@@ -146,7 +167,7 @@ onBeforeUnmount(() => resizeObserver.unobserve(outputElement.value));
 				</tbody>
 				<tbody v-else>
 					<tr v-for="(entry, i) in props.rows" :key="i">
-						<td v-for="lang in props.languages" :key="lang" :lang="lang">{{entry[lang]}}</td>
+						<td v-for="lang in props.languages" :key="lang" :lang="lang">{{transform(entry[lang])}}</td>
 					</tr>
 				</tbody>
 			</table>

@@ -30,6 +30,8 @@ const {dataset} = defineProps({
 
 const displayAsRows = ref(false)
 
+const displayWhitespace = ref(false);
+
 const VIEWS = ['original', 'clean', 'changes'];
 
 const view = ref('clean'); // one of VIEWs
@@ -218,6 +220,8 @@ const filterIsOpen = new class {
 			<header class="controls">
 				<Checkbox v-model="displayAsRows">Display as rows</Checkbox>
 
+				<Checkbox v-model="displayWhitespace">Display whitespace</Checkbox>
+
 				<div class="button-group">
 					<button class="icon-button" title="Undo" @click="filterSteps.undo()" :disabled="!filterSteps.canUndo.value"><RotateCcwIcon/></button>
 					<button class="icon-button" title="Redo" @click="filterSteps.redo()" :disabled="!filterSteps.canRedo.value"><RotateCwIcon/></button>
@@ -236,7 +240,8 @@ const filterIsOpen = new class {
 					:languages="languages"
 					:rows="view === 'original' ? original?.stdout : sample?.stdout"
 					:ref-rows="view === 'changes' ? original?.stdout : null"
-					:display-as-rows="displayAsRows"/>
+					:display-as-rows="displayAsRows"
+					:display-whitespace="displayWhitespace"/>
 				<div class="filter-error" v-if="sample?.stderr" translate="no">
 					<pre>{{ sample.stderr }}</pre>
 				</div>

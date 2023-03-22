@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, readonly, onUpdated } from 'vue';
+import { ref, computed, readonly, onMounted, onBeforeUnmount, onUpdated } from 'vue';
 import { diffSample } from '../diff.js';
 import InlineDiff from './InlineDiff.vue';
 
@@ -71,7 +71,7 @@ function languageName(lang) {
 
 const gutter = ref();
 
-onUpdated(() => {
+function renderGutter() {
 	if (gutter.value.hidden = !isShowingDiff.value)
 		 return;
 
@@ -97,10 +97,18 @@ onUpdated(() => {
 			/* x */ 0,
 			/* y */ row.offsetTop / tableHeight * viewHeight,
 			/* w */ width,
-			/* h */ Math.max(row.offsetHeight / tableHeight, 1)
+			/* h */ Math.max(row.offsetHeight / tableHeight * viewHeight, 1)
 		);
 	});
-});
+};
+
+// Re-render gutter when we update content
+onUpdated(renderGutter);
+
+// Re-render gutter when the table is resized
+const resizeObserver = new ResizeObserver(renderGutter);
+onMounted(() => resizeObserver.observe(outputElement.value));
+onBeforeUnmount(() => resizeObserver.unobserve(outputElement.value));
 
 </script>
 

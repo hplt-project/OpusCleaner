@@ -25,7 +25,7 @@ from typing import Dict, List, Any, BinaryIO, Optional, TypeVar, Iterable, Tuple
 from pydantic import parse_obj_as
 
 from opuscleaner.config import COL_PY, FILTER_PATH
-from opuscleaner.filters import list_filters, filter_context, filter_format_command, Filter, FilterStep, FilterPipeline
+from opuscleaner.filters import list_filters, set_global_filters, filter_format_command, Filter, FilterStep, FilterPipeline
 from opuscleaner._util import none_throws
 
 
@@ -448,9 +448,9 @@ def main() -> None:
         for definition in list_filters(args.filters)
     }
 
-    # filter_context() provides the filters to the validators in FilterPipeline
-    with filter_context(filters):
-        pipeline_config = parse_obj_as(FilterPipeline, json.load(args.pipeline))
+    # set_global_filters() provides the filters to the validators in FilterPipeline
+    set_global_filters(filters)
+    pipeline_config = parse_obj_as(FilterPipeline, json.load(args.pipeline))
 
     # Queue filled by the babysitters with the stderr of the children, consumed
     # by `print_lines()` to prevent racing on stderr.

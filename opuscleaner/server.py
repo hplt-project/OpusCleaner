@@ -33,7 +33,7 @@ from opuscleaner.categories import app as categories_app
 from opuscleaner.config import DATA_PATH, FILTER_PATH, COL_PY, SAMPLE_PY, SAMPLE_SIZE
 from opuscleaner.datasets import list_datasets, Path
 from opuscleaner.download import app as download_app
-from opuscleaner.filters import filter_context, filter_format_command, get_filter, get_filters, FilterType, FilterStep, FilterPipeline
+from opuscleaner.filters import filter_format_command, get_global_filter, get_global_filters, set_global_filters, list_filters, FilterType, FilterStep, FilterPipeline
 from opuscleaner.sample import sample
 
 
@@ -169,7 +169,7 @@ def format_shell(val: Any) -> str:
 
 
 async def exec_filter_step(filter_step: FilterStep, langs: List[str], input: bytes) -> Tuple[bytes,bytes]:
-    filter_definition = get_filter(filter_step.filter)
+    filter_definition = get_global_filter(filter_step.filter)
 
     command = filter_format_command(filter_definition, filter_step, langs)
 
@@ -225,7 +225,7 @@ async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[Filter
     yield FilterOutput(langs, sample)
 
     for i, filter_step in enumerate(filters, start=1):
-        filter_definition = get_filter(filter_step.filter)
+        filter_definition = get_global_filter(filter_step.filter)
 
         checksum = cache_hash(jsonable_encoder(filter_step),
             cache_hash(jsonable_encoder(filter_definition),
@@ -359,15 +359,15 @@ def api_get_dataset_filters_as_openfilter(name:str) -> Response:
     filter_steps: List[Dict[str,Any]] = []
 
     for step in pipeline.filters:
-        if (match := re.search(r'\bopusfilter\.preprocessors\.(\w+)\b', get_filter(step.filter).command)):
+        if (match := re.search(r'\bopusfilter\.preprocessors\.(\w+)\b', get_global_filter(step.filter).command)):
             preprocess_steps.append({
                 str(match.group(1)): step.parameters
             })
-        elif (match := re.search(r'\bopusfilter\.filters\.(\w+)\b', get_filter(step.filter).command)):
+        elif (match := re.search(r'\bopusfilter\.filters\.(\w+)\b', get_global_filter(step.filter).command)):
             filter_steps.append({
                 str(match.group(1)): step.parameters
             })
-        elif get_filter(step.filter).type == FilterType.BILINGUAL:
+        elif get_global_filter(step.filter).type == FilterType.BILINGUAL:
             filter_steps.append({
                 'OpusCleanerFilter': {
                     'filter': step.filter,
@@ -375,7 +375,7 @@ def api_get_dataset_filters_as_openfilter(name:str) -> Response:
                 },
                 'module': 'opuscleaner.opusfilter_compat'
             })
-        elif get_filter(step.filter).type == FilterType.MONOLINGUAL:
+        elif get_global_filter(step.filter).type == FilterType.MONOLINGUAL:
             filter_steps.append({
                 'OpusCleanerFilter': {
                     'filter': step.filter,
@@ -423,21 +423,10 @@ def api_get_dataset_filters_as_openfilter(name:str) -> Response:
     return Response(yaml.safe_dump(opusfilter_config, sort_keys=False), media_type='application/yaml')
 
 
-app_context = ExitStack()
-
-
 @app.get('/api/filters/')
 def api_get_filters():
-    # TODO: Disabled this here because of a race condition where if you reload
-    # the filter editor page, it will reload the filters while trying to filter
-    # the sample on that page, and the sample filtering might fail due to it
-    # missing filters because _FILTERS is empty? I don't fully understand it
-    # because there is no time between .close() and .enter_context() for the
-    # async filtering computation function above to run. Maybe fastapi is
-    # secretly running tasks in their own threads!? Hence todo understand.
-    # app_context.close() # unloads old filter definitions
-    # app_context.enter_context(filter_context(FILTER_PATH))
-    return get_filters()
+    set_global_filters(list_filters(FILTER_PATH))
+    return get_global_filters()
 
 
 @app.get('/')
@@ -501,9 +490,8 @@ def main(argv=sys.argv):
 
     args = parser.parse_args()
 
-    with app_context:
-        app_context.enter_context(filter_context(FILTER_PATH))
-        args.func(args)
+    set_global_filters(list_filters(FILTER_PATH))
+    args.func(args)
 
 if __name__ == '__main__':
     main()

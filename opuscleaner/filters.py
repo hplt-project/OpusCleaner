@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import threading
 from contextlib import contextmanager
 from enum import Enum
 from glob import glob
@@ -207,28 +208,21 @@ def list_filters(paths:str) -> Iterable[Filter]:
                 warn(f"Could not parse {filename}: {e}")
 
 
-@contextmanager
-def filter_context(filters:Union[Dict[str,Filter],str]) -> Iterator[Dict[str,Filter]]:
-    if isinstance(filters, str):
-        filters = {filter.name: filter for filter in list_filters(filters)}
-
+def set_global_filters(filters:Union[Dict[str,Filter], Iterable[Filter]]) -> None:
     global _FILTERS
-    _prev = _FILTERS.copy()
-    _FILTERS.clear()
-    _FILTERS |= filters
-    yield _FILTERS
-    _FILTERS.clear()
-    _FILTERS |= _prev
+    if isinstance(filters, dict):
+        _FILTERS = dict(filters)
+    else:
+        _FILTERS = {filter.name: filter for filter in filters}
 
 
-def get_filters() -> Dict[str,Filter]:
+def get_global_filters() -> Dict[str,Filter]:
     global _FILTERS
     return _FILTERS
 
 
-def get_filter(name:str) -> Filter:
-    global _FILTERS
-    return _FILTERS[name]
+def get_global_filter(name:str) -> Filter:
+    return get_global_filters()[name]
 
 
 def format_shell(val: Any) -> str:

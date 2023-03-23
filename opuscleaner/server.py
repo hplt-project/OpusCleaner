@@ -112,40 +112,42 @@ async def compute_sample(name:str, columns:List[Tuple[str,Path]]) -> None:
             copyfileobj(tempfile, fdest)
 
 
-async def get_dataset_sample(name:str, columns:List[Tuple[str,Path]]) -> Tuple[bytes,bytes]:
-    langs = [lang for lang, _ in columns]
-
-    if not os.path.exists(sample_path(name, langs)):
-        await compute_sample(name, columns)
-
-    with open(sample_path(name, langs), 'rb') as fh:
-        return fh.read(), bytes()
+class FilterOutput(NamedTuple):
+    langs: List[str] # order of columns
+    returncode: int
+    stdout: bytes
+    stderr: bytes
 
 
-class FilterOutput(BaseModel):
+class ParsedFilterOutput(BaseModel):
+    """JSON serializable version of FilterOutput that has stdout parsed into
+       an array of dicts, with a field per language.
+    """
+    returncode: int
     stdout: List[Dict[str,str]]
-    stderr: Optional[str]
-
-    def __init__(self, langs:List[str], stdout:bytes, stderr:Optional[bytes] = None):
+    stderr: str
+    
+    def __init__(self, output:FilterOutput):
         lines = []
 
-        for lineno, line in enumerate(stdout.rstrip(b'\n').split(b'\n'), start=1):
+        for lineno, line in enumerate(output.stdout.rstrip(b'\n').split(b'\n'), start=1):
             values = []
             for colno, field in enumerate(line.split(b'\t'), start=1):
                 try:
                     values.append(field.decode())
                 except UnicodeDecodeError as e:
                     values.append(f'[Error: Cannot decode line {lineno} column {colno}: {e!s}]')
-            lines.append(dict(zip_longest(langs, values, fillvalue='')))
+            lines.append(dict(zip_longest(output.langs, values, fillvalue='')))
 
         super().__init__(
+            returncode=output.returncode,
             stdout=lines,
-            stderr=stderr.decode() if stderr is not None else None)
+            stderr=output.stderr.decode())
 
 
 class SampleCacheEntry(NamedTuple):
     checksum: bytes
-    future: asyncio.Task[Tuple[bytes, bytes]]
+    future: asyncio.Task[FilterOutput]
 
 
 sample_cache: Dict[str,List[SampleCacheEntry]] = {}
@@ -155,6 +157,18 @@ def cache_hash(obj: Any, seed: bytes = bytes()) -> bytes:
     impl = hashlib.sha256(seed)
     impl.update(json.dumps(obj, sort_keys=True).encode())
     return impl.digest()
+
+
+async def get_dataset_sample(name:str, columns:List[Tuple[str,Path]]) -> FilterOutput:
+    langs = [lang for lang, _ in columns]
+
+    if not os.path.exists(sample_path(name, langs)):
+        await compute_sample(name, columns)
+
+    with open(sample_path(name, langs), 'rb') as fh:
+        stdout = fh.read()
+
+    return FilterOutput([lang for lang, _ in columns], 0, stdout, bytes())
 
 
 def format_shell(val: Any) -> str:
@@ -192,7 +206,9 @@ async def exec_filter_step(filter_step: FilterStep, langs: List[str], input: byt
         env=filter_env)
 
     # Check exit codes, testing most obvious problems first.
-    return await p_filter.communicate(input=input)
+    stdout, stderr = await p_filter.communicate(input=input)
+
+    return FilterOutput(langs, p_filter.returncode, stdout, stderr)
 
 
 def cancel_cached_tasks(name:str, offset:int) -> None:
@@ -220,9 +236,10 @@ async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[Filter
             )
         ]
 
-    sample, _ = await sample_cache[name][0].future
+    sample = await sample_cache[name][0].future
 
-    yield FilterOutput(langs, sample)
+    # Return a clean unfiltered sample first
+    yield sample
 
     for i, filter_step in enumerate(filters, start=1):
         filter_definition = get_global_filter(filter_step.filter)
@@ -238,16 +255,16 @@ async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[Filter
 
             sample_cache[name].append(SampleCacheEntry(
                 checksum=checksum,
-                future=asyncio.create_task(exec_filter_step(filter_step, langs, sample))
+                future=asyncio.create_task(exec_filter_step(filter_step, langs, sample.stdout))
             ))
 
             assert len(sample_cache[name]) == i + 1
         
-        filter_output, filter_stderr = await sample_cache[name][i].future    
+        sample = await sample_cache[name][i].future    
         
-        yield FilterOutput(langs, filter_output, filter_stderr)
+        # Return the (partially) filtered sample
+        yield sample
 
-        sample = filter_output
 
     # if there are additional steps left in the cache, remove them
     if len(sample_cache[name]) > len(filters) + 1:
@@ -291,12 +308,12 @@ def api_get_dataset(name:str) -> Dataset:
 
 @app.get('/api/datasets/{name:path}/sample')
 async def api_get_sample(name:str) -> Response:
-    return stream_jsonl(get_sample(name, []))
+    return stream_jsonl(ParsedFilterOutput(output) async for output in get_sample(name, []))
 
 
 @app.post('/api/datasets/{name:path}/sample')
 async def api_get_filtered_sample(name:str, filters:List[FilterStep]) -> Response:
-    return stream_jsonl(get_sample(name, filters))
+    return stream_jsonl(ParsedFilterOutput(output) async for output in get_sample(name, filters))
 
 
 def make_pipeline(name:str, filters:List[FilterStep] = []) -> FilterPipeline:

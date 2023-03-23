@@ -55,6 +55,15 @@ const languages = computed(() => {
 	return languages;
 });
 
+/**
+ * {
+ *   {
+ *     "stdout": Object[],
+ *     "stderr": String,
+ *     "returncode": Number
+ *   }[]
+ * }
+ */
 const samples = ref([]);
 
 const sample = computed(() => {
@@ -151,14 +160,14 @@ function setFilterStepData(dataTransfer, el) {
 }
 	
 function getLoadingStage(index) {
-	if (samples.value.length === index + 1) // `+1` because first of samples is the raw sample)
+	if (samples.value.length < index + 1) // `+1` because first of samples is the raw sample)
+		return 'pending';
+	else if (samples.value.length === index + 1)
 		return 'loading';
-	else if (samples.value.length >= index + 1 && samples.value[index + 1].stderr)
-		return 'failed';
-	else if (samples.value.length >= index + 1)
+	else if (samples.value[index + 1].returncode === 0)
 		return 'loaded';
 	else
-		return 'pending';
+		return 'failed';
 }
 
 function filterFilters(filters, query) {

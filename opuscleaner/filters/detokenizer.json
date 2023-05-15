@@ -1,7 +1,7 @@
 {
     "description": "Detokenizes tokenized text. If the language is unsupported, enter 'other'. Uses sacremoses",
     "type": "monolingual",
-    "command": "sacremoses detokenize -l $LANG1",
+    "command": "sacremoses -l $LANG1 detokenize",
     "parameters": {
         "LANG1":
         {

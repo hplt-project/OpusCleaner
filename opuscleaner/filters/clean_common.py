@@ -21,6 +21,7 @@ CHARS = {
     'hi': r'[\u0900-\u097F]', # devanagari
     'hr': r'[abcčČćĆdđĐefghijklmnoprsšŠtuvzžŽ]',
     'hu': r'[a-zÁáÉéÍíÓóÖöŐőŰű]',
+    'hy': r'[\u0530-\u058F]',
     'is': r'[abdefghijklmnoprstuvxyÁáðÐÉéÍíÓóÚúÝýÞþÆæÖö]',
     'it': r'[a-zàÀèÈéÉìÌíÍîÎòÒóÓùÙúÚ]',
     'ko': r'[\uac00-\ud7af]|[\u1100-\u11ff]|[\u3130-\u318f]|[\ua960-\ua97f]|[\ud7b0-\ud7ff]',

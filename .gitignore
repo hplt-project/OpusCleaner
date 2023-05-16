@@ -32,6 +32,11 @@ coverage
 *__pycache__*
 .env
 placeholders/mappings.yml
+
+
+# Pickled dedup dictionaries
+*.pickle
+
 *.sublime-workspace
 *.sublime-project
 *.whl

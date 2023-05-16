@@ -6,6 +6,10 @@ input[type=checkbox] {
 	width: 1em;
 }
 
+.property-list {
+	overflow: hidden;
+}
+
 .property-list > summary {
 	align-items: center;
 }
@@ -48,12 +52,17 @@ details.property-list[open] > summary::before {
 .property-list > header > *,
 .property-list > footer > * {
 	flex: 1;
+	flex-wrap: nowrap;
 }
 
 .property-list > * > * {
 	flex: 0;
 	align-self: center;
 	margin-left: 0.5em;
+}
+
+.property-list > * > fieldset {
+	flex: 1 0 100%;
 }
 
 .property-list > * > .property-list-description {

@@ -33,5 +33,12 @@ coverage
 .env
 placeholders/mappings.yml
 
+
 # Pickled dedup dictionaries
 *.pickle
+
+*.sublime-workspace
+*.sublime-project
+*.whl
+.venv
+.vscode

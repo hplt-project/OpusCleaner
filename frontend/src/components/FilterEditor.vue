@@ -5,7 +5,7 @@ import {ref, computed, watch, watchEffect, onMounted, onUnmounted, readonly} fro
 import draggable from 'vuedraggable';
 import {stream} from '../stream.js';
 import { getFilters, filterRequiresLanguage } from '../store/filters.js';
-import { getFilterSteps } from '../store/filtersteps.js';
+import { getFilterSteps, defaultValue } from '../store/filtersteps.js';
 import { formatNumberSuffix } from '../format.js';
 import Checkbox from '../components/Checkbox.vue';
 import SegmentedControl from '../components/SegmentedControl.vue';
@@ -30,6 +30,8 @@ const {dataset} = defineProps({
 
 const displayAsRows = ref(false)
 
+const displayWhitespace = ref(false);
+
 const VIEWS = ['original', 'clean', 'changes'];
 
 const view = ref('clean'); // one of VIEWs
@@ -53,6 +55,15 @@ const languages = computed(() => {
 	return languages;
 });
 
+/**
+ * {
+ *   {
+ *     "stdout": Object[],
+ *     "stderr": String,
+ *     "returncode": Number
+ *   }[]
+ * }
+ */
 const samples = ref([]);
 
 const sample = computed(() => {
@@ -120,7 +131,7 @@ function createFilterStep(filter) {
 		id: getUniqueId(),
 		filter: filter.name,
 		language: filterRequiresLanguage({filter:filter.name}) ? languages.value[0] : null,
-		parameters: Object.fromEntries(Object.entries(filter.parameters).map(([key, parameter]) => [key, parameter.default]))
+		parameters: Object.fromEntries(Object.entries(filter.parameters).map(([key, parameter]) => [key, defaultValue(parameter)]))
 	}
 }
 
@@ -149,14 +160,14 @@ function setFilterStepData(dataTransfer, el) {
 }
 	
 function getLoadingStage(index) {
-	if (samples.value.length === index + 1) // `+1` because first of samples is the raw sample)
+	if (samples.value.length < index + 1) // `+1` because first of samples is the raw sample)
+		return 'pending';
+	else if (samples.value.length === index + 1)
 		return 'loading';
-	else if (samples.value.length >= index + 1 && samples.value[index + 1].stderr)
-		return 'failed';
-	else if (samples.value.length >= index + 1)
+	else if (samples.value[index + 1].returncode === 0)
 		return 'loaded';
 	else
-		return 'pending';
+		return 'failed';
 }
 
 function filterFilters(filters, query) {
@@ -218,6 +229,8 @@ const filterIsOpen = new class {
 			<header class="controls">
 				<Checkbox v-model="displayAsRows">Display as rows</Checkbox>
 
+				<Checkbox v-model="displayWhitespace">Display whitespace</Checkbox>
+
 				<div class="button-group">
 					<button class="icon-button" title="Undo" @click="filterSteps.undo()" :disabled="!filterSteps.canUndo.value"><RotateCcwIcon/></button>
 					<button class="icon-button" title="Redo" @click="filterSteps.redo()" :disabled="!filterSteps.canRedo.value"><RotateCwIcon/></button>
@@ -236,7 +249,8 @@ const filterIsOpen = new class {
 					:languages="languages"
 					:rows="view === 'original' ? original?.stdout : sample?.stdout"
 					:ref-rows="view === 'changes' ? original?.stdout : null"
-					:display-as-rows="displayAsRows"/>
+					:display-as-rows="displayAsRows"
+					:display-whitespace="displayWhitespace"/>
 				<div class="filter-error" v-if="sample?.stderr" translate="no">
 					<pre>{{ sample.stderr }}</pre>
 				</div>
@@ -418,6 +432,8 @@ const filterIsOpen = new class {
 
 .filter .filter-name {
 	flex: 2;
+	text-overflow: ellipsis;
+	overflow: hidden;
 }
 
 .filter .filter-type {

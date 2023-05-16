@@ -1,0 +1,129 @@
+{
+    "description": "Filters the lines based on the ratio between alphabetic characters in a line from the language and others",
+    "command": "./alpha_ratio.py --src-lang $LANG1 ${LANG2:+--trg-lang $LANG2} --ratio-words-src $SRCWORDRAT --ratio-words-trg $TRGWORDRAT --ratio-alpha-src $SRCALPHARAT --ratio-alpha-trg $TRGALPHARAT ${DEBUG:+--debug}",
+    "parameters":
+    {
+        "LANG1":
+        {
+            "type": "str",
+            "allowed_values":
+            [
+                "ar",
+                "bg",
+                "bn",
+                "ca",
+                "cs",
+                "da",
+                "de",
+                "en",
+                "el",
+                "es",
+                "et",
+                "eu",
+                "fi",
+                "fr",
+                "ga",
+                "gl",
+                "hi",
+                "hr",
+                "hu",
+                "hy",
+                "is",
+                "it",
+                "ko",
+                "lt",
+                "lv",
+                "mt",
+                "nb",
+                "nl",
+                "no",
+                "nn",
+                "pl",
+                "pt",
+                "ro",
+                "ru",
+                "sk",
+                "sl",
+                "sv",
+                "zh"
+            ]
+        },
+        "LANG2":
+        {
+            "type": "str",
+            "allowed_values":
+            [
+                "ar",
+                "bg",
+                "bn",
+                "ca",
+                "cs",
+                "da",
+                "de",
+                "en",
+                "el",
+                "es",
+                "et",
+                "eu",
+                "fi",
+                "fr",
+                "ga",
+                "gl",
+                "hi",
+                "hr",
+                "hu",
+                "hy",
+                "is",
+                "it",
+                "ko",
+                "lt",
+                "lv",
+                "mt",
+                "nb",
+                "nl",
+                "no",
+                "nn",
+                "pl",
+                "pt",
+                "ro",
+                "ru",
+                "sk",
+                "sl",
+                "sv",
+                "zh",
+                ""
+            ]
+        },
+        "SRCWORDRAT":
+        {
+            "type": "float",
+            "default": 0.4,
+            "help": "Ratio between words and non words (eg numbers, foreign words) in a src sentence."
+        },
+        "TRGWORDRAT":
+        {
+            "type": "float",
+            "default": 0.4,
+            "help": "Ratio between words and non words (eg numbers, foreign words) in a trg sentence."
+        },
+        "SRCALPHARAT":
+        {
+            "type": "float",
+            "default": 0.5,
+            "help": "Ratio between characters from the src language compared to all characters (eg numbers, emoji, punctuation, etc...)"
+        },
+        "TRGALPHARAT":
+        {
+            "type": "float",
+            "default": 0.5,
+            "help": "Ratio between characters from the trg language compared to all characters (eg numbers, emoji, punctuation, etc...)"
+        },
+        "DEBUG":
+        {
+            "type": "bool",
+            "default": false,
+            "help": "Print reason for each line that is filtered out"
+        }
+    },
+    "type": "bilingual"
+}

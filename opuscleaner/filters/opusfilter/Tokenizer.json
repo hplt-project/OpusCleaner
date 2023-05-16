@@ -1,0 +1,42 @@
+{
+    "type": "bilingual",
+    "name": "opus.Tokenizer",
+    "description": "Tokenize text",
+    "command": "./opusfilter-ersatz.py --quiet opusfilter.preprocessors.Tokenizer \"$PARAMETERS_AS_YAML\"",
+    "parameters": {
+        "tokenizer": {
+            "type": "tuple",
+            "parameters": [
+                {
+                    "type": "str",
+                    "allowed_values": [
+                        "moses",
+                        "jieba",
+                        "mecab"
+                    ],
+                    "default": "moses"
+                },
+                {
+                    "type": "str",
+                    "allowed_values": [
+                        "moses",
+                        "jieba",
+                        "mecab"
+                    ],
+                    "default": "moses"
+                }
+            ]
+        },
+        "languages": {
+            "type": "tuple",
+            "parameters": [
+                {
+                    "type": "str"
+                },
+                {
+                    "type": "str"
+                }
+            ]
+        }
+    }
+}

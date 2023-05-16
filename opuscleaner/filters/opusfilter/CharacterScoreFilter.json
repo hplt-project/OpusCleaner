@@ -1,0 +1,129 @@
+{
+    "type": "bilingual",
+    "name": "opus.CharacterScoreFilter",
+    "command": "./opusfilter-ersatz.py --quiet opusfilter.filters.CharacterScoreFilter \"$PARAMETERS_AS_YAML\"",
+    "description": "Proportion of alphabetic characters that are in the given script.",
+    "parameters": {
+        "scripts": {
+            "type": "tuple",
+            "help": "For a list of valid scripts, see https://www.regular-expressions.info/unicode.html",
+            "parameters": [
+                {
+                    "type": "str",
+                    "default": "Latin",
+                    "allowed_values": [
+                        "Common",
+                        "Arabic",
+                        "Armenian",
+                        "Bengali",
+                        "Bopomofo",
+                        "Braille",
+                        "Buhid",
+                        "Canadian_Aboriginal",
+                        "Cherokee",
+                        "Cyrillic",
+                        "Devanagari",
+                        "Ethiopic",
+                        "Georgian",
+                        "Greek",
+                        "Gujarati",
+                        "Gurmukhi",
+                        "Han",
+                        "Hangul",
+                        "Hanunoo",
+                        "Hebrew",
+                        "Hiragana",
+                        "Inherited",
+                        "Kannada",
+                        "Katakana",
+                        "Khmer",
+                        "Lao",
+                        "Latin",
+                        "Limbu",
+                        "Malayalam",
+                        "Mongolian",
+                        "Myanmar",
+                        "Ogham",
+                        "Oriya",
+                        "Runic",
+                        "Sinhala",
+                        "Syriac",
+                        "Tagalog",
+                        "Tagbanwa",
+                        "TaiLe",
+                        "Tamil",
+                        "Telugu",
+                        "Thaana",
+                        "Thai",
+                        "Tibetan",
+                        "Yi"
+                    ]
+                },
+                {
+                    "type": "str",
+                    "default": "Latin",
+                    "allowed_values": [
+                        "Common",
+                        "Arabic",
+                        "Armenian",
+                        "Bengali",
+                        "Bopomofo",
+                        "Braille",
+                        "Buhid",
+                        "Canadian_Aboriginal",
+                        "Cherokee",
+                        "Cyrillic",
+                        "Devanagari",
+                        "Ethiopic",
+                        "Georgian",
+                        "Greek",
+                        "Gujarati",
+                        "Gurmukhi",
+                        "Han",
+                        "Hangul",
+                        "Hanunoo",
+                        "Hebrew",
+                        "Hiragana",
+                        "Inherited",
+                        "Kannada",
+                        "Katakana",
+                        "Khmer",
+                        "Lao",
+                        "Latin",
+                        "Limbu",
+                        "Malayalam",
+                        "Mongolian",
+                        "Myanmar",
+                        "Ogham",
+                        "Oriya",
+                        "Runic",
+                        "Sinhala",
+                        "Syriac",
+                        "Tagalog",
+                        "Tagbanwa",
+                        "TaiLe",
+                        "Tamil",
+                        "Telugu",
+                        "Thaana",
+                        "Thai",
+                        "Tibetan",
+                        "Yi"
+                    ]
+                }
+            ]
+        },
+        "thresholds": {
+            "type": "tuple",
+            "parameters": [
+                {
+                    "type": "float",
+                    "default": 1
+                },
+                {
+                    "type": "float",
+                    "default": 1
+                }
+            ]
+        }
+    }
+}

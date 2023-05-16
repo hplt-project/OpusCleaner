@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, readonly, onUpdated } from 'vue';
+import { ref, computed, readonly, onMounted, onBeforeUnmount, onUpdated } from 'vue';
 import { diffSample } from '../diff.js';
 import InlineDiff from './InlineDiff.vue';
 
@@ -15,6 +15,10 @@ const props = defineProps({
 		default: null
 	},
 	displayAsRows: {
+		type: Boolean,
+		default: false
+	},
+	displayWhitespace: {
 		type: Boolean,
 		default: false
 	}
@@ -71,7 +75,7 @@ function languageName(lang) {
 
 const gutter = ref();
 
-onUpdated(() => {
+function renderGutter() {
 	if (gutter.value.hidden = !isShowingDiff.value)
 		 return;
 
@@ -97,10 +101,35 @@ onUpdated(() => {
 			/* x */ 0,
 			/* y */ row.offsetTop / tableHeight * viewHeight,
 			/* w */ width,
-			/* h */ Math.max(row.offsetHeight / tableHeight, 1)
+			/* h */ Math.max(row.offsetHeight / tableHeight * viewHeight, 1)
 		);
 	});
-});
+};
+
+// Re-render gutter when we update content
+onUpdated(renderGutter);
+
+// Re-render gutter when the table is resized
+const resizeObserver = new ResizeObserver(renderGutter);
+onMounted(() => resizeObserver.observe(outputElement.value));
+onBeforeUnmount(() => resizeObserver.unobserve(outputElement.value));
+
+const replacements = {
+	"\u00A0": "␣", // no-break space
+	"\u202F": "␣", // narrow no-break space
+	"\u2007": "␣", // figure space
+	"\u2060": "␣", // word joiner
+	" ": "·" // normal space
+};
+
+const replacementsExpr = new RegExp(Object.keys(replacements).join('|'), 'g');
+
+function transform(text) {
+	if (!props.displayWhitespace)
+		return text;
+
+	return text.replace(replacementsExpr, (match) => replacements[match]);
+}
 
 </script>
 
@@ -127,10 +156,10 @@ onUpdated(() => {
 						<tr v-for="(entry, j) in chunk.value" :key="`${i}:${j}`" :class="{'added':chunk.added, 'removed':chunk.removed, 'changed':chunk.changed}">
 							<td v-for="lang in props.languages" :key="lang" :lang="lang">
 								<template v-if="chunk.changed">
-									<InlineDiff class="inline-diff" :current="entry[lang]" :previous="chunk.differences[j].previous[lang]"/>
+									<InlineDiff class="inline-diff" :current="transform(entry[lang])" :previous="transform(chunk.differences[j].previous[lang])"/>
 								</template>
 								<template v-else>
-									{{entry[lang]}}
+									{{transform(entry[lang])}}
 								</template>
 							</td>
 						</tr>
@@ -138,7 +167,7 @@ onUpdated(() => {
 				</tbody>
 				<tbody v-else>
 					<tr v-for="(entry, i) in props.rows" :key="i">
-						<td v-for="lang in props.languages" :key="lang" :lang="lang">{{entry[lang]}}</td>
+						<td v-for="lang in props.languages" :key="lang" :lang="lang">{{transform(entry[lang])}}</td>
 					</tr>
 				</tbody>
 			</table>

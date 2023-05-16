@@ -1,0 +1,42 @@
+{
+    "type": "bilingual",
+    "name": "opus.Detokenizer",
+    "description": "Detokenize text",
+    "command": "./opusfilter-ersatz.py --quiet opusfilter.preprocessors.Detokenizer \"$PARAMETERS_AS_YAML\"",
+    "parameters": {
+        "tokenizer": {
+            "type": "tuple",
+            "parameters": [
+                {
+                    "type": "str",
+                    "allowed_values": [
+                        "moses",
+                        "jieba",
+                        "mecab"
+                    ],
+                    "default": "moses"
+                },
+                {
+                    "type": "str",
+                    "allowed_values": [
+                        "moses",
+                        "jieba",
+                        "mecab"
+                    ],
+                    "default": "moses"
+                }
+            ]
+        },
+        "languages": {
+            "type": "tuple",
+            "parameters": [
+                {
+                    "type": "str"
+                },
+                {
+                    "type": "str"
+                }
+            ]
+        }
+    }
+}

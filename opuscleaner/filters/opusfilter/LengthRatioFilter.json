@@ -1,0 +1,17 @@
+{
+    "type": "bilingual",
+    "name": "opus.LengthRatioFilter",
+    "command": "./opusfilter-ersatz.py --quiet opusfilter.filters.LengthRatioFilter \"$PARAMETERS_AS_YAML\"",
+    "description": "Character length ratio",
+    "parameters": {
+        "threshold": {
+            "type": "int",
+            "default": 3
+        },
+        "unit": {
+            "type": "str",
+            "default": "word",
+            "allowed_values": ["word", "character"]
+        }
+    }
+}

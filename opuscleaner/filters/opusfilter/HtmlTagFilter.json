@@ -1,0 +1,7 @@
+{
+    "type": "bilingual",
+    "name": "opus.HtmlTagFilter",
+    "command": "./opusfilter-ersatz.py --quiet opusfilter.filters.HtmlTagFilter \"$PARAMETERS_AS_YAML\"",
+    "description": "HTML tag filter",
+    "parameters": {}
+}

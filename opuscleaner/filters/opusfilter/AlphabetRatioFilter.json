@@ -1,0 +1,16 @@
+{
+    "type": "bilingual",
+    "name": "opus.AlphabetRatioFilter",
+    "command": "./opusfilter-ersatz.py --quiet opusfilter.filters.AlphabetRatioFilter \"$PARAMETERS_AS_YAML\"",
+    "description": "Proportion of alphabetic characters in the segment",
+    "parameters": {
+        "threshold": {
+            "type": "float",
+            "default": 0.75
+        },
+        "exclude_whitespace": {
+            "type": "bool",
+            "default": false
+        }
+    }
+}

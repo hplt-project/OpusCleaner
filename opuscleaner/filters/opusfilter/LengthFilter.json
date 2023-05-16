@@ -1,0 +1,26 @@
+{
+    "type": "bilingual",
+    "name": "opus.LengthFilter",
+    "command": "./opusfilter-ersatz.py --quiet opusfilter.filters.LengthFilter \"$PARAMETERS_AS_YAML\"",
+    "description": "Sentence length filter",
+    "parameters": {
+        "min_length": {
+            "type": "int",
+            "default": 1
+        },
+        "max_length": {
+            "type": "int",
+            "default": 100
+        },
+        "unit": {
+            "type": "str",
+            "allowed_values": ["word", "character"],
+            "default": "word",
+            "required": true
+        },
+        "pass_empty": {
+            "type": "bool",
+            "default": false
+        }
+    }
+}

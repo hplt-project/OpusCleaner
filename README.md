@@ -4,6 +4,18 @@ OpusCleaner is a machine translation/language model data cleaner and training sc
 ## Cleaner
 The cleaner bit takes care of downloading and cleaning multiple different datasets and preparing them for translation.
 
+### Installation for cleaning
+If you just want to use OpusCleaner for cleaning, you can install it from PyPI, and then run it
+
+```sh
+pip3 install opuscleaner
+opuscleaner-server serve
+```
+
+Then you can go to http://127.0.0.1:8000/ to show the interface.
+
+You can also install and run OpusCleaner on a remote machine, and use [SSH local forwarding](https://www.ssh.com/academy/ssh/tunneling-example) (e.g. `ssh -L 8000:localhost:8000 you@remote.machine`) to access the interface on your local machine.
+
 ### Dependencies
 (Mainly listed as shortcuts to documentation)
 
@@ -32,20 +44,20 @@ Compare the dataset at different stages of filtering to see what the impact is o
 
 ### Installation for development
 ```sh
-python3 -m venv .env
-bash --init-file .env/bin/activate
-pip install -e .
-
 cd frontend
 npm clean-install
 npm run build
 cd ..
+
+python3 -m venv .env
+bash --init-file .env/bin/activate
+pip install -e .
 ```
 
 Finally you can run `opuscleaner-server` as normal. The `--reload` option will cause it to restart when any of the python files change.
 
 ```sh
-opuscleaner-server --reload
+opuscleaner-server serve --reload
 ```
 
 Then go to http://127.0.0.1:8000/ for the "interface" or http://127.0.0.1:8000/docs for the API.

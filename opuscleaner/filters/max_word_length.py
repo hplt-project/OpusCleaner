@@ -14,7 +14,7 @@ def parse_user_args():
 def clean_parallel(max_word_length: float, fin: TextIO, fout: TextIO) -> None:
     """Cleans the parallel or mono dataset based on line lengths"""
     for line in fin:
-        fields = line.strip().split('\t')
+        fields = line.rstrip('\r\n').split('\t')
 
         if any(len(token) > max_word_length
             for field in fields

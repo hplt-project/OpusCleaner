@@ -11,7 +11,7 @@ class SentencePair(NamedTuple):
 best: Dict[str,SentencePair] = {}
 
 for line in sys.stdin:
-	src, trg, checksum, rank = line.rstrip('\n').split('\t')
+	src, trg, checksum, rank = line.rstrip('\r\n').split('\t')
 
 	if checksum not in best or best[checksum].rank < float(rank):
 		best[checksum] = SentencePair(src, trg, float(rank))

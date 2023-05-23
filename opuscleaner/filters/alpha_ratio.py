@@ -22,7 +22,7 @@ trg_lang: Optional[str], ratio_words_trg: float, ratio_alpha_trg: float,\
  debug: bool = True) -> None:
     """Cleans the parallel (or monolingual) dataset based on the number of characters"""
     for line in stdin:
-        fields = line.strip().split('\t')
+        fields = line.rstrip('\r\n').split('\t')
         if len(fields) == 1:
             src = fields[-1].strip()
             trg = None

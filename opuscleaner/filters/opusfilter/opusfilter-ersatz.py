@@ -58,7 +58,7 @@ elif isinstance(filter_obj, opusfilter.PreprocessorABC):
 else:
 	raise ValueError('filter class does not implement FilterABC or PreprocessorABC')
 
-lines = (line.rstrip('\n').split('\t') for line in sys.stdin)
+lines = (line.rstrip('\r\n').split('\t') for line in sys.stdin)
 
 for line in apply_filter(lines):
 	print("\t".join(line))

@@ -143,7 +143,7 @@ def main() -> None:
 				for col, entry in enumerate(pair):
 					if col > 0:
 						sys.stdout.buffer.write(delimiter)
-					sys.stdout.buffer.write(entry.rstrip(b"\n"))
+					sys.stdout.buffer.write(entry.rstrip(b"\r\n"))
 				sys.stdout.buffer.write(b"\n")
 			sys.stdout.buffer.flush()
 

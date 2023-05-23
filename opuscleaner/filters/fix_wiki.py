@@ -81,7 +81,7 @@ if __name__ == "__main__":
 		patterns.append(HEADINGS_PATTERN)
 
 	for n, line in enumerate(sys.stdin, start=1):
-		fields = line.rstrip("\n").split("\t")
+		fields = line.rstrip("\r\n").split("\t")
 
 		if args.code and any(is_code(field) for field in fields):
 			continue

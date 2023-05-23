@@ -8,7 +8,6 @@ re_final_comma = re.compile(r"\.$")
 
 
 for line in sys.stdin:
-    line = line[:-1] #EoL
     line = line.strip()
     if line[-1] == '，':
         line = line[:-1] + "\u3002"

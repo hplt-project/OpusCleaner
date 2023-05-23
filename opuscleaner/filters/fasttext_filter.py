@@ -62,7 +62,7 @@ def main():
     model = fasttext.load_model(f"{args.model_type}.bin")
     for batch in chunked(sys.stdin, args.batch_size):
         # Remove newlines
-        batch = [row.rstrip("\n") for row in batch]
+        batch = [row.rstrip("\r\n") for row in batch]
         sources, targets = zip(*[row.split("\t", 1) for row in batch])
         sources_ok = verify_lang(model, list(sources), source_lang, args.debug)
         targets_ok = verify_lang(model, list(targets), target_lang, args.debug)

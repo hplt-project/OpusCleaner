@@ -6,7 +6,7 @@ def fix(text:str)->str:
 	return re.sub(r'^[\'‘"“„](.+?)["”;]*$', r'\1', text)
 
 for line in sys.stdin:
-	fields = line.rstrip("\n").split("\t")
+	fields = line.rstrip("\r\n").split("\t")
 
 	fields = [fix(field).strip() for field in fields]
 

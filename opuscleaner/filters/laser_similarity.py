@@ -97,7 +97,7 @@ def main():
 
     for batch in chunked(sys.stdin, chunk_size=args.batch_size, chunk_time=args.batch_latency, verbose=sys.stderr if args.verbose else NullIO()):
         # TODO error checking of column count?
-        scores = _compute_similarity(laser, [tuple(line.split("\t")[:2]) for line in batch], args.src_lang, args.tgt_lang)
+        scores = _compute_similarity(laser, [tuple(line.rstrip("\r\n").split("\t")[:2]) for line in batch], args.src_lang, args.tgt_lang)
 
         if args.scores:
             for score in scores:

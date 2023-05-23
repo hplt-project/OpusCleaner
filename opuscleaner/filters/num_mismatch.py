@@ -11,7 +11,7 @@ def normalize(numstr:Match) -> str:
 
 def filter_numerical_mismatch(fin: TextIO, fout: TextIO, ratio: float, *, debug: bool = False):
 	for line in fin:
-		cols = line.rstrip('\n').split('\t')
+		cols = line.rstrip('\r\n').split('\t')
 
 		assert len(cols) >= 2
 

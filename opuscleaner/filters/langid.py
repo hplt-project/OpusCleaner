@@ -42,7 +42,7 @@ def parse_user_args():
 
 def detect_language_parallel(args: argparse.Namespace, fin: BinaryIO, fout: BinaryIO):
     for n, line in enumerate(fin):
-        fields = line.rstrip(b"\n").split(b"\t")
+        fields = line.rstrip(b"\r\n").split(b"\t")
 
         for field, lang in zip(fields, args.languages):
             try:

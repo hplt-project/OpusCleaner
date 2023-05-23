@@ -42,7 +42,7 @@ Comparator = Callable[[List[str], List[str], float], bool]
 def clean_parallel(ratio: float, filter_identical: bool, *, debug: bool=False, compare: Comparator=compare_lin) -> None:
     """Cleans the parallel dataset based on the ratio of source to target tokens and vice versa"""
     for line in stdin:
-        fields = line.strip().split('\t')
+        fields = line.rstrip('\r\n').split('\t')
         if len(fields) != 2:
             stderr.write(f'SINGLE/MULTIPLE_LINES\t{line}')
             continue

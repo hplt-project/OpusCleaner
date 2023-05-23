@@ -75,7 +75,7 @@ if __name__  == "__main__":
 	parser.add_argument("--count", action="store_true")
 	args = parser.parse_args()
 
-	lines = (line.rstrip("\n") for line in sys.stdin)
+	lines = (line.rstrip("\r\n") for line in sys.stdin)
 
 	if args.count:
 		counter = Counter()

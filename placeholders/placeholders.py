@@ -77,7 +77,7 @@ class Encoder:
         # Compile rules into one mega-pattern
         self.rule_pattern = re.compile('|'.join('(?:{})'.format(rule.pattern) for rule in self.rules))
 
-    def make_placeholders(self, inputline) -> Tuple[str, Dict[str, str]]:
+    def make_placeholders(self, inputline: str) -> Tuple[str, Dict[str, str]]:
         """Replaces strings that match the regex patterns from the config file
         and words that cause the appearance of <unk>
         """
@@ -101,6 +101,9 @@ class Encoder:
                 return replacements[token]
             except IndexError:
                 return token
+
+        # Remove line ending
+        inputline = inputline.rstrip('\r\n')
 
         # use regex rules
         inputline = re.sub(self.rule_pattern, lambda match: replace_one(match.group()), inputline)

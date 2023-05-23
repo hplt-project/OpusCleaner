@@ -32,7 +32,7 @@ class Pattern:
 def load_patterns(file_path: str) -> List[Pattern]:
     with open(file_path) as f:
         # Skip comment lines
-        lines = [line.rstrip("\n") for line in f.readlines() if line[0] != "#"]
+        lines = [line.rstrip("\r\n") for line in f.readlines() if line[0] != "#"]
         patterns = []
         for line in lines:
             parts = line.split("\t")
@@ -53,7 +53,7 @@ def main():
     patterns = load_patterns(args.pattern_file)
 
     for line in sys.stdin:
-        line = line.rstrip("\n")
+        line = line.rstrip("\r\n")
         source, target = line.split("\t", 1)
         for pattern in patterns:
             # Either pattern_on_both_cols is not set or it matches the whole line

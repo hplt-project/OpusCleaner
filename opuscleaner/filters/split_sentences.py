@@ -9,7 +9,7 @@ def split_sentences_in_bitext(fin: TextIO, fout: TextIO, languages: List[str], k
 	splitters = [SentenceSplitter(language=lang) for lang in languages]
 	
 	for line in fin:
-		cols = line.rstrip('\n').split('\t')
+		cols = line.rstrip('\r\n').split('\t')
 
 		assert len(cols) == len(splitters)
 

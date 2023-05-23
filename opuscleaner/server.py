@@ -130,9 +130,9 @@ class ParsedFilterOutput(BaseModel):
     def __init__(self, output:FilterOutput):
         lines = []
 
-        for lineno, line in enumerate(output.stdout.rstrip(b'\n').split(b'\n'), start=1):
+        for lineno, line in enumerate(output.stdout.rstrip(b'\r\n').split(b'\n'), start=1):
             values = []
-            for colno, field in enumerate(line.split(b'\t'), start=1):
+            for colno, field in enumerate(line.rstrip(b'\r').split(b'\t'), start=1):
                 try:
                     values.append(field.decode())
                 except UnicodeDecodeError as e:

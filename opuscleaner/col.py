@@ -23,7 +23,7 @@ def none_throws(optional: Optional[T], message: str = "Unexpected `None`") -> T:
 def split(column, queue, fin, fout):
 	try:
 		for line in fin:
-			fields = line.rstrip(b'\n').split(b'\t')
+			fields = line.rstrip(b'\r\n').split(b'\t')
 			field = fields[column] # Doing column selection first so that if this fails, we haven't already written it to the queue
 			queue.put(fields[:column] + fields[(column+1):])
 			fout.write(field + b'\n')

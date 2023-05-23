@@ -15,7 +15,7 @@ def parse_user_args():
 def clean_parallel(max_length: float, min_length: float, debug: bool=True) -> None:
     """Cleans the parallel or mono dataset based on line lengths"""
     for line in stdin:
-        fields = line.strip().split('\t')
+        fields = line.strip('\r\n').split('\t')
         if len(fields) == 1:
             src = fields[-1].strip()
             trg = None

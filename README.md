@@ -26,16 +26,16 @@ You can also install and run OpusCleaner on a remote machine, and use [SSH local
 ### Screenshots
 
 List and categorize the datasets you are going to use for training.
-[<img src=".github/screenshots/list-datasets.png" width="100%">](.github/screenshots/list-datasets.png)
+[<img src="https://github.com/hplt-project/OpusCleaner/raw/main/.github/screenshots/list-datasets.png" width="100%">](https://github.com/hplt-project/OpusCleaner/blob/main/.github/screenshots/list-datasets.png)
 
 Download more datasets right from the interface.
-[<img src=".github/screenshots/add-datasets.png" width="100%">](.github/screenshots/add-datasets.png)
+[<img src="https://github.com/hplt-project/OpusCleaner/raw/main/.github/screenshots/add-datasets.png" width="100%">](https://github.com/hplt-project/OpusCleaner/blob/main/.github/screenshots/add-datasets.png)
 
 Filter each individual dataset, showing you the results immediately.
-[<img src=".github/screenshots/filter-datasets.png" width="100%">](.github/screenshots/filter-datasets.png)
+[<img src="https://github.com/hplt-project/OpusCleaner/raw/main/.github/screenshots/filter-datasets.png" width="100%">](https://github.com/hplt-project/OpusCleaner/blob/main/.github/screenshots/filter-datasets.png)
 
 Compare the dataset at different stages of filtering to see what the impact is of each filter.
-[<img src=".github/screenshots/diff-filter-output.png" width="100%">](.github/screenshots/diff-filter-output.png)
+[<img src="https://github.com/hplt-project/OpusCleaner/raw/main/.github/screenshots/diff-filter-output.png" width="100%">](https://github.com/hplt-project/OpusCleaner/blob/main/.github/screenshots/diff-filter-output.png)
 
 
 ### Paths

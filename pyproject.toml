@@ -57,19 +57,12 @@ no-cov = "cov --no-cov {args}"
 python = ["37", "38", "39", "310", "311"]
 
 [tool.hatch.build]
-exclude = [
-  "/.github",
-  "/.gitignore",
-  "/frontend",
-  "/placeholders",
-  "/build_frontend.py"
-]
-artifacts = [
-  "/frontend/dist/*"
+include = [
+  "/opuscleaner",
 ]
 
-[tool.hatch.build.sources]
-"/frontend/dist" = "/opuscleaner/frontend"
+[tool.hatch.build.force-include]
+"frontend/dist" = "/opuscleaner/frontend"
 
 [tool.hatch.metadata.hooks.requirements_txt]
 files = ["requirements.txt"]

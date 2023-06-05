@@ -37,9 +37,9 @@ opuscleaner-threshold = "opuscleaner.threshold:main"
 opuscleaner-sample = "opuscleaner.sample:main"
 
 [project.urls]
-Documentation = "https://github.com/unknown/opuscleaner#readme"
-Issues = "https://github.com/unknown/opuscleaner/issues"
-Source = "https://github.com/unknown/opuscleaner"
+Documentation = "https://github.com/hplt-project/opuscleaner#readme"
+Issues = "https://github.com/hplt-project/opuscleaner/issues"
+Source = "https://github.com/hplt-project/opuscleaner"
 
 [tool.hatch.version]
 path = "opuscleaner/__about__.py"

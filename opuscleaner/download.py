@@ -134,7 +134,7 @@ class EntryDownload:
             return DownloadState.CANCELLED
 
 
-DownloadQueue = SimpleQueue[Optional[EntryDownload]]
+DownloadQueue = SimpleQueue#[Optional[EntryDownload]]
 
 
 class Downloader:

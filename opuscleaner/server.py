@@ -147,7 +147,7 @@ class ParsedFilterOutput(BaseModel):
 
 class SampleCacheEntry(NamedTuple):
     checksum: bytes
-    future: asyncio.Task[FilterOutput]
+    future: asyncio.Task#[FilterOutput]
 
 
 sample_cache: Dict[str,List[SampleCacheEntry]] = {}

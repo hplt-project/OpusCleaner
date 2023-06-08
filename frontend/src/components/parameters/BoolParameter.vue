@@ -10,6 +10,6 @@ export default {
 	<input
     type="checkbox"
     v-bind="$attrs"
-    v-bind:value="modelValue"
-    v-on:input="$emit('update:modelValue', $event.target.value)"/>
+    v-bind:checked="modelValue"
+    v-on:input="$emit('update:modelValue', $event.target.checked)"/>
 </template>

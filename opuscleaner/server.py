@@ -8,7 +8,7 @@ import re
 import subprocess
 import sys
 import traceback
-from contextlib import ExitStack
+from contextlib import ExitStack, asynccontextmanager
 from enum import Enum
 from glob import glob
 from itertools import chain, zip_longest
@@ -281,7 +281,18 @@ def stream_jsonl(iterable:AsyncIterator[Any]) -> StreamingResponse:
         media_type='application/json')
 
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Place to do the start-up and shut-down operations of the web service.
+    See https://fastapi.tiangolo.com/advanced/events/#lifespan-events
+    """
+    set_global_filters(list_filters(FILTER_PATH))
+    yield
+    set_global_filters([])
+
+
+app = FastAPI(lifespan=lifespan)
 
 @app.get('/api/datasets/')
 def api_list_datasets() -> List[Dataset]:
@@ -503,8 +514,6 @@ def main(argv=sys.argv):
     parser_sample.set_defaults(func=main_sample)
 
     args = parser.parse_args()
-
-    set_global_filters(list_filters(FILTER_PATH))
     args.func(args)
 
 if __name__ == '__main__':

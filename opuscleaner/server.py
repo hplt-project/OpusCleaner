@@ -21,6 +21,7 @@ from warnings import warn
 import yaml
 from fastapi import FastAPI, HTTPException
 from fastapi.encoders import jsonable_encoder
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, parse_obj_as, validator, ValidationError
@@ -293,6 +294,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+app.add_middleware(GZipMiddleware, minimum_size=512)
 
 @app.get('/api/datasets/')
 def api_list_datasets() -> List[Dataset]:

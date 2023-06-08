@@ -9,9 +9,8 @@ import {UploadIcon, CodeIcon, FilterIcon, PieChartIcon, Edit3Icon, TagIcon} from
 import NoDatasetImage from '../assets/data-cuate.svg';
 
 function languages(dataset) {
-	const keys = Object.keys(dataset?.columns || {});
 	const intl = new Intl.DisplayNames([], {type:'language'});
-	return keys.map(lang => {
+	return (dataset?.columns || []).map(({lang}) => {
 		try {
 			return intl.of(lang.replace('_', '-'));
 		} catch (e) {

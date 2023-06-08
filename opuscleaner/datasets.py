@@ -5,10 +5,10 @@ from functools import wraps
 from glob import glob
 from itertools import groupby
 from pathlib import Path as Path
-from typing import Iterable, Dict
+from typing import Iterable, Dict, List, Tuple
 
 
-def list_datasets(path:str) -> Dict[str,Dict[str,Path]]:
+def list_datasets(path:str) -> Dict[str,List[Tuple[str,Path]]]:
     """Lists datasets given a directory. Scans the directories and returns a dictionary of the
     datasets encoutered. Dictionary looks like {dataset_name : { lang: path}}"""
     root = Path(path.split('*')[0])
@@ -31,10 +31,10 @@ def list_datasets(path:str) -> Dict[str,Dict[str,Path]]:
     ]
 
     return {
-        name: {
-            entry.name.rsplit('.', 2)[1]: entry
+        name: [
+            (entry.name.rsplit('.', 2)[1], entry)
             for entry in files
-        }
+        ]
         for name, files in datasets
         if len(files) > 1
     }

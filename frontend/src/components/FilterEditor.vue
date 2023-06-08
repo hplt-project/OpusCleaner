@@ -44,15 +44,7 @@ const filterSteps = getFilterSteps(dataset);
 
 const languages = computed(() => {
 	// Unloaded state the dataset will have a name, but not all its details yet
-	if (!dataset?.columns)
-		return [];
-
-	const languages = Array.from(Object.keys(dataset.columns)).sort();
-	// First try non-alphabetical order. If no success, return alphabetical order
-	if (!dataset.name.includes(languages.reverse().join('-')))
-		languages.reverse();
-	
-	return languages;
+	return (dataset?.columns || []).map(({lang}) => lang);
 });
 
 /**

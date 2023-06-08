@@ -50,14 +50,15 @@ FRONTEND_PATH = next(iter(path
 ))
 
 
-class File(BaseModel):
+class Column(BaseModel):
+    lang: str
     path: str
     size: int
 
 
 class Dataset(BaseModel):
     name: str
-    columns: Dict[str,File]
+    columns: List[Column]
 
 
 class FilterPipelinePatch(BaseModel):
@@ -218,7 +219,7 @@ def cancel_cached_tasks(name:str, offset:int) -> None:
 
 
 async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[FilterOutput]:
-    columns: List[Tuple[str,Path]] = sorted(list_datasets(DATA_PATH)[name].items(), key=lambda pair: pair[0])
+    columns: List[Tuple[str,Path]] = list_datasets(DATA_PATH)[name]
     langs = [lang for lang, _ in columns]
 
     checksum = cache_hash([
@@ -285,10 +286,10 @@ app = FastAPI()
 @app.get('/api/datasets/')
 def api_list_datasets() -> List[Dataset]:
     return [
-        Dataset(name=name, columns={
-            lang: File(path=file.name, size=file.stat().st_size)
-            for lang, file in columns.items()
-        })
+        Dataset(name=name, columns=[
+            Column(lang=lang, path=file.name, size=file.stat().st_size)
+            for lang, file in columns
+        ])
         for name, columns in list_datasets(DATA_PATH).items()
     ]
 
@@ -300,10 +301,10 @@ def api_get_dataset(name:str) -> Dataset:
     if not columns:
         raise HTTPException(status_code=404, detail='Dataset not found')
 
-    return Dataset(name=name, columns={
-        lang: File(path=file.name, size=file.stat().st_size)
-        for lang, file in columns.items()
-    })
+    return Dataset(name=name, columns=[
+        Column(lang=lang, path=file.name, size=file.stat().st_size)
+        for lang, file in columns
+    ])
 
 
 @app.get('/api/datasets/{name:path}/sample')
@@ -320,10 +321,7 @@ def make_pipeline(name:str, filters:List[FilterStep] = []) -> FilterPipeline:
     columns = list_datasets(DATA_PATH)[name]
     return FilterPipeline(
         version=1,
-        files=[file.name
-            for _, file in
-            sorted(columns.items(), key=lambda pair: pair[0])
-        ],
+        files=[file.name for _, file in columns],
         filters=filters
     )
 
@@ -466,11 +464,10 @@ async def sample_all_datasets(args):
     tasks = []
 
     for name, columns in list_datasets(DATA_PATH).items():
-        sorted_cols = sorted(columns.items(), key=lambda pair: pair[0])
-        langs = [lang for lang, _ in sorted_cols]
+        langs = [lang for lang, _ in columns]
         if not os.path.exists(sample_path(name, langs)):
             print(f"Sampling {name}...", file=sys.stderr)
-            tasks.append([name, sorted_cols])
+            tasks.append([name, columns])
 
     for task, result in zip(tasks, await asyncio.gather(*[compute_sample(*task) for task in tasks], return_exceptions=True)):
         if isinstance(result, Exception):

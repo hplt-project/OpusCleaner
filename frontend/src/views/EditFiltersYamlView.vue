@@ -9,8 +9,10 @@ import {fetched} from '../hacks.js';
 const route = useRoute();
 
 const code = fetched(async (fetch) => {
-	const response = await fetch(`/api/datasets/${encodeURIComponent(route.params.datasetName)}/${encodeURIComponent(route.params.format)}`);
-	return await response.text()
+	if (route.params.datasetName && route.params.format) {
+		const response = await fetch(`/api/datasets/${encodeURIComponent(route.params.datasetName)}/${encodeURIComponent(route.params.format)}`);
+		return await response.text();
+	}
 });
 
 </script>

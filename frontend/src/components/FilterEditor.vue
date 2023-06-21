@@ -38,14 +38,20 @@ const view = ref('clean'); // one of VIEWs
 
 const isFetchingSamples = ref(false);
 
-const filters = getFilters();
-
-const filterSteps = getFilterSteps(dataset);
-
 const languages = computed(() => {
 	// Unloaded state the dataset will have a name, but not all its details yet
 	return (dataset?.columns || []).map(({lang}) => lang);
 });
+
+const filters = computed(() => {
+	let filters = getFilters().value || [];
+	// monolingual data? Only show monolingual filters
+	if (languages.value?.length === 1)
+		filters = filters.filter(def => def.type === 'monolingual')
+	return filters
+});
+
+const filterSteps = getFilterSteps(dataset);
 
 /**
  * {

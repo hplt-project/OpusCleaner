@@ -91,17 +91,28 @@ const trgLangOptions = computed(() => {
 });
 
 const datasets = computed(() => {
-	if (!srcLang.value || !(trgLang.value || preprocessing.value === Preprocessing.MONOLINGUAL))
-		return [];
+	let key;
 
-	const key = `${srcLang.value}-${trgLang.value}`;
+	switch (preprocessing.value) {
+		case Preprocessing.BILINGUAL:
+			if (!srcLang.value || !trgLang.value)
+				return [];
+			key = `${srcLang.value}-${trgLang.value}`;
+			break;
+		case Preprocessing.MONOLINGUAL:
+			if (!srcLang.value)
+				return [];
+			key = `${srcLang.value}`;
+			break;
+		default:
+			throw new Error('Unknown preprocessing type');
+	}
+	
 	if (!cache.has(key)) {
 		const list = ref([]);
 		cache.set(key, list);
 		// Fetches actual list async, but the cache entry is available immediately.
-		fetchDatasets(srcLang.value, trgLang.value).then(datasets => {
-			list.value = datasets;
-		})
+		fetchDatasets(key).then(datasets => list.value = datasets);
 	}
 
 	// cache contains refs, so this computed() is called again once the data
@@ -203,8 +214,7 @@ async function fetchTargetLanguages(sourceLanguage) {
 	return await fetchJSON(`/api/download/languages/${encodeURIComponent(sourceLanguage)}`);
 }
 
-async function fetchDatasets(srcLang, trgLang) {
-	const key = trgLang ? `${srcLang}-${trgLang}` : srcLang;
+async function fetchDatasets(key) {
 	return await fetchJSON(`/api/download/by-language/${encodeURIComponent(key)}`);
 }
 

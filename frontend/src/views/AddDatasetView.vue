@@ -7,6 +7,15 @@ import {DownloadCloudIcon} from 'vue3-feather';
 
 import 'vue-select/dist/vue-select.css';
 
+function nonEmpty(x) {
+	return x != '';
+}
+
+const Preprocessing = {
+	MONOLINGUAL: 'monolingual',
+	BILINGUAL: 'bilingual'
+};
+
 const SORT_ORDER_OPTIONS = [
 	{
 		label: 'Corpus name',
@@ -36,9 +45,7 @@ const nameFilter = ref("");
 
 const latestOnly = ref(true);
 
-const includeMonolingual = ref(true);
-
-const includeBilingual = ref(true);
+const preprocessing = ref(Preprocessing.BILINGUAL);
 
 const srcLang = ref();
 
@@ -84,7 +91,7 @@ const trgLangOptions = computed(() => {
 });
 
 const datasets = computed(() => {
-	if (!srcLang.value || !trgLang.value)
+	if (!srcLang.value || !(trgLang.value || preprocessing.value === Preprocessing.MONOLINGUAL))
 		return [];
 
 	const key = `${srcLang.value}-${trgLang.value}`;
@@ -107,10 +114,14 @@ const datasets = computed(() => {
 		});
 
 	datasets = datasets.filter(dataset => {
-		if (dataset.langs.length > 1)
-			return includeBilingual.value;
-		else
-			return includeMonolingual.value;
+		switch (preprocessing.value) {
+			case Preprocessing.BILINGUAL:
+				return dataset.langs.filter(nonEmpty).length > 1;
+			case Preprocessing.MONOLINGUAL:
+				return dataset.langs.filter(nonEmpty).length == 1;
+			default:
+				return false;
+		}
 	});
 
 	if (latestOnly.value) {
@@ -193,7 +204,7 @@ async function fetchTargetLanguages(sourceLanguage) {
 }
 
 async function fetchDatasets(srcLang, trgLang) {
-	const key = `${srcLang}-${trgLang}`;
+	const key = trgLang ? `${srcLang}-${trgLang}` : srcLang;
 	return await fetchJSON(`/api/download/by-language/${encodeURIComponent(key)}`);
 }
 
@@ -225,12 +236,12 @@ const countFormat = new Intl.NumberFormat();
 			<label>
 				<input type="search" placeholder="Search dataset…" v-model="nameFilter">
 			</label>
-			<label class="search-button" :class="{'checked': includeMonolingual}">
-				<input type="checkbox" v-model="includeMonolingual">
+			<label class="search-button" :class="{'checked': preprocessing == Preprocessing.MONOLINGUAL}">
+				<input type="radio" name="preprocessing" v-model="preprocessing" :value="Preprocessing.MONOLINGUAL">
 				Monolingual
 			</label>
-			<label class="search-button" :class="{'checked': includeBilingual}">
-				<input type="checkbox" v-model="includeBilingual">
+			<label class="search-button" :class="{'checked': preprocessing == Preprocessing.BILINGUAL}">
+				<input type="radio" name="preprocessing" v-model="preprocessing" :value="Preprocessing.BILINGUAL">
 				Bilingual
 			</label>
 			<label class="search-button" :class="{'checked': latestOnly}">
@@ -240,7 +251,7 @@ const countFormat = new Intl.NumberFormat();
 			<label>
 				<VueSelect v-model="srcLang" :options="srcLangOptions" :reduce="({lang}) => lang" placeholder="Origin language" />
 			</label>
-			<label>
+			<label v-show="preprocessing == Preprocessing.BILINGUAL">
 				<VueSelect v-model="trgLang" :options="trgLangOptions" :reduce="({lang}) => lang" placeholder="Target language" />
 			</label>
 			<label>
@@ -260,7 +271,7 @@ const countFormat = new Intl.NumberFormat();
 					<dt>Version</dt>
 					<dd title="Version">{{ dataset.version }}</dd>
 					<dt>Languages</dt>
-					<dd title="Languages">{{ dataset.langs.join('→') }}</dd>
+					<dd title="Languages">{{ dataset.langs.filter(nonEmpty).join('→') }}</dd>
 					<dt>Pairs</dt>
 					<dd title="Sentence pairs">{{ dataset.pairs ? countFormat.format(dataset.pairs) : '' }}</dd>
 					<dt>Size</dt>

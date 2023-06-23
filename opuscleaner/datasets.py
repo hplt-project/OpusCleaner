@@ -36,7 +36,6 @@ def list_datasets(path:str) -> Dict[str,List[Tuple[str,Path]]]:
             for entry in files
         ]
         for name, files in datasets
-        if len(files) > 1
     }
 
 

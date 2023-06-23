@@ -187,13 +187,19 @@ class OpusAPI:
     def get_dataset(self, id:int) -> Entry:
         return self._datasets[id]
 
-    def find_datasets(self, lang1:str, lang2:str) -> List[Entry]:
-        query = {
-            'source': lang1,
-            'target': lang2,
-            'preprocessing': 'moses'
-        }
-        
+    def find_datasets(self, lang1:str, lang2:Optional[str]=None) -> List[Entry]:
+        if lang2 is None:
+            query = {
+                'source': lang1,
+                'preprocessing': 'mono'
+            }
+        else:
+            query = {
+                'source': lang1,
+                'target': lang2,
+                'preprocessing': 'moses'
+            }
+
         with urlopen(f'{self.endpoint}?{urlencode(query)}') as fh:
             datasets = [cast_entry(entry) for entry in json.load(fh).get('corpora', [])]
 

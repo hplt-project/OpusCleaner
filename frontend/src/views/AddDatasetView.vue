@@ -1,11 +1,28 @@
 <script setup>
 import {ref, reactive, computed, watch, onMounted} from 'vue';
-import { Interval } from '../interval.js';
 import { formatSize } from '../format.js';
 import VueSelect from 'vue-select';
 import {DownloadCloudIcon} from 'vue3-feather';
+import DownloadPopup from '../components/DownloadPopup.vue';
+import {fetchJSON} from '../store/fetch.js';
+import {
+	download,
+	isDownloading,
+	fetchDownloadableDatasets,
+	fetchSourceLanguages,
+	fetchTargetLanguages
+} from '../store/downloads.js';
 
 import 'vue-select/dist/vue-select.css';
+
+function nonEmpty(x) {
+	return x != '';
+}
+
+const Preprocessing = {
+	MONOLINGUAL: 'monolingual',
+	BILINGUAL: 'bilingual'
+};
 
 const SORT_ORDER_OPTIONS = [
 	{
@@ -24,8 +41,6 @@ const SORT_ORDER_OPTIONS = [
 
 const sortOrder = ref(SORT_ORDER_OPTIONS[0]);
 
-const loading = ref(0);
-
 // Per language all target languages
 const languages = new Map();
 
@@ -36,9 +51,7 @@ const nameFilter = ref("");
 
 const latestOnly = ref(true);
 
-const includeMonolingual = ref(true);
-
-const includeBilingual = ref(true);
+const preprocessing = ref(Preprocessing.BILINGUAL);
 
 const srcLang = ref();
 
@@ -84,17 +97,28 @@ const trgLangOptions = computed(() => {
 });
 
 const datasets = computed(() => {
-	if (!srcLang.value || !trgLang.value)
-		return [];
+	let key;
 
-	const key = `${srcLang.value}-${trgLang.value}`;
+	switch (preprocessing.value) {
+		case Preprocessing.BILINGUAL:
+			if (!srcLang.value || !trgLang.value)
+				return [];
+			key = `${srcLang.value}-${trgLang.value}`;
+			break;
+		case Preprocessing.MONOLINGUAL:
+			if (!srcLang.value)
+				return [];
+			key = `${srcLang.value}`;
+			break;
+		default:
+			throw new Error('Unknown preprocessing type');
+	}
+	
 	if (!cache.has(key)) {
 		const list = ref([]);
 		cache.set(key, list);
 		// Fetches actual list async, but the cache entry is available immediately.
-		fetchDatasets(srcLang.value, trgLang.value).then(datasets => {
-			list.value = datasets;
-		})
+		fetchDownloadableDatasets(key).then(datasets => list.value = datasets);
 	}
 
 	// cache contains refs, so this computed() is called again once the data
@@ -107,10 +131,14 @@ const datasets = computed(() => {
 		});
 
 	datasets = datasets.filter(dataset => {
-		if (dataset.langs.length > 1)
-			return includeBilingual.value;
-		else
-			return includeMonolingual.value;
+		switch (preprocessing.value) {
+			case Preprocessing.BILINGUAL:
+				return dataset.langs.filter(nonEmpty).length > 1;
+			case Preprocessing.MONOLINGUAL:
+				return dataset.langs.filter(nonEmpty).length == 1;
+			default:
+				return false;
+		}
 	});
 
 	if (latestOnly.value) {
@@ -127,34 +155,12 @@ const datasets = computed(() => {
 	return datasets;
 });
 
-const downloads = reactive({});
-
 onMounted(async () => {
 	fetchSourceLanguages().then(languages => {
 		srcLangs.value = languages;
 	})
-
-	fetchDownloads().then(list => {
-		Object.assign(downloads, castDownloadListToMap(list))
-	})
 })
 
-let downloadUpdateInterval = new Interval(1000, async () => {
-	const list = await fetchDownloads();
-	Object.assign(downloads, castDownloadListToMap(list));
-})
-
-// Watch list of downloads to re-evaluate whether we need to do updating using
-// the downloadUpdateInterval. Stop updating once there's nothing active
-// anymore. The changes caused by downloadSelection() will re-trigger this
-// watch expression and enable the interval again.
-watch(downloads, (downloads) => {
-	const activeStates = new Set(['pending', 'downloading']);
-	if (Object.values(downloads).some(download => activeStates.has(download.state)))
-		downloadUpdateInterval.restart();
-	else
-		downloadUpdateInterval.stop();
-});
 
 function assignList(current, update, key = 'id') {
 	const updates = Object.fromEntries(update.map(entry => [entry[key], entry]));
@@ -162,53 +168,6 @@ function assignList(current, update, key = 'id') {
 		if (current[i][key] in updates)
 			Object.assign(current[i], updates[current[i][key]]);
 	return current;
-}
-
-function castDownloadListToMap(list) {
-	return Object.fromEntries(list.map(download => [download.entry.id, download]));
-}
-
-function download(dataset) {
-	requestDownloadSelection([dataset]).then(update => {
-		Object.assign(downloads, castDownloadListToMap(update));
-	});
-}
-
-async function fetchJSON(url, options) {
-	try {
-		loading.value += 1;
-		const response = await fetch(url, options);
-		return await response.json();
-	} finally {
-		loading.value -= 1;
-	}
-}
-
-async function fetchSourceLanguages() {
-	return await fetchJSON('/api/download/languages/');
-}
-
-async function fetchTargetLanguages(sourceLanguage) {
-	return await fetchJSON(`/api/download/languages/${encodeURIComponent(sourceLanguage)}`);
-}
-
-async function fetchDatasets(srcLang, trgLang) {
-	const key = `${srcLang}-${trgLang}`;
-	return await fetchJSON(`/api/download/by-language/${encodeURIComponent(key)}`);
-}
-
-async function fetchDownloads() {
-	return await fetchJSON(`/api/download/downloads/`);
-}
-
-async function requestDownloadSelection(datasets) {
-	return await fetchJSON('/api/download/downloads/', {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json'
-		},
-		body: JSON.stringify(datasets.map(({id}) => ({id})))
-	});
 }
 
 const countFormat = new Intl.NumberFormat();
@@ -225,12 +184,12 @@ const countFormat = new Intl.NumberFormat();
 			<label>
 				<input type="search" placeholder="Search dataset…" v-model="nameFilter">
 			</label>
-			<label class="search-button" :class="{'checked': includeMonolingual}">
-				<input type="checkbox" v-model="includeMonolingual">
+			<label class="search-button" :class="{'checked': preprocessing == Preprocessing.MONOLINGUAL}">
+				<input type="radio" name="preprocessing" v-model="preprocessing" :value="Preprocessing.MONOLINGUAL">
 				Monolingual
 			</label>
-			<label class="search-button" :class="{'checked': includeBilingual}">
-				<input type="checkbox" v-model="includeBilingual">
+			<label class="search-button" :class="{'checked': preprocessing == Preprocessing.BILINGUAL}">
+				<input type="radio" name="preprocessing" v-model="preprocessing" :value="Preprocessing.BILINGUAL">
 				Bilingual
 			</label>
 			<label class="search-button" :class="{'checked': latestOnly}">
@@ -240,7 +199,7 @@ const countFormat = new Intl.NumberFormat();
 			<label>
 				<VueSelect v-model="srcLang" :options="srcLangOptions" :reduce="({lang}) => lang" placeholder="Origin language" />
 			</label>
-			<label>
+			<label v-show="preprocessing == Preprocessing.BILINGUAL">
 				<VueSelect v-model="trgLang" :options="trgLangOptions" :reduce="({lang}) => lang" placeholder="Target language" />
 			</label>
 			<label>
@@ -251,7 +210,7 @@ const countFormat = new Intl.NumberFormat();
 			<div class="dataset" v-for="dataset in datasets" :key="dataset.id" :id="`did-${dataset.id}`">
 				<div class="dataset-name">
 					<h3 class="dataset-title"><a :href="`https://opus.nlpl.eu/${dataset.corpus}-${dataset.version}.php`" target="_blank">{{ dataset.corpus }}</a></h3>
-					<button class="download-dataset-button" @click="download(dataset)" :disabled="dataset.id in downloads || 'paths' in dataset">
+					<button class="download-dataset-button" @click="download(dataset)" :disabled="isDownloading(dataset) || 'paths' in dataset">
 						Download
 						<DownloadCloudIcon class="download-icon"/>
 					</button>
@@ -260,7 +219,7 @@ const countFormat = new Intl.NumberFormat();
 					<dt>Version</dt>
 					<dd title="Version">{{ dataset.version }}</dd>
 					<dt>Languages</dt>
-					<dd title="Languages">{{ dataset.langs.join('→') }}</dd>
+					<dd title="Languages">{{ dataset.langs.filter(nonEmpty).join('→') }}</dd>
 					<dt>Pairs</dt>
 					<dd title="Sentence pairs">{{ dataset.pairs ? countFormat.format(dataset.pairs) : '' }}</dd>
 					<dt>Size</dt>
@@ -269,12 +228,7 @@ const countFormat = new Intl.NumberFormat();
 			</div>
 		</div>
 		<Teleport to=".navbar">
-			<details class="downloads-popup">
-				<summary><h2>Downloads</h2></summary>
-				<ul>
-					<li v-for="download in downloads" :key="download.entry.id">{{ download.entry.corpus }} <em>{{ download.state }}</em></li>
-				</ul>
-			</details>
+			<DownloadPopup/>
 		</Teleport>
 	</div>
 </template>

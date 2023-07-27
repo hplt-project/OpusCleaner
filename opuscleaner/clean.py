@@ -221,6 +221,10 @@ class Pipeline:
             self.steps.append(PipelineStep(command_str, filter_def.basedir))
 
     def run(self, pool:ProcessPipeline, stdin:BinaryIO, stdout:BinaryIO, *, tee:bool=False, basename:str="") -> None:
+        if not self.steps:
+            copyfileobj(stdin, stdout)
+            return
+
         for i, (is_last_step, step) in enumerate(mark_last(self.steps)):
             child = pool.start(f'step {i}', step.command,
                 stdin=stdin,

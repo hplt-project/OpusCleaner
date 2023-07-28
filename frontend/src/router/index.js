@@ -27,8 +27,20 @@ const router = createRouter({
     },
     {
       path: '/download/',
+      name: 'add-dataset-defaults',
+      redirect: to => ({
+        name: 'add-dataset',
+        params: {
+          preprocessing: window.localStorage['add-dataset-preprocessing'] || 'bilingual',
+          languages: window.localStorage['add-dataset-languages']?.split(';') || []
+        }
+      })
+    },
+    {
+      path: '/download/:preprocessing/:languages*',
       name: 'add-dataset',
-      component: () => import('../views/AddDatasetView.vue')
+      component: () => import('../views/AddDatasetView.vue'),
+      props: true
     },
   ]
 })

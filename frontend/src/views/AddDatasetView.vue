@@ -1,5 +1,6 @@
 <script setup>
 import {ref, reactive, computed, watch, onMounted} from 'vue';
+import {RouterLink, useRouter} from 'vue-router';
 import { formatSize } from '../format.js';
 import VueSelect from 'vue-select';
 import {DownloadCloudIcon} from 'vue3-feather';
@@ -23,6 +24,23 @@ const Preprocessing = {
 	MONOLINGUAL: 'monolingual',
 	BILINGUAL: 'bilingual'
 };
+
+const props = defineProps({
+	preprocessing: {
+		type: String,
+		default: 'bilingual'
+	},
+	languages: {
+		type: Array,
+		default: () => []
+	}
+});
+
+// Store for later, used in the router for the add-dataset-defaults route
+window.localStorage['add-dataset-preprocessing'] = props.preprocessing;
+window.localStorage['add-dataset-languages'] = props.languages.join(';');
+
+const router = useRouter();
 
 const SORT_ORDER_OPTIONS = [
 	{
@@ -51,27 +69,21 @@ const nameFilter = ref("");
 
 const latestOnly = ref(true);
 
-const preprocessing = ref(Preprocessing.BILINGUAL);
-
-const srcLang = ref();
-
-const trgLang = ref();
-
 const srcLangs = ref();
 
 const trgLangs = computed(() => {
-	if (!srcLang.value)
+	if (!props.languages[0])
 		return [];
 
-	if (!languages.has(srcLang.value)) {
+	if (!languages.has(props.languages[0])) {
 		const list = ref([]);
-		languages.set(srcLang.value, list);
-		fetchTargetLanguages(srcLang.value).then(langs => {
+		languages.set(props.languages[0], list);
+		fetchTargetLanguages(props.languages[0]).then(langs => {
 			list.value = langs
 		});
 	}
 
-	return languages.get(srcLang.value).value; // reactive, so will update once fetch() finishes
+	return languages.get(props.languages[0]).value; // reactive, so will update once fetch() finishes
 });
 
 const srcLangOptions = computed(() => {
@@ -99,16 +111,16 @@ const trgLangOptions = computed(() => {
 const datasets = computed(() => {
 	let key;
 
-	switch (preprocessing.value) {
+	switch (props.preprocessing) {
 		case Preprocessing.BILINGUAL:
-			if (!srcLang.value || !trgLang.value)
+			if (!props.languages[0] || !props.languages[1])
 				return [];
-			key = `${srcLang.value}-${trgLang.value}`;
+			key = `${props.languages[0]}-${props.languages[1]}`;
 			break;
 		case Preprocessing.MONOLINGUAL:
-			if (!srcLang.value)
+			if (!props.languages[0])
 				return [];
-			key = `${srcLang.value}`;
+			key = `${props.languages[0]}`;
 			break;
 		default:
 			throw new Error('Unknown preprocessing type');
@@ -131,7 +143,7 @@ const datasets = computed(() => {
 		});
 
 	datasets = datasets.filter(dataset => {
-		switch (preprocessing.value) {
+		switch (props.preprocessing) {
 			case Preprocessing.BILINGUAL:
 				return dataset.langs.filter(nonEmpty).length > 1;
 			case Preprocessing.MONOLINGUAL:
@@ -184,25 +196,36 @@ const countFormat = new Intl.NumberFormat();
 			<label>
 				<input type="search" placeholder="Search dataset…" v-model="nameFilter">
 			</label>
-			<label class="search-button" :class="{'checked': preprocessing == Preprocessing.MONOLINGUAL}">
-				<input type="radio" name="preprocessing" v-model="preprocessing" :value="Preprocessing.MONOLINGUAL">
-				Monolingual
-			</label>
-			<label class="search-button" :class="{'checked': preprocessing == Preprocessing.BILINGUAL}">
-				<input type="radio" name="preprocessing" v-model="preprocessing" :value="Preprocessing.BILINGUAL">
-				Bilingual
-			</label>
+			<span class="segmented-control">
+				<RouterLink :class="{'search-button': true, 'checked': preprocessing == Preprocessing.MONOLINGUAL}" :to="{name: 'add-dataset', params: {preprocessing: Preprocessing.MONOLINGUAL, languages:props.languages.slice(0, 1)}}">
+					Monolingual
+				</RouterLink>
+				<RouterLink :class="{'search-button': true, 'checked': preprocessing == Preprocessing.BILINGUAL}" :to="{name: 'add-dataset', params: {preprocessing: Preprocessing.BILINGUAL, languages:props.languages}}">
+					Bilingual
+				</RouterLink>
+			</span>
 			<label class="search-button" :class="{'checked': latestOnly}">
 				<input type="checkbox" v-model="latestOnly">
 				Latest only
 			</label>
 			<label>
-				<VueSelect v-model="srcLang" :options="srcLangOptions" :reduce="({lang}) => lang" placeholder="Origin language" />
+				<VueSelect
+					:options="srcLangOptions"
+					:reduce="({lang}) => lang" 
+					:modelValue="props.languages[0]"
+					@update:modelValue="(lang) => router.push({name: 'add-dataset', params: {preprocessing: props.preprocessing, languages: [lang].concat(props.languages.slice(1))}})"
+					placeholder="Origin language" />
 			</label>
 			<label v-show="preprocessing == Preprocessing.BILINGUAL">
-				<VueSelect v-model="trgLang" :options="trgLangOptions" :reduce="({lang}) => lang" placeholder="Target language" />
+				<VueSelect 
+					:options="trgLangOptions"
+					:reduce="({lang}) => lang" 
+					:modelValue="props.languages[1]"
+					@update:modelValue="(lang) => router.push({name: 'add-dataset', params: {preprocessing: props.preprocessing, languages: [props.languages[0], lang]}})"
+					placeholder="Target language" />
 			</label>
-			<label>
+			<label class="sort-order">
+				Sort by:
 				<VueSelect v-model="sortOrder" :options="SORT_ORDER_OPTIONS" placeholder="Sort order" />
 			</label>
 		</div>
@@ -256,6 +279,7 @@ const countFormat = new Intl.NumberFormat();
 }
 
 .search-inputs {
+	display: flex;
 	margin: 10px 0 20px 0;
 }
 
@@ -294,6 +318,33 @@ const countFormat = new Intl.NumberFormat();
 	width: 180px;
 	height: 28px;
 	border-radius: 3px;
+}
+
+.search-inputs .sort-order {
+	margin-left: auto; /* push button to the right of the screen */
+}
+
+a.search-button {
+	text-decoration: none;
+}
+
+.segmented-control {
+	display: inline-flex;
+	margin: 0 2px;
+}
+
+.segmented-control .search-button {
+	flex: 1 1 auto;
+	margin: 0;
+	border-radius: 0;
+}
+
+.segmented-control .search-button:first-child {
+	border-radius: 2px 0 0 2px;
+}
+
+.segmented-control .search-button:last-child {
+	border-radius: 0 2px 2px 0;
 }
 
 .dataset-list {

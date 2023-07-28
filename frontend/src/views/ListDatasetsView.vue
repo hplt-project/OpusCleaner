@@ -24,7 +24,7 @@ function languages(dataset) {
 <template>
 	<div class="table-container-first-screen">
 		<Teleport to=".navbar">
-			<RouterLink class="import-data-button" v-bind:to="{name:'add-dataset'}">
+			<RouterLink class="import-data-button" v-bind:to="{name:'add-dataset-defaults'}">
 				Import dataset
 				<UploadIcon class="import-data-icon" />
 			</RouterLink>

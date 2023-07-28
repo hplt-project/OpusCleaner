@@ -62,6 +62,34 @@ class DownloadState(Enum):
 
 
 def get_dataset(entry:RemoteEntry, path:str) -> None:
+    if entry.url.endswith('.zip'):
+        get_bilingual_dataset(entry, path)
+    elif entry.url.endswith('.txt.gz'):
+        get_monolingual_dataset(entry, path)
+    else:
+        raise RuntimeError(f'Unknown dataset file type: {entry.url}')
+
+
+def get_monolingual_dataset(entry:RemoteEntry, path:str) -> None:
+    lang = next(lang for lang in entry.langs if lang != '')
+    assert entry.url.endswith(f'{lang}.txt.gz')
+    
+    # Make sure our path exists
+    os.makedirs(path, exist_ok=True)
+
+    with TemporaryDirectory(dir=path) as temp_dir:
+        temp_path = os.path.join(temp_dir, os.path.basename(entry.url))
+        dest_path = os.path.join(path, f'{entry.basename}.{lang}.gz')
+
+        # Download dataset to temporary file
+        with urlopen(entry.url) as fh, open(temp_path, 'wb') as fout:
+            copyfileobj(fh, fout)
+
+        # move to permanent position
+        os.rename(temp_path, dest_path)
+
+
+def get_bilingual_dataset(entry:RemoteEntry, path:str) -> None:
     # List of extensions of the expected files, e.g. `.en-mt.mt` and `.en-mt.en`.
     suffixes = [f'.{"-".join(entry.langs)}.{lang}' for lang in entry.langs]
 

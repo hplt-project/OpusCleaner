@@ -139,7 +139,7 @@ class EntryDownload:
         self._child = None
     
     def start(self) -> None:
-        self._child = Process(target=get_dataset, args=(self.entry, DOWNLOAD_PATH))
+        self._child = Process(target=get_dataset, args=(self.entry, DOWNLOAD_PATH), daemon=True)
         self._child.start()
 
     def run(self) -> None:

@@ -23,7 +23,12 @@ const dataset = computed(() => {
 		<FilterEditor v-if="dataset" :dataset="dataset"/>
 
 		<Teleport to=".navbar">
-			<RouterLink class="import-data-button" v-bind:to="{name:'add-dataset'}">
+			<RouterLink class="import-data-button" v-bind:to="dataset
+				? {name: 'add-dataset', params: {
+						preprocessing: dataset.columns.length > 1 ? 'bilingual' : 'monolingual',
+						languages: dataset.columns.map(({lang}) => lang)
+					}}
+				: {name: 'add-dataset-defaults'}">
 				Import dataset
 				<UploadIcon class="import-data-icon" />
 			</RouterLink>

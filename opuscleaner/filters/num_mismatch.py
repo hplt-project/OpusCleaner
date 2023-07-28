@@ -6,16 +6,16 @@ from typing import Match, TextIO
 
 
 def normalize(numstr:Match) -> str:
-	return re.sub(r'[^\d]+', '*', numstr[0])
+	return numstr['sign'] + re.sub(r'[^\d]+', '*', numstr['value']) # ignore the decimal and digit separators
 
 
 def filter_numerical_mismatch(fin: TextIO, fout: TextIO, ratio: float, *, debug: bool = False):
 	for line in fin:
-		cols = line.rstrip('\r\n').split('\t')
+		cols = line.rstrip('\r').split('\t')
 
 		assert len(cols) >= 2
 
-		nums_left, nums_right = (set(map(normalize, re.finditer(r'\d+(?:[\.,]\d+)*', col))) for col in cols[:2])
+		nums_left, nums_right = (set(map(normalize, re.finditer(r'(?P<sign>[-+]?)(?:0*)(?P<value>\d+(?:[\.,]\d+)*)', col))) for col in cols[:2])
 
 		# Only bother calculating the ratio if there were any numbers to begin with
 		if nums_left and nums_right:

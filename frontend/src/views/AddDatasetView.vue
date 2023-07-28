@@ -392,6 +392,7 @@ a.search-button {
 .download-dataset-button {
 	display: flex;
 	align-items: center;
+	align-self: flex-start;
 	width: 100px;
 	padding: 2px 8px;
 	border: none;

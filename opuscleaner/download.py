@@ -286,7 +286,8 @@ def batch_add_downloads(datasets: List[EntryRef]) -> Iterable[EntryDownloadView]
     """Batch download requests!"""
     needles = set(dataset.id
         for dataset in datasets
-        if dataset.id not in downloads)
+        if dataset.id not in downloads
+        or downloads[dataset.id].state in {DownloadState.CANCELLED, DownloadState.FAILED})
 
     entries = [
         api.get_dataset(id) for id in needles

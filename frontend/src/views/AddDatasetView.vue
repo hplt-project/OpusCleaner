@@ -3,11 +3,11 @@ import {ref, reactive, computed, watch, onMounted} from 'vue';
 import {RouterLink, useRouter} from 'vue-router';
 import { formatSize } from '../format.js';
 import VueSelect from 'vue-select';
-import {DownloadCloudIcon} from 'vue3-feather';
+import {DownloadCloudIcon, CheckIcon} from 'vue3-feather';
 import DownloadPopup from '../components/DownloadPopup.vue';
 import {fetchJSON} from '../store/fetch.js';
 import {
-	download,
+	startDownload,
 	isDownloading,
 	fetchDownloadableDatasets,
 	fetchSourceLanguages,
@@ -233,7 +233,15 @@ const countFormat = new Intl.NumberFormat();
 			<div class="dataset" v-for="dataset in datasets" :key="dataset.id" :id="`did-${dataset.id}`">
 				<div class="dataset-name">
 					<h3 class="dataset-title"><a :href="`https://opus.nlpl.eu/${dataset.corpus}-${dataset.version}.php`" target="_blank">{{ dataset.corpus }}</a></h3>
-					<button class="download-dataset-button" @click="download(dataset)" :disabled="isDownloading(dataset) || 'paths' in dataset">
+					<button v-if="'paths' in dataset" class="download-dataset-button" disabled="disabled">
+						Downloaded
+						<CheckIcon class="download-icon"/>
+					</button>
+					<button v-else-if="isDownloading(dataset)" class="download-dataset-button" disabled>
+						{{ isDownloading(dataset).state }}
+						<DownloadCloudIcon class="download-icon"/>
+					</button>
+					<button v-else class="download-dataset-button" @click="startDownload(dataset)">
 						Download
 						<DownloadCloudIcon class="download-icon"/>
 					</button>

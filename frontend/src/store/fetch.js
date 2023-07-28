@@ -6,6 +6,8 @@ export async function fetchJSON(url, options) {
 	try {
 		loading.value += 1;
 		const response = await fetch(url, options);
+		if (!response.ok)
+			throw new Error(response.status);
 		return await response.json();
 	} finally {
 		loading.value -= 1;

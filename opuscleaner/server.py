@@ -471,7 +471,7 @@ app.mount('/api/categories/', categories_app)
 
 def main_serve(args):
     import uvicorn
-    uvicorn.run(f'opuscleaner.server:app', port=args.port, reload=args.reload, log_level='info')
+    uvicorn.run(f'opuscleaner.server:app', host=args.host, port=args.port, reload=args.reload, log_level='info')
 
 
 async def sample_all_datasets(args):
@@ -509,6 +509,7 @@ def main(argv=sys.argv):
     subparsers = parser.add_subparsers()
 
     parser_serve = subparsers.add_parser('serve')
+    parser_serve.add_argument('--host', type=str, default='127.0.0.1', help='Bind socket to this host. (default: 127.0.0.1)')
     parser_serve.add_argument('-p', '--port', type=int, default=8000, help='Bind socket to this port. (default: 8000)')
     parser_serve.add_argument('--reload', action='store_true', help='Enable auto-reload.')
     parser_serve.set_defaults(func=main_serve)

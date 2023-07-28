@@ -65,6 +65,9 @@ def get_dataset(entry:RemoteEntry, path:str) -> None:
     # List of extensions of the expected files, e.g. `.en-mt.mt` and `.en-mt.en`.
     suffixes = [f'.{"-".join(entry.langs)}.{lang}' for lang in entry.langs]
 
+    # Make sure our path exists
+    os.makedirs(path, exist_ok=True)
+
     with TemporaryFile() as temp_archive:
         # Download zip file to temporary file
         with urlopen(entry.url) as fh:

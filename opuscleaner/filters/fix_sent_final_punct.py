@@ -24,6 +24,8 @@ for line in sys.stdin:
         trg = trg + src[-1]
     elif trg[-1] in my_punct and src[-1] not in my_punct:
         src = src + trg[-1]
-    elif trg[-1] in my_punct and src[-1] in my_punct and src[-1] != trg[-1] and src[-1] != '»' and src[-1] != '«' and trg[-1] != '»' and trg[-1] != '«':
+    # Final case. Fix mismatched punctuation on the src and trg. EXCEPT in cases like french quotes. And in cases where we have emdash at the front, as it means spech
+    elif trg[-1] in my_punct and src[-1] in my_punct and src[-1] != trg[-1] and src[-1] != '»' \
+and src[-1] != '«' and trg[-1] != '»' and trg[-1] != '«' and src[0] != '–' and trg[0] != '–' and src[0] != '—' and trg[0] != '—':
         trg = trg[:-1] + src[-1]
     print(src + '\t' + trg)

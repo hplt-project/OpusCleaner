@@ -5,11 +5,16 @@ my_punct = ['!', '"', '#', '$', '%', '&', "'", '(', ')', '*', '+', ',', '.', '/'
 
 for line in sys.stdin:
     src, trg = line.rstrip("\r\n").split("\t")
+    if len(src) == 0 or len(trg) == 0:
+        print(src + '\t' + trg)
+        continue
+
     # Sometimes we have a space between the final letter and the punctuation
-    if src[-1] in my_punct and src[-2] == " ":
+    if len(src) >= 2 and src[-1] in my_punct and src[-2] == " ":
         src = src[:-2] + src[-1]
-    if trg[-1] in my_punct and trg[-2] == " ":
+    if len(trg) >= 2 and trg[-1] in my_punct and trg[-2] == " ":
         trg = trg[:-2] + trg[-1]
+
     # check for the french quotes special case
     if src[-1] == '»' or src[-1] == '«' and trg[-1] not in my_punct:
         trg = trg + '"'

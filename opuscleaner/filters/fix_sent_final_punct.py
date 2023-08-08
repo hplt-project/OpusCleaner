@@ -9,10 +9,10 @@ for line in sys.stdin:
         print(src + '\t' + trg)
         continue
 
-    # Sometimes we have a space between the final letter and the punctuation
-    if len(src) >= 2 and src[-1] in my_punct and src[-2] == " ":
+    # Sometimes we have a space between the final letter and the punctuation, which is wrong except if using french quotes
+    if len(src) >= 2 and src[-1] in my_punct and src[-2] == " " and src[-1] != '»' and src[-1] != '«':
         src = src[:-2] + src[-1]
-    if len(trg) >= 2 and trg[-1] in my_punct and trg[-2] == " ":
+    if len(trg) >= 2 and trg[-1] in my_punct and trg[-2] == " " and trg[-1] != '»' and trg[-1] != '«':
         trg = trg[:-2] + trg[-1]
 
     # check for the french quotes special case
@@ -24,6 +24,6 @@ for line in sys.stdin:
         trg = trg + src[-1]
     elif trg[-1] in my_punct and src[-1] not in my_punct:
         src = src + trg[-1]
-    elif trg[-1] in my_punct and src[-1] in my_punct and src[-1] != trg[-1]:
+    elif trg[-1] in my_punct and src[-1] in my_punct and src[-1] != trg[-1] and src[-1] != '»' and src[-1] != '«' and trg[-1] != '»' and trg[-1] != '«':
         trg = trg[:-1] + src[-1]
     print(src + '\t' + trg)

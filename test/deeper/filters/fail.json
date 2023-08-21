@@ -1,0 +1,11 @@
+{
+    "description": "Crashes",
+    "type": "monolingual",
+    "command": "python3 -c 'import sys\nsys.exit(int(sys.argv[1]))' $EXITCODE",
+    "parameters": {
+        "EXITCODE": {
+            "type": "int",
+            "default": 1
+        }
+    }
+}

@@ -26,7 +26,7 @@ from pydantic import parse_obj_as
 
 from opuscleaner.config import COL_PY, FILTER_PATH
 from opuscleaner.filters import list_filters, set_global_filters, filter_format_command, Filter, FilterStep, FilterPipeline
-from opuscleaner._util import none_throws
+from opuscleaner._util import none_throws, RaisingThread
 
 
 # Queue for printing lines to stdout or stderr. None means end of input.
@@ -399,7 +399,7 @@ def run_parallel(pipeline:Pipeline, stdin:BinaryIO, stdout:BinaryIO, *, parallel
     # Read `batch_queue` for batch filenames, and process them. Put output files
     # on `merge_queue`.
     runners = [
-        Thread(target=run_pipeline, args=[print_queue, batch_queue, merge_queue, pipeline, f'{n}/'])
+        RaisingThread(target=run_pipeline, args=[print_queue, batch_queue, merge_queue, pipeline, f'{n}/'])
         for n in range(parallel)
     ]
 
@@ -416,12 +416,12 @@ def run_parallel(pipeline:Pipeline, stdin:BinaryIO, stdout:BinaryIO, *, parallel
     # using a blocking size-limited Queue() to control the splitter's progress
     # but a SimpleQueue() that sends messages.
 
-    print_queue.put(f'[run.py] Waiting for splitter to finish\n'.encode())
-    splitter.join()
-
     print_queue.put(f'[run.py] Waiting for pipelines to finish\n'.encode())
     for runner in runners:
         runner.join()
+
+    print_queue.put(f'[run.py] Waiting for splitter to finish\n'.encode())
+    splitter.join()
 
     print_queue.put(f'[run.py] Waiting for merger to finish\n'.encode())
     merger.join()

@@ -3,11 +3,12 @@ import {ref, reactive, computed, watch, onMounted} from 'vue';
 import {RouterLink, useRouter} from 'vue-router';
 import { formatSize } from '../format.js';
 import VueSelect from 'vue-select';
-import {DownloadCloudIcon, CheckIcon} from 'vue3-feather';
+import {DownloadCloudIcon, CheckIcon, LoaderIcon} from 'vue3-feather';
 import DownloadPopup from '../components/DownloadPopup.vue';
 import {fetchJSON} from '../store/fetch.js';
 import {
 	startDownload,
+	startDownloads,
 	isDownloading,
 	fetchDownloadableDatasets,
 	fetchSourceLanguages,
@@ -167,12 +168,23 @@ const datasets = computed(() => {
 	return datasets;
 });
 
+const downloadableDatasets = computed(() => datasets.value.filter((dataset) => {
+	// Datasets that have a path, or that are being downloaded right now, are not
+	// offered as downloadable.
+	if (('paths' in dataset) || isDownloading(dataset))
+		return false;
+	return true;
+}));
+
 onMounted(async () => {
 	fetchSourceLanguages().then(languages => {
 		srcLangs.value = languages;
 	})
 })
 
+function beep(list) {
+	alert(list.length);
+}
 
 function assignList(current, update, key = 'id') {
 	const updates = Object.fromEntries(update.map(entry => [entry[key], entry]));
@@ -228,6 +240,10 @@ const countFormat = new Intl.NumberFormat();
 				Sort by:
 				<VueSelect v-model="sortOrder" :options="SORT_ORDER_OPTIONS" placeholder="Sort order" />
 			</label>
+			<button class="download-dataset-button" @click="startDownloads(downloadableDatasets)" :disabled="downloadableDatasets.length === 0">
+				Download all
+				<DownloadCloudIcon class="download-icon"/>
+			</button>
 		</div>
 		<div class="dataset-list">
 			<div class="dataset" v-for="dataset in datasets" :key="dataset.id" :id="`did-${dataset.id}`">
@@ -239,7 +255,7 @@ const countFormat = new Intl.NumberFormat();
 					</button>
 					<button v-else-if="isDownloading(dataset)" class="download-dataset-button" disabled>
 						{{ isDownloading(dataset).state }}
-						<DownloadCloudIcon class="download-icon"/>
+						<LoaderIcon class="download-icon loading-spinner"/>
 					</button>
 					<button v-else class="download-dataset-button" @click="startDownload(dataset)">
 						Download
@@ -266,6 +282,16 @@ const countFormat = new Intl.NumberFormat();
 
 <style scoped>
 
+.loading-spinner {
+	animation: rotate 1.5s linear infinite;
+}
+
+@keyframes rotate {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
 .datasets-catalogue-title {
 	font-size: 20px;
 	color: #182231;
@@ -289,6 +315,10 @@ const countFormat = new Intl.NumberFormat();
 .search-inputs {
 	display: flex;
 	margin: 10px 0 20px 0;
+}
+
+.search-inputs > *:not(:first-child) {
+	margin-left: 3px;
 }
 
 .search-button {
@@ -393,7 +423,6 @@ a.search-button {
 	display: flex;
 	align-items: center;
 	align-self: flex-start;
-	width: 100px;
 	padding: 2px 8px;
 	border: none;
 	border-radius: 2px;

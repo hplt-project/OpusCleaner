@@ -34,11 +34,14 @@ async function fetchDownloads() {
 	return await fetchJSON(`/api/download/downloads/`);
 }
 
-export function startDownload(dataset) {
-	requestDownloadSelection([dataset]).then(update => {
-		console.log('update');
+export function startDownloads(datasets) {
+	requestDownloadSelection(datasets).then(update => {
 		Object.assign(downloads, castDownloadListToMap(update));
 	});
+}
+
+export function startDownload(dataset) {
+	return startDownloads([dataset]);
 }
 
 export function isDownloading(dataset) {

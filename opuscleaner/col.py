@@ -15,9 +15,28 @@ queue = SimpleQueue() # type: SimpleQueue[list[bytes]]
 T = TypeVar("T")
 
 def none_throws(optional: Optional[T], message: str = "Unexpected `None`") -> T:
-    if optional is None:
-        raise AssertionError(message)
-    return optional
+	if optional is None:
+		raise AssertionError(message)
+	return optional
+
+
+class RaisingThread(Thread):
+	"""Thread that will raise any uncaught exceptions in the thread in the
+	parent once it joins again."""
+
+	exception: Optional[Exception]
+
+	def run(self):
+		self.exception = None
+		try:
+			super().run()
+		except Exception as exc:
+			self.exception = exc
+
+	def join(self, timeout:float=None):
+		super().join(timeout=timeout)
+		if self.exception is not None:
+			raise self.exception
 
 
 def split(column, queue, fin, fout):
@@ -39,7 +58,7 @@ def merge(column, queue, fin, fout):
 		for field in fin:
 			fields = queue.get()
 			if fields is None:
-				raise RuntimeError('Subprcess produced more lines of output than it was given.')
+				raise RuntimeError('Subprocess produced more lines of output than it was given.')
 			fout.write(b'\t'.join(fields[:column] + [field.rstrip(b'\n')] + fields[column:]) + b'\n')
 		if queue.get() is not None:
 			raise RuntimeError('Subprocess produced fewer lines than it was given.')
@@ -55,25 +74,24 @@ def main():
 
 	child = Popen(sys.argv[2:], stdin=PIPE, stdout=PIPE)
 
+	feeder = RaisingThread(target=split, args=[column, queue, sys.stdin.buffer, none_throws(child).stdin])
+	feeder.start()
+
+	consumer = RaisingThread(target=merge, args=[column, queue, none_throws(child).stdout, sys.stdout.buffer])
+	consumer.start()
+
+	retval = child.wait()
+
 	try:
-		feeder = Thread(target=split, args=[column, queue, sys.stdin.buffer, none_throws(child).stdin])
-		feeder.start()
-
-		consumer = Thread(target=merge, args=[column, queue, none_throws(child).stdout, sys.stdout.buffer])
-		consumer.start()
-
 		feeder.join()
 		consumer.join()
-	except:
-		none_throws(child.stdin).close()
-		raise
-	finally:
-		sys.stderr.close()
-		# Whatever happens, make sure the child stops first otherwise we might
-		# end up with a zombie
-		retval = child.wait()
-		sys.exit(retval)
+	except Exception as e:
+		print(f'Error: {e}', file=sys.stderr)
+		# Only change retval if it wasn't already non-zero by the program.
+		if retval == 0:
+			retval = 1
 
+	sys.exit(retval)
 
 if __name__ == '__main__':
 	main()

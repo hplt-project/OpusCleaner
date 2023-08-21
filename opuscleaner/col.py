@@ -70,28 +70,29 @@ def merge(column, queue, fin, fout):
 
 
 def main():
-	column = int(sys.argv[1])
-
-	child = Popen(sys.argv[2:], stdin=PIPE, stdout=PIPE)
-
-	feeder = RaisingThread(target=split, args=[column, queue, sys.stdin.buffer, none_throws(child).stdin])
-	feeder.start()
-
-	consumer = RaisingThread(target=merge, args=[column, queue, none_throws(child).stdout, sys.stdout.buffer])
-	consumer.start()
-
-	retval = child.wait()
+	retval = 0
 
 	try:
+		column = int(sys.argv[1])
+
+		child = Popen(sys.argv[2:], stdin=PIPE, stdout=PIPE)
+
+		feeder = RaisingThread(target=split, args=[column, queue, sys.stdin.buffer, none_throws(child).stdin])
+		feeder.start()
+
+		consumer = RaisingThread(target=merge, args=[column, queue, none_throws(child).stdout, sys.stdout.buffer])
+		consumer.start()
+
+		retval = child.wait()
+		if retval != 0:
+			raise RuntimeError(f'Subprocess exited with status code {retval}')
+
 		feeder.join()
 		consumer.join()
 	except Exception as e:
 		print(f'Error: {e}', file=sys.stderr)
-		# Only change retval if it wasn't already non-zero by the program.
-		if retval == 0:
-			retval = 1
+		sys.exit(retval or 1)
 
-	sys.exit(retval)
 
 if __name__ == '__main__':
 	main()

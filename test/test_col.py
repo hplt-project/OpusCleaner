@@ -122,4 +122,5 @@ class TestCol(unittest.TestCase):
 
 		out, err, retval = self._run(['0', sys.executable, '-c', underproduce], TEST_INPUT)
 		self.assertEqual(retval, 42)
+		self.assertIn('Subprocess exited with status code 42', err)
 

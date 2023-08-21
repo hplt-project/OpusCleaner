@@ -488,7 +488,7 @@ def main() -> None:
         with ProcessPipeline(print_queue) as pool:
             # If we're not reading from stdin, read from files and paste them together
             if args.input:
-                stdin = sys.stdin.buffer
+                stdin = args.input
             else:
                 # Open `gzunip` for each language file
                 gunzips = [
@@ -515,21 +515,21 @@ def main() -> None:
 
                 stdin = none_throws(paste.stdout)
 
-                # If we only want the first N lines processed, use `head` to chop those off.
-                if args.first > 0:
-                    head = pool.start('head',
-                        ['head', '-n', str(args.first)],
-                        stdin=stdin,
-                        stdout=PIPE,
-                        stderr=PIPE)
+            # If we only want the first N lines processed, use `head` to chop those off.
+            if args.first > 0:
+                head = pool.start('head',
+                    ['head', '-n', str(args.first)],
+                    stdin=stdin,
+                    stdout=PIPE,
+                    stderr=PIPE)
 
-                    stdin.close() # now taken over by `head`.
-                    stdin = none_throws(head.stdout)
+                stdin.close() # now taken over by `head`.
+                stdin = none_throws(head.stdout)
 
-                if args.parallel > 1:
-                    run_parallel(pipeline, stdin, stdout, print_queue=print_queue, parallel=args.parallel, batch_size=args.batch_size)
-                else:
-                    pipeline.run(pool, stdin, stdout, tee=args.tee, basename=basename)
+            if args.parallel > 1:
+                run_parallel(pipeline, stdin, stdout, print_queue=print_queue, parallel=args.parallel, batch_size=args.batch_size)
+            else:
+                pipeline.run(pool, stdin, stdout, tee=args.tee, basename=basename)
     except:
         # If we didn't cleanly exit all processes, we err as well
         traceback.print_exc(file=sys.stderr)

@@ -262,7 +262,7 @@ async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[Filter
 
             assert len(sample_cache[name]) == i + 1
         
-        sample = await sample_cache[name][i].future    
+        sample = await sample_cache[name][i].future
         
         # Return the (partially) filtered sample
         yield sample

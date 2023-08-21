@@ -101,6 +101,8 @@ class ProcessPipeline:
     """Context manager for spawning and babysitting child processes that are
     siblings connected by their pipes.
     """
+    name: str
+
     ctrl_queue: ControlQueue
 
     print_queue: PrintQueue
@@ -109,7 +111,8 @@ class ProcessPipeline:
 
     children: List[Child]
 
-    def __init__(self, print_queue: PrintQueue, *, env:Dict[str,str]={}):
+    def __init__(self, print_queue: PrintQueue, *, env:Dict[str,str]={}, name:str=''):
+        self.name = name
         self.ctrl_queue = SimpleQueue()
         self.print_queue = print_queue
         self.environ = dict(env)
@@ -182,6 +185,7 @@ class ProcessPipeline:
 
 
 class PipelineStep(NamedTuple):
+    name: str
     command: str
     basedir: str
 
@@ -218,7 +222,7 @@ class Pipeline:
         for step in pipeline.filters:
             filter_def = filters[step.filter]
             command_str = filter_format_command(filter_def, step, languages)
-            self.steps.append(PipelineStep(command_str, filter_def.basedir))
+            self.steps.append(PipelineStep(step.filter, command_str, filter_def.basedir))
 
     def run(self, pool:ProcessPipeline, stdin:BinaryIO, stdout:BinaryIO, *, tee:bool=False, basename:str="") -> None:
         if not self.steps:
@@ -226,7 +230,7 @@ class Pipeline:
             return
 
         for i, (is_last_step, step) in enumerate(mark_last(self.steps)):
-            child = pool.start(f'step {i}', step.command,
+            child = pool.start(f'{pool.name}{i}/{step.name}', step.command,
                 stdin=stdin,
                 stdout=stdout if is_last_step and not tee else PIPE,
                 stderr=PIPE,
@@ -241,7 +245,7 @@ class Pipeline:
             if not is_last_step and not tee:
                 stdin = none_throws(child.stdout)
 
-            pool.print_queue.put(f'[run.py] step {i}: Started {step.command}\n'.encode())
+            pool.print_queue.put(f'[run.py] step {pool.name}{i}/{step.name}: Started {step.command}\n'.encode())
 
             # If we are tee-ing for debug, shunt the output to a separate file
             # TODO: uncompressed at the moment. Might be trouble.
@@ -297,7 +301,7 @@ def split_input(print_queue:PrintQueue, parallel: int, batch_queue: BatchQueue, 
             batch_queue.put(None)
 
 
-def run_pipeline(print_queue:PrintQueue, batch_queue:BatchQueue, merge_queue:MergeQueue, pipeline:Pipeline) -> None:
+def run_pipeline(print_queue:PrintQueue, batch_queue:BatchQueue, merge_queue:MergeQueue, pipeline:Pipeline, name:str='') -> None:
     """Receives an input filename from `batch_queue`, and once that has been processed
     with `pipeline`, it will post the output filename to `merge_queue`.
 
@@ -327,7 +331,7 @@ def run_pipeline(print_queue:PrintQueue, batch_queue:BatchQueue, merge_queue:Mer
                     print_queue.put(f'[run.py] Filtering chunk {filename} to {stdout.name}\n'.encode())
 
                     # Open chunk file and process pool and run the pipeline with it.
-                    with open(filename, 'rb') as stdin, ProcessPipeline(print_queue, env={'TMPDIR': tmpdir}) as pool:
+                    with open(filename, 'rb') as stdin, ProcessPipeline(print_queue, env={'TMPDIR': tmpdir}, name=name) as pool:
                         pipeline.run(pool, stdin, stdout)
 
                     stdout.close()
@@ -395,8 +399,8 @@ def run_parallel(pipeline:Pipeline, stdin:BinaryIO, stdout:BinaryIO, *, parallel
     # Read `batch_queue` for batch filenames, and process them. Put output files
     # on `merge_queue`.
     runners = [
-        Thread(target=run_pipeline, args=[print_queue, batch_queue, merge_queue, pipeline])
-        for _ in range(parallel)
+        Thread(target=run_pipeline, args=[print_queue, batch_queue, merge_queue, pipeline, f'{n}/'])
+        for n in range(parallel)
     ]
 
     for runner in runners:

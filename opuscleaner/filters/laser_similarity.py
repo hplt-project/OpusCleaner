@@ -86,7 +86,7 @@ def main():
                                      description="Filter a parallel dataset using LASER.")
     parser.add_argument("--verbose", action="store_true", help="Print tuning info")
     parser.add_argument("--batch-size", type=int, help="LASER batch size")
-    parser.add_argument("--batch-latency", type=float, default=10.0, help="Tune batch size to process a batch every N seconds (defaults to 30s, ignored if --batch-size is given)")
+    parser.add_argument("--batch-latency", type=float, default=10.0, help="Tune batch size to process a batch every N seconds (defaults to 10s, ignored if --batch-size is given)")
     parser.add_argument("--src-lang", type=str, required=True, help="Two-letter source language code (ISO 639-1)")
     parser.add_argument("--tgt-lang", type=str, required=True, help="Two-letter target language code (ISO 639-1)")
     

@@ -92,7 +92,7 @@ def get_monolingual_dataset(entry:RemoteEntry, path:str) -> None:
 
 def _extract(path:str, name:str, dest:str) -> str:
     with ZipFile(path) as archive, archive.open(name) as fin, gzip.open(dest, 'wb') as fout:
-        copyfileobj(fin, fout)
+        copyfileobj(fin, fout, length=2**24) # 16MB blocks
     return dest
 
 

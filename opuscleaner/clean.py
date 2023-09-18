@@ -55,8 +55,6 @@ def babysit_child(n: int, child: Popen, name: str, print_queue: PrintQueue, ctrl
 
     child.wait()
 
-    print_queue.put(f'[run.py] {name} exited with status code {child.returncode}\n'.encode())
-
     ctrl_queue.put((n, child.returncode))
 
 
@@ -250,7 +248,7 @@ class Pipeline:
             if not is_last_step and not tee:
                 stdin = none_throws(child.stdout)
 
-            pool.print_queue.put(f'[run.py] step {pool.name}{i}/{step.name}: Started {step.command}\n'.encode())
+            pool.print_queue.put(f'[run.py] step {pool.name}{i}/{step.name}: Started {step.command} (pid {child.pid})\n'.encode())
 
             # If we are tee-ing for debug, shunt the output to a separate file
             # TODO: uncompressed at the moment. Might be trouble.

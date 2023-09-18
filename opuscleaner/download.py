@@ -22,6 +22,7 @@ from tempfile import TemporaryDirectory, TemporaryFile
 from shutil import copyfileobj
 from multiprocessing import Process
 from zipfile import ZipFile
+from concurrent.futures import ProcessPoolExecutor
 
 from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException
@@ -89,6 +90,12 @@ def get_monolingual_dataset(entry:RemoteEntry, path:str) -> None:
         os.rename(temp_path, dest_path)
 
 
+def _extract(path:str, name:str, dest:str) -> str:
+    with ZipFile(path) as archive, archive.open(name) as fin, gzip.open(dest, 'wb') as fout:
+        copyfileobj(fin, fout)
+    return dest
+
+
 def get_bilingual_dataset(entry:RemoteEntry, path:str) -> None:
     # List of extensions of the expected files, e.g. `.en-mt.mt` and `.en-mt.en`.
     suffixes = [f'.{"-".join(entry.langs)}.{lang}' for lang in entry.langs]
@@ -105,25 +112,30 @@ def get_bilingual_dataset(entry:RemoteEntry, path:str) -> None:
         with TemporaryDirectory(dir=path) as temp_extracted:
             files = []
 
-            with ZipFile(temp_archive) as archive:
-                for info in archive.filelist:
-                    if info.is_dir() or not any(info.filename.endswith(suffix) for suffix in suffixes):
-                        continue
+            with ProcessPoolExecutor(max_workers=8) as pool:
+                futures = []
 
-                    # `info.filename` is something like "beepboop.en-nl.en", `lang` will be "en".
-                    _, lang = info.filename.rsplit('.', maxsplit=1)
+                with ZipFile(temp_archive) as archive:
+                    for info in archive.filelist:
+                        if info.is_dir() or not any(info.filename.endswith(suffix) for suffix in suffixes):
+                            continue
 
-                    filename = f'{entry.basename}.{lang}.gz'
-                    temp_dest = os.path.join(temp_extracted, filename)
-                    data_dest = os.path.join(path, filename)
+                        # `info.filename` is something like "beepboop.en-nl.en", `lang` will be "en".
+                        _, lang = info.filename.rsplit('.', maxsplit=1)
 
-                    # Extract the file from the zip archive into the temporary directory, compress
-                    # it while we're at it.
-                    with archive.open(info) as fin, gzip.open(temp_dest, 'wb') as fout:
-                        copyfileobj(fin, fout)
+                        filename = f'{entry.basename}.{lang}.gz'
+                        temp_dest = os.path.join(temp_extracted, filename)
+                        data_dest = os.path.join(path, filename)
 
-                    # Keep a list of extracted files, and where they eventually need to go to
-                    files.append((temp_dest, data_dest))
+                        # Extract the file from the zip archive into the temporary directory, and
+                        # compress it while we're at it.
+                        future = pool.submit(_extract, temp_archive, info.filename, temp_dest)
+
+                        futures.append((future, data_dest))
+
+                # Keep a list of extracted files, and where they eventually need to go to
+                for future, data_dest in futures:
+                    files.append((future.result(), data_dest))
 
             # Once we know all files extracted as expected, move them to their permanent place.
             for temp_path, dest_path in files:
@@ -135,7 +147,7 @@ class EntryDownload:
     _child: Optional[Process]
 
     def __init__(self, entry:RemoteEntry):
-        self.entry = entry
+        self.entry = entrys
         self._child = None
     
     def start(self) -> None:

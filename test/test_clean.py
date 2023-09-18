@@ -17,6 +17,11 @@ FILES = [
 	"bible-uedin-v1.de-en.en.gz"
 ]
 
+SCENARIOS = {
+	'single': [],
+	'parallel': ['--parallel', '2', '--batch-size', '32000'], # parallel
+}
+
 
 class TestClean(unittest.TestCase):
 	def _run(self, args:List[str], **kwargs):
@@ -75,9 +80,9 @@ class TestClean(unittest.TestCase):
 			json.dump(config, fh)
 			fh.flush()
 
-			for mode in [[], ['--parallel', '1']]:
+			for mode, args in SCENARIOS.items():
 				with self.subTest(mode=mode):
-					out, err, retval = self._run([*mode, fh.name])
+					out, err, retval = self._run([*args, fh.name])
 					self.assertEqual(out.count(b'\n'), 0)
 					self.assertNotEqual(retval, 0)
 
@@ -110,14 +115,14 @@ class TestClean(unittest.TestCase):
 					)
 				fdata.flush()
 
-				for mode in [[], ['--parallel', '1']]:
+				for mode, args in SCENARIOS.items():
 					with self.subTest(mode=mode):
 						# Reset dataset input
 						fdata.seek(0)
 
 						# Run cleaner with `--input -` and pass the data through stdin
 						proc_clean = subprocess.Popen(
-							args=[sys.executable, '-m', 'opuscleaner.clean', *mode, '--input', '-', fconf.name, 'de', 'en'],
+							args=[sys.executable, '-m', 'opuscleaner.clean', *args, '--input', '-', fconf.name, 'de', 'en'],
 							cwd=TEST_CWD,
 							env={
 								'PYTHONPATH': os.path.join(os.path.dirname(__file__), '..') # so it can find opuscleaner code

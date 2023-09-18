@@ -249,7 +249,7 @@ const countFormat = new Intl.NumberFormat();
 			<div class="dataset" v-for="dataset in datasets" :key="dataset.id" :id="`did-${dataset.id}`">
 				<div class="dataset-name">
 					<h3 class="dataset-title"><a :href="`https://opus.nlpl.eu/${dataset.corpus}-${dataset.version}.php`" target="_blank">{{ dataset.corpus }}</a></h3>
-					<button v-if="'paths' in dataset" class="download-dataset-button" disabled="disabled">
+					<button v-if="'paths' in dataset || isDownloading(dataset).state === 'downloaded'" class="download-dataset-button" disabled="disabled">
 						Downloaded
 						<CheckIcon class="download-icon"/>
 					</button>

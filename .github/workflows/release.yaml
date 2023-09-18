@@ -28,6 +28,26 @@ jobs:
           name: frontend
           path: frontend/dist/
 
+  run_tests:
+    needs: [build_frontend]
+    name: Run tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-python@v3
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: frontend
+          path: frontend/dist
+      
+      - name: Install
+        run: python3 -m pip install .
+
+      - name: Run unittest
+        run: python3 -m unittest discover -s test
+
   build_sdist:
     needs: [build_frontend]
     name: Build source distribution

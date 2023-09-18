@@ -94,7 +94,7 @@ class CancelableQueue(Generic[T]):
     def get(self) -> T:
         """blocking get(). Either returns an item from the queue, or raises
         `Cancelled`.
-        """"
+        """
         with self.cv:
             self.cv.wait_for(lambda: self.cancelled or self.size > 0)
             if self.cancelled:

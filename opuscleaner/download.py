@@ -18,7 +18,7 @@ from urllib.parse import urlencode
 from pprint import pprint
 from operator import itemgetter
 from warnings import warn
-from tempfile import TemporaryDirectory, TemporaryFile
+from tempfile import TemporaryDirectory, TemporaryFile, NamedTemporaryFile
 from shutil import copyfileobj
 from multiprocessing import Process
 from zipfile import ZipFile
@@ -103,7 +103,7 @@ def get_bilingual_dataset(entry:RemoteEntry, path:str) -> None:
     # Make sure our path exists
     os.makedirs(path, exist_ok=True)
 
-    with TemporaryFile() as temp_archive:
+    with NamedTemporaryFile() as temp_archive:
         # Download zip file to temporary file
         with urlopen(entry.url) as fh:
             copyfileobj(fh, temp_archive)
@@ -129,7 +129,7 @@ def get_bilingual_dataset(entry:RemoteEntry, path:str) -> None:
 
                         # Extract the file from the zip archive into the temporary directory, and
                         # compress it while we're at it.
-                        future = pool.submit(_extract, temp_archive, info.filename, temp_dest)
+                        future = pool.submit(_extract, temp_archive.name, info.filename, temp_dest)
 
                         futures.append((future, data_dest))
 
@@ -147,11 +147,11 @@ class EntryDownload:
     _child: Optional[Process]
 
     def __init__(self, entry:RemoteEntry):
-        self.entry = entrys
+        self.entry = entry
         self._child = None
     
     def start(self) -> None:
-        self._child = Process(target=get_dataset, args=(self.entry, DOWNLOAD_PATH), daemon=True)
+        self._child = Process(target=get_dataset, args=(self.entry, DOWNLOAD_PATH))
         self._child.start()
 
     def run(self) -> None:

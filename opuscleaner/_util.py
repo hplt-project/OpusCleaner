@@ -32,13 +32,16 @@ class ThreadPool:
 
     def start(self, func, *args, **kwargs):
         thread_id = len(self.threads)
-        self.threads[thread_id] = Thread(target=_thread_pool_worker, kwargs={
-            "id": thread_id,
-            "exc_queue": self.queue,
-            "target": func,
-            "args": args,
-            "kwargs": kwargs,
-        }, daemon=True)
+        self.threads[thread_id] = Thread(
+            target=_thread_pool_worker,
+            kwargs={
+                "id": thread_id,
+                "exc_queue": self.queue,
+                "target": func,
+                "args": args,
+                "kwargs": kwargs,
+            },
+            name=func.__name__)
         self.threads[thread_id].start()
 
     def join(self):

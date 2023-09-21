@@ -7,6 +7,7 @@ the dataset from the same folder as the pipeline configuration file.
 import argparse
 import json
 import os
+import re
 import shlex
 import signal
 import sys
@@ -46,7 +47,7 @@ MergeQueue = CancelableQueue[Union[None,Tuple[int,str]]]
 
 
 @logging.trace
-def babysit_child(n: int, child: Popen, name: str, print_queue: PrintQueue, ctrl_queue: ControlQueue, time_fh:Optional[BinaryIO]) -> None:
+def babysit_child(n: int, child: Popen, name: str, print_queue: PrintQueue, ctrl_queue: ControlQueue, time_fd:Optional[int]=None) -> None:
     """Thread that looks after a child process and passes (and prefixes) all of
     its stderr to a queue. It will tell the parent thread about the end of the
     child through the ctrl_queue.
@@ -63,15 +64,13 @@ def babysit_child(n: int, child: Popen, name: str, print_queue: PrintQueue, ctrl
 
         logging.event('child_exited', n=n, retval=child.returncode)
 
-        if time_fh is not None:
-            try:
+        if time_fd is not None:
+            with os.fdopen(time_fd, 'r') as fh:
                 time = {}
-                for line in time_fh:
-                    match = re.match(r'^(real|user|sys)\s+(\d+\.\d+)$', line.decode().rstrip('\r\n'))
+                for line in fh:
+                    match = re.match(r'^(real|user|sys)\s+(\d+\.\d+)$', line.rstrip('\r\n'))
                     time[match[1]] = float(match[2])
                 logging.update(time=time)
-            finally:
-                time_fh.close()
     finally:
         ctrl_queue.put((n, child.returncode))
 
@@ -135,7 +134,7 @@ class ProcessPool:
         self.children = []
 
     def start(self, name:str, cmd: Union[str,List[str]], *, shell:bool=False, time:bool=False, **kwargs) -> Popen:
-        time_output = None
+        time_out = None
 
         args = ([cmd] if isinstance(cmd, str) else cmd)
         
@@ -143,9 +142,10 @@ class ProcessPool:
             args = ['/bin/sh', '-c', *args]
 
         if time:
-            time_output = TemporaryFile('w+b')
-            args = ['/usr/bin/time', '-p', '-o', f'/dev/fd/{time_output.fileno()}', *args]
-            kwargs['pass_fds'] = [time_output.fileno(), *kwargs.get('pass_fds', [])]
+            time_out, time_in = os.pipe()
+            os.set_inheritable(time_in, True)
+            args = ['/usr/bin/time', '-p', '-o', f'/dev/fd/{time_in}', *args]
+            kwargs['pass_fds'] = (time_in, *kwargs.get('pass_fds', tuple()))
         
         child = Popen(args, **{
             **kwargs,
@@ -155,8 +155,10 @@ class ProcessPool:
                 **(kwargs.get('env') or dict())
             }
         })
+        if time_in:
+            os.close(time_in)
         n = len(self.children)
-        thread = Thread(target=babysit_child, args=[n, child, name, self.print_queue, self.ctrl_queue, time_output])
+        thread = Thread(target=babysit_child, args=[n, child, name, self.print_queue, self.ctrl_queue, time_out])
         thread.start()
         self.children.append(Child(name, child, thread))
         return child

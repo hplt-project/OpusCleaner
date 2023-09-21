@@ -18,7 +18,7 @@ from queue import Queue, SimpleQueue
 from shlex import quote
 from shutil import copyfileobj
 from subprocess import Popen, PIPE
-from tempfile import NamedTemporaryFile, TemporaryDirectory
+from tempfile import TemporaryFile, NamedTemporaryFile, TemporaryDirectory
 from threading import Thread
 from typing import Dict, List, Any, BinaryIO, TextIO, Optional, TypeVar, Iterable, Tuple, NamedTuple, Union
 from io import TextIOWrapper
@@ -46,23 +46,34 @@ MergeQueue = CancelableQueue[Union[None,Tuple[int,str]]]
 
 
 @logging.trace
-def babysit_child(n: int, child: Popen, name: str, print_queue: PrintQueue, ctrl_queue: ControlQueue) -> None:
+def babysit_child(n: int, child: Popen, name: str, print_queue: PrintQueue, ctrl_queue: ControlQueue, time_fh:Optional[BinaryIO]) -> None:
     """Thread that looks after a child process and passes (and prefixes) all of
     its stderr to a queue. It will tell the parent thread about the end of the
     child through the ctrl_queue.
     """
-    logging.update(pid=child.pid)
+    try:
+        logging.update(pid=child.pid)
 
-    prefix = f'[{name}] '.encode()
+        prefix = f'[{name}] '.encode()
 
-    for line in none_throws(child.stderr):
-        print_queue.put(prefix + line)
+        for line in none_throws(child.stderr):
+            print_queue.put(prefix + line)
 
-    child.wait()
+        child.wait()
 
-    logging.event('child_exited', n=n, retval=child.returncode)
+        logging.event('child_exited', n=n, retval=child.returncode)
 
-    ctrl_queue.put((n, child.returncode))
+        if time_fh is not None:
+            try:
+                time = {}
+                for line in time_fh:
+                    match = re.match(r'^(real|user|sys)\s+(\d+\.\d+)$', line.decode().rstrip('\r\n'))
+                    time[match[1]] = float(match[2])
+                logging.update(time=time)
+            finally:
+                time_fh.close()
+    finally:
+        ctrl_queue.put((n, child.returncode))
 
 
 def print_lines(queue: PrintQueue, fout: BinaryIO) -> None:
@@ -123,8 +134,20 @@ class ProcessPool:
         self.environ = dict(env)
         self.children = []
 
-    def start(self, name:str, cmd: Union[str,List[str]], **kwargs) -> Popen:
-        child = Popen(cmd, **{
+    def start(self, name:str, cmd: Union[str,List[str]], *, shell:bool=False, time:bool=False, **kwargs) -> Popen:
+        time_output = None
+
+        args = ([cmd] if isinstance(cmd, str) else cmd)
+        
+        if shell:
+            args = ['/bin/sh', '-c', *args]
+
+        if time:
+            time_output = TemporaryFile('w+b')
+            args = ['/usr/bin/time', '-p', '-o', f'/dev/fd/{time_output.fileno()}', *args]
+            kwargs['pass_fds'] = [time_output.fileno(), *kwargs.get('pass_fds', [])]
+        
+        child = Popen(args, **{
             **kwargs,
             'env': {
                 **os.environ,
@@ -133,7 +156,7 @@ class ProcessPool:
             }
         })
         n = len(self.children)
-        thread = Thread(target=babysit_child, args=[n, child, name, self.print_queue, self.ctrl_queue])
+        thread = Thread(target=babysit_child, args=[n, child, name, self.print_queue, self.ctrl_queue, time_output])
         thread.start()
         self.children.append(Child(name, child, thread))
         return child
@@ -228,7 +251,7 @@ class Pipeline:
             command_str = filter_format_command(filter_def, step, languages)
             self.steps.append(PipelineStep(step.filter, command_str, filter_def.basedir))
 
-    def run(self, pool:ProcessPool, stdin:BinaryIO, stdout:BinaryIO, *, tee:bool=False, basename:str="") -> None:
+    def run(self, pool:ProcessPool, stdin:BinaryIO, stdout:BinaryIO, *, tee:bool=False, basename:str="", time:bool=False) -> None:
         if not self.steps:
             copyfileobj(stdin, stdout)
             return
@@ -240,7 +263,8 @@ class Pipeline:
                 stderr=PIPE,
                 cwd=step.basedir,
                 env=self.env,
-                shell=True)
+                shell=True,
+                time=time)
 
             # Close our reference to the previous child, now taken over by the next child
             stdin.close()
@@ -317,7 +341,7 @@ def split_input(print_queue:PrintQueue, parallel: int, batch_queue: BatchQueue, 
 
 
 @logging.trace
-def run_pipeline(print_queue:PrintQueue, batch_queue:BatchQueue, merge_queue:MergeQueue, pipeline:Pipeline) -> None:
+def run_pipeline(print_queue:PrintQueue, batch_queue:BatchQueue, merge_queue:MergeQueue, pipeline:Pipeline, *, time:bool=False) -> None:
     """Receives an input filename from `batch_queue`, and once that has been processed
     with `pipeline`, it will post the output filename to `merge_queue`.
 
@@ -348,7 +372,7 @@ def run_pipeline(print_queue:PrintQueue, batch_queue:BatchQueue, merge_queue:Mer
                 with logging.span('run_pipeline_batch', batch_index=batch_index), \
                     open(filename, 'rb') as stdin, \
                     ProcessPool(print_queue, env={'TMPDIR': tmpdir}, print_prefix=f'{batch_index}/') as pool:
-                    pipeline.run(pool, stdin, stdout)
+                    pipeline.run(pool, stdin, stdout, time=time)
 
                 stdout.close()
 
@@ -411,7 +435,7 @@ def merge_output(print_queue:PrintQueue, parallel:int, merge_queue:MergeQueue, s
         raise RuntimeError(f'Not all batches got merged: {next_batch_index=} <= {max(pending_batches.keys())=}')
 
 @logging.trace
-def run_parallel(pipeline:Pipeline, stdin:BinaryIO, stdout:BinaryIO, *, parallel:int, batch_size:int, print_queue: PrintQueue) -> None:
+def run_parallel(pipeline:Pipeline, stdin:BinaryIO, stdout:BinaryIO, *, parallel:int, batch_size:int, print_queue: PrintQueue, time:bool=False) -> None:
     batch_queue: BatchQueue = CancelableQueue(parallel * 2)
 
     merge_queue: MergeQueue = CancelableQueue()
@@ -423,7 +447,7 @@ def run_parallel(pipeline:Pipeline, stdin:BinaryIO, stdout:BinaryIO, *, parallel
         # Read `batch_queue` for batch filenames, and process them. Put output files
         # on `merge_queue`.
         for n in range(parallel):
-            pool.start(run_pipeline, print_queue, batch_queue, merge_queue, pipeline)
+            pool.start(run_pipeline, print_queue, batch_queue, merge_queue, pipeline, time=time)
 
         # Read from `merge_queue` and combine files in order.
         pool.start(merge_output, print_queue, parallel, merge_queue, stdout)
@@ -448,6 +472,7 @@ def main() -> None:
     parser.add_argument('--first', type=int, default=0, help='Limit reading input to the N first lines')
     parser.add_argument('--dump', action='store_true', help='Print shell script instead')
     parser.add_argument('--trace', type=argparse.FileType('w'), help='Write tracing JSON to file')
+    parser.add_argument('--time', action='store_true', help='Measure real/user/sys times for each filter step')
     parser.add_argument('pipeline', metavar='PIPELINE', type=argparse.FileType('r'), help='Pipeline steps specification file, e.g. *.filters.json')
     parser.add_argument('languages', metavar='LANG', type=str, nargs='*', help='Language codes of the columns in the input TSV. Only used when --input is set')
 
@@ -460,7 +485,13 @@ def main() -> None:
             args.basedir = os.path.dirname(args.pipeline.name) or os.getcwd()
 
         if args.input is not None and not args.languages:
-            parser.error('When --input is specified, each column\'s LANG has to be specified as well.')
+            parser.error('When --input is specified, each column\'s LANG has to be specified as well')
+
+        if args.tee and args.parallel > 1:
+            parser.error('When --parallel is used, --tee does not have any effect')
+
+        if args.time and not args.trace:
+            parser.error('You need to use --trace to see the output of --time')
 
         # load all filter definitions (we need to, to get their name)
         filters = {
@@ -544,9 +575,9 @@ def main() -> None:
                     stdin = none_throws(head.stdout)
 
                 if args.parallel > 1:
-                    run_parallel(pipeline, stdin, stdout, print_queue=print_queue, parallel=args.parallel, batch_size=args.batch_size)
+                    run_parallel(pipeline, stdin, stdout, print_queue=print_queue, parallel=args.parallel, batch_size=args.batch_size, time=args.time)
                 else:
-                    pipeline.run(pool, stdin, stdout, tee=args.tee, basename=basename)
+                    pipeline.run(pool, stdin, stdout, tee=args.tee, basename=basename, time=args.time)
         except:
             # If we didn't cleanly exit all processes, we err as well
             traceback.print_exc(file=sys.stderr)

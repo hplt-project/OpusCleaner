@@ -20,12 +20,13 @@ from shutil import copyfileobj
 from subprocess import Popen, PIPE
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from threading import Thread
-from typing import Dict, List, Any, BinaryIO, Optional, TypeVar, Iterable, Tuple, NamedTuple, Union
+from typing import Dict, List, Any, BinaryIO, TextIO, Optional, TypeVar, Iterable, Tuple, NamedTuple, Union
+from io import TextIOWrapper
 
 from pydantic import parse_obj_as
 
 from opuscleaner.config import COL_PY, FILTER_PATH
-from opuscleaner.filters import list_filters, set_global_filters, filter_format_command, Filter, FilterStep, FilterPipeline
+from opuscleaner.filters import list_filters, set_global_filters, filter_format_command, Filter, FilterStep, FilterPipeline, quote, format_shell
 from opuscleaner._util import none_throws, ThreadPool, CancelableQueue, Cancelled
 
 
@@ -262,6 +263,16 @@ class Pipeline:
                 stdin.close()
                 stdin = none_throws(tee_child.stdout)
 
+    def dump(self, out:TextIO) -> None:
+        if self.env:
+            for key, val in self.env:
+                out.write(f'export {key}={quote(format_shell(val))}\n')
+
+        for i, (is_last_step, step) in enumerate(mark_last(self.steps)):
+            out.write(f'(cd {quote(format_shell(step.basedir))} && ({step.command}))')
+            out.write('\n' if is_last_step else ' |\n')
+
+
 
 def split_input(print_queue:PrintQueue, parallel: int, batch_queue: BatchQueue, batch_size:int, stdin:BinaryIO) -> None:
     """Reads data from `stdin` and splits it into chunks of `batch_size` lines.
@@ -441,6 +452,7 @@ def main() -> None:
     parser.add_argument('--parallel', type=int, default=1, help='Run N parallel copies of the pipeline processing batches')
     parser.add_argument('--batch-size', type=int, default=1_000_000, help='Batch size in lines that each parallel copy processes (only if --parallel > 1)')
     parser.add_argument('--first', type=int, default=0, help='Limit reading input to the N first lines')
+    parser.add_argument('--dump', action='store_true', help='Print shell script instead')
     parser.add_argument('pipeline', metavar='PIPELINE', type=argparse.FileType('r'), help='Pipeline steps specification file, e.g. *.filters.json')
     parser.add_argument('languages', metavar='LANG', type=str, nargs='*', help='Language codes of the columns in the input TSV. Only used when --input is set')
 
@@ -452,7 +464,7 @@ def main() -> None:
         args.basedir = os.path.dirname(args.pipeline.name) or os.getcwd()
 
     if args.input is not None and not args.languages:
-        parser.error('When --input is specified, each colum\'s LANG has to be specified as well.')
+        parser.error('When --input is specified, each column\'s LANG has to be specified as well.')
 
     # load all filter definitions (we need to, to get their name)
     filters = {
@@ -463,15 +475,6 @@ def main() -> None:
     # set_global_filters() provides the filters to the validators in FilterPipeline
     set_global_filters(filters)
     pipeline_config = parse_obj_as(FilterPipeline, json.load(args.pipeline))
-
-    # Queue filled by the babysitters with the stderr of the children, consumed
-    # by `print_lines()` to prevent racing on stderr.
-    print_queue = SimpleQueue() # type: SimpleQueue[Optional[bytes]]
-
-    # First start the print thread so that we get immediate feedback from the
-    # children even if all of them haven't started yet.
-    print_thread = Thread(target=print_lines, args=[print_queue, sys.stderr.buffer])
-    print_thread.start()
 
     # Order of columns. Matches datasets.py:list_datasets(path)
     languages: List[str] = args.languages if args.input else [filename.rsplit('.', 2)[1] for filename in pipeline_config.files]
@@ -486,6 +489,20 @@ def main() -> None:
 
     # Output of this program
     stdout:BinaryIO = args.output
+
+    # If we're just dumping the pipeline, do so to the specified output
+    if args.dump:
+        pipeline.dump(TextIOWrapper(stdout))
+        sys.exit(0)
+
+    # Queue filled by the babysitters with the stderr of the children, consumed
+    # by `print_lines()` to prevent racing on stderr.
+    print_queue = SimpleQueue() # type: SimpleQueue[Optional[bytes]]
+
+    # First start the print thread so that we get immediate feedback from the
+    # children even if all of them haven't started yet.
+    print_thread = Thread(target=print_lines, args=[print_queue, sys.stderr.buffer])
+    print_thread.start()
 
     # Start child processes, each reading the output from the previous sibling
     try:

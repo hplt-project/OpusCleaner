@@ -46,10 +46,15 @@ def split(column, queue, fin, fout):
 			field = fields[column] # Doing column selection first so that if this fails, we haven't already written it to the queue
 			queue.put(fields[:column] + fields[(column+1):])
 			fout.write(field + b'\n')
-		fout.close()
 	except BrokenPipeError:
 		pass
+	except IndexError:
+		raise RuntimeError('line does not contain enough columns')
 	finally:
+		try:
+			fout.close() # might fail if BrokenPipeError
+		except:
+			pass
 		queue.put(None) # End indicator
 		fin.close()
 
@@ -58,10 +63,10 @@ def merge(column, queue, fin, fout):
 		for field in fin:
 			fields = queue.get()
 			if fields is None:
-				raise RuntimeError('Subprocess produced more lines of output than it was given.')
+				raise RuntimeError('subprocess produced more lines of output than it was given')
 			fout.write(b'\t'.join(fields[:column] + [field.rstrip(b'\n')] + fields[column:]) + b'\n')
 		if queue.get() is not None:
-			raise RuntimeError('Subprocess produced fewer lines than it was given.')
+			raise RuntimeError('subprocess produced fewer lines than it was given')
 		fout.close()
 	except BrokenPipeError:
 		pass
@@ -84,8 +89,9 @@ def main():
 		consumer.start()
 
 		retval = child.wait()
+		
 		if retval != 0:
-			raise RuntimeError(f'Subprocess exited with status code {retval}')
+			raise RuntimeError(f'subprocess exited with status code {retval}')
 
 		feeder.join()
 		consumer.join()

@@ -95,12 +95,11 @@ class Child(NamedTuple):
     process: Popen
     babysitter: Thread
 
-
-class ProcessPipeline:
+class ProcessPool:
     """Context manager for spawning and babysitting child processes that are
     siblings connected by their pipes.
     """
-    name: str
+    print_prefix: str
 
     ctrl_queue: ControlQueue
 
@@ -110,8 +109,8 @@ class ProcessPipeline:
 
     children: List[Child]
 
-    def __init__(self, print_queue: PrintQueue, *, env:Dict[str,str]={}, name:str=''):
-        self.name = name
+    def __init__(self, print_queue: PrintQueue, *, env:Dict[str,str]={}, print_prefix:str=''):
+        self.print_prefix = print_prefix
         self.ctrl_queue = SimpleQueue()
         self.print_queue = print_queue
         self.environ = dict(env)
@@ -132,7 +131,7 @@ class ProcessPipeline:
         self.children.append(Child(name, child, thread))
         return child
 
-    def __enter__(self) -> 'ProcessPipeline':
+    def __enter__(self) -> 'ProcessPool':
         return self
 
     def __exit__(self, err_type, err_inst, err_trace) -> None:
@@ -149,6 +148,7 @@ class ProcessPipeline:
         # Place to store a non-zero child exit
         problem_child: Optional[Child] = None
 
+        # Wait for all children to signal their exit
         try:
             while running_children > 0:
                 child_i, retval = self.ctrl_queue.get()
@@ -161,31 +161,24 @@ class ProcessPipeline:
                     problem_child = self.children[child_i]
                     break
         except KeyboardInterrupt:
-            # TODO: Wait, how does the interrupt stop the children?
-            print('[run.py] KeyboardInterrupt', file=sys.stderr)
+            # Oh user doesn't want to wait? Okay, then we terminate.
+            for child in self.children:
+                child.process.terminate()
             pass
 
-        # If supported, print usage for each child?
-        if False and os.path.isdir('/proc'):
-            for child in self.children:
-                with open(f'/proc/{child.process.pid}/stat', 'r') as fh:
-                    sys.stderr.write(child.name + "\t")
-                    sys.stderr.write(fh.readline())
-
-        # Wait for all the processes to prevent zombies
+        # Wait for all the processes to exit to prevent zombies
         for child in self.children:
             if child.process.returncode is None:
                 child.process.wait()
 
-        # Wait for the babysitters to exit, which happens when their process stops
+        # Wait for the babysitters to exit, which happens when their process has stopped
         for child in self.children:
             child.babysitter.join()
 
-        # If we broke out of our ctrl_queue loop be clearly exited with an
-        # issue, so let's mark that occasion by throwing.
+        # If we broke out of our ctrl_queue loop we did so because there was an issue
+        # with one of the children. Let's raise that to the parent.
         if not err_inst and problem_child:
-            raise Exception(f"Child {problem_child.name} (pid {problem_child.process.pid}) exited with {problem_child.process.returncode}")
-
+            raise RuntimeError(f"Child {problem_child.name} (pid {problem_child.process.pid}) exited with {problem_child.process.returncode}")
 
 
 class PipelineStep(NamedTuple):
@@ -228,13 +221,13 @@ class Pipeline:
             command_str = filter_format_command(filter_def, step, languages)
             self.steps.append(PipelineStep(step.filter, command_str, filter_def.basedir))
 
-    def run(self, pool:ProcessPipeline, stdin:BinaryIO, stdout:BinaryIO, *, tee:bool=False, basename:str="") -> None:
+    def run(self, pool:ProcessPool, stdin:BinaryIO, stdout:BinaryIO, *, tee:bool=False, basename:str="") -> None:
         if not self.steps:
             copyfileobj(stdin, stdout)
             return
 
         for i, (is_last_step, step) in enumerate(mark_last(self.steps)):
-            child = pool.start(f'{pool.name}{i}/{step.name}', step.command,
+            child = pool.start(f'{pool.print_prefix}{i}:{step.name}', step.command,
                 stdin=stdin,
                 stdout=stdout if is_last_step and not tee else PIPE,
                 stderr=PIPE,
@@ -308,10 +301,9 @@ def split_input(print_queue:PrintQueue, parallel: int, batch_queue: BatchQueue, 
                 # to process it further.
                 os.unlink(fh.name)
         except Cancelled:
-            # Somewhere down the pipeline we stopped processing, so no need
-            # to retain this chunk
+            # batch_queue got interrupted, so fn.name never made it into the
+            # queue. Let's clean that up.
             os.unlink(fh.name)
-            # Also stop the loop.
             raise
 
         batch_index += 1
@@ -321,12 +313,12 @@ def split_input(print_queue:PrintQueue, parallel: int, batch_queue: BatchQueue, 
         batch_queue.put(None)
 
 
-def run_pipeline(print_queue:PrintQueue, batch_queue:BatchQueue, merge_queue:MergeQueue, pipeline:Pipeline, name:str='') -> None:
+def run_pipeline(print_queue:PrintQueue, batch_queue:BatchQueue, merge_queue:MergeQueue, pipeline:Pipeline) -> None:
     """Receives an input filename from `batch_queue`, and once that has been processed
     with `pipeline`, it will post the output filename to `merge_queue`.
 
     TODO: This could also instead run ./run.py on the input and output files
-    directly as opposed to using `ProcessPipeline` + `pipeline.run()`.
+    directly as opposed to using `ProcessPool` + `pipeline.run()`.
 
     TODO: We can rewrite this to call `srun` on SLUM clusters so that the
     actual filtering pipeline is executed on a different node. Since input
@@ -350,17 +342,21 @@ def run_pipeline(print_queue:PrintQueue, batch_queue:BatchQueue, merge_queue:Mer
                 print_queue.put(f'[run.py] Filtering chunk {filename} to {stdout.name}\n'.encode())
 
                 # Open chunk file and process pool and run the pipeline with it.
-                with open(filename, 'rb') as stdin, ProcessPipeline(print_queue, env={'TMPDIR': tmpdir}, name=name) as pool:
+                # The pool's __exit__() will make us wait till the pipeline is done.
+                with open(filename, 'rb') as stdin, \
+                    ProcessPool(print_queue, env={'TMPDIR': tmpdir}, print_prefix=f'{batch_index}/') as pool:
                     pipeline.run(pool, stdin, stdout)
 
                 stdout.close()
 
                 # Tell merger that they can process this batch when the time comes
                 merge_queue.put((batch_index, stdout.name))
-            except Cancelled:
+            except Exception as exc:
                 # Didn't get to put it on the queue, delete it.
                 os.unlink(stdout.name)
-                raise
+                
+                # Add a bit more info, and re-raise
+                raise RuntimeError(f'Error while processing batch {batch_index}') from exc
             finally:
                 # Delete the input file from disk.
                 os.unlink(filename)
@@ -385,29 +381,33 @@ def merge_output(print_queue:PrintQueue, parallel:int, merge_queue:MergeQueue, s
 
             print_queue.put(f'[run.py] Merging {filename} into output\n'.encode())
             
-            with open(filename, 'rb') as fh:
-                copyfileobj(fh, stdout)
-
-            os.unlink(filename)
+            try:
+                with open(filename, 'rb') as fh:
+                    copyfileobj(fh, stdout)
+            except Exception as exc:
+                raise RuntimeError(f'Error while merging batch {batch_index}') from exc
+            finally:
+                os.unlink(filename)
 
             next_batch_index += 1
         # If not yet, we wait on the queue to come through with (hopefully) the next batch
-        else:
+        elif parallel > 0:
             entry = merge_queue.get()
 
+            # Another batch processor finished
             if entry is None:
                 parallel -= 1
+            else:
+                batch_index, filename = entry
+                assert batch_index not in pending_batches
+                pending_batches[batch_index] = filename
+        # next_batch_index is not in pending_batches, and there are no more batches coming from
+        # any batch processors. So let's stop.
+        else:
+            break
 
-                if parallel == 0:
-                    break
-                else:
-                    continue
-
-            batch_index, filename = entry
-
-            assert batch_index not in pending_batches
-            pending_batches[batch_index] = filename
-
+    if len(pending_batches) and next_batch_index <= max(pending_batches.keys()):
+        raise RuntimeError(f'Not all batches got merged: {next_batch_index=} <= {max(pending_batches.keys())=}')
 
 def run_parallel(pipeline:Pipeline, stdin:BinaryIO, stdout:BinaryIO, *, parallel:int, batch_size:int, print_queue: PrintQueue) -> None:
     batch_queue: BatchQueue = CancelableQueue(parallel * 2)
@@ -421,22 +421,16 @@ def run_parallel(pipeline:Pipeline, stdin:BinaryIO, stdout:BinaryIO, *, parallel
         # Read `batch_queue` for batch filenames, and process them. Put output files
         # on `merge_queue`.
         for n in range(parallel):
-            pool.start(run_pipeline, print_queue, batch_queue, merge_queue, pipeline, f'{n}/')
+            pool.start(run_pipeline, print_queue, batch_queue, merge_queue, pipeline)
 
         # Read from `merge_queue` and combine files in order.
         pool.start(merge_output, print_queue, parallel, merge_queue, stdout)
 
-        # TODO: problem. Say the runners crash. The splitter is then stuck blocking
-        # on Queue.put (because of size limit) and doesn't know that it should stop.
-        # We then block on the splitter.join() call here. Maybe I should not be
-        # using a blocking size-limited Queue() to control the splitter's progress
-        # but a SimpleQueue() that sends messages.
 
         print_queue.put(f'[run.py] Waiting for pipelines to finish\n'.encode())
         try:
             pool.join()
-        except Exception as e:
-            print_queue.put(f'[run.py] {e} in one of the workers, aborting...\n'.encode())
+        except BaseException as exc: # Note: also catches KeyboardInterrupt
             batch_queue.cancel()
             merge_queue.cancel()
             raise

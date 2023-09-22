@@ -18,10 +18,11 @@ from urllib.parse import urlencode
 from pprint import pprint
 from operator import itemgetter
 from warnings import warn
-from tempfile import TemporaryDirectory, TemporaryFile
+from tempfile import TemporaryDirectory, TemporaryFile, NamedTemporaryFile
 from shutil import copyfileobj
 from multiprocessing import Process
 from zipfile import ZipFile
+from concurrent.futures import ProcessPoolExecutor
 
 from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException
@@ -89,6 +90,12 @@ def get_monolingual_dataset(entry:RemoteEntry, path:str) -> None:
         os.rename(temp_path, dest_path)
 
 
+def _extract(path:str, name:str, dest:str) -> str:
+    with ZipFile(path) as archive, archive.open(name) as fin, gzip.open(dest, 'wb') as fout:
+        copyfileobj(fin, fout, length=2**24) # 16MB blocks
+    return dest
+
+
 def get_bilingual_dataset(entry:RemoteEntry, path:str) -> None:
     # List of extensions of the expected files, e.g. `.en-mt.mt` and `.en-mt.en`.
     suffixes = [f'.{"-".join(entry.langs)}.{lang}' for lang in entry.langs]
@@ -96,7 +103,7 @@ def get_bilingual_dataset(entry:RemoteEntry, path:str) -> None:
     # Make sure our path exists
     os.makedirs(path, exist_ok=True)
 
-    with TemporaryFile() as temp_archive:
+    with NamedTemporaryFile() as temp_archive:
         # Download zip file to temporary file
         with urlopen(entry.url) as fh:
             copyfileobj(fh, temp_archive)
@@ -105,25 +112,30 @@ def get_bilingual_dataset(entry:RemoteEntry, path:str) -> None:
         with TemporaryDirectory(dir=path) as temp_extracted:
             files = []
 
-            with ZipFile(temp_archive) as archive:
-                for info in archive.filelist:
-                    if info.is_dir() or not any(info.filename.endswith(suffix) for suffix in suffixes):
-                        continue
+            with ProcessPoolExecutor(max_workers=8) as pool:
+                futures = []
 
-                    # `info.filename` is something like "beepboop.en-nl.en", `lang` will be "en".
-                    _, lang = info.filename.rsplit('.', maxsplit=1)
+                with ZipFile(temp_archive) as archive:
+                    for info in archive.filelist:
+                        if info.is_dir() or not any(info.filename.endswith(suffix) for suffix in suffixes):
+                            continue
 
-                    filename = f'{entry.basename}.{lang}.gz'
-                    temp_dest = os.path.join(temp_extracted, filename)
-                    data_dest = os.path.join(path, filename)
+                        # `info.filename` is something like "beepboop.en-nl.en", `lang` will be "en".
+                        _, lang = info.filename.rsplit('.', maxsplit=1)
 
-                    # Extract the file from the zip archive into the temporary directory, compress
-                    # it while we're at it.
-                    with archive.open(info) as fin, gzip.open(temp_dest, 'wb') as fout:
-                        copyfileobj(fin, fout)
+                        filename = f'{entry.basename}.{lang}.gz'
+                        temp_dest = os.path.join(temp_extracted, filename)
+                        data_dest = os.path.join(path, filename)
 
-                    # Keep a list of extracted files, and where they eventually need to go to
-                    files.append((temp_dest, data_dest))
+                        # Extract the file from the zip archive into the temporary directory, and
+                        # compress it while we're at it.
+                        future = pool.submit(_extract, temp_archive.name, info.filename, temp_dest)
+
+                        futures.append((future, data_dest))
+
+                # Keep a list of extracted files, and where they eventually need to go to
+                for future, data_dest in futures:
+                    files.append((future.result(), data_dest))
 
             # Once we know all files extracted as expected, move them to their permanent place.
             for temp_path, dest_path in files:
@@ -139,7 +151,7 @@ class EntryDownload:
         self._child = None
     
     def start(self) -> None:
-        self._child = Process(target=get_dataset, args=(self.entry, DOWNLOAD_PATH), daemon=True)
+        self._child = Process(target=get_dataset, args=(self.entry, DOWNLOAD_PATH))
         self._child.start()
 
     def run(self) -> None:

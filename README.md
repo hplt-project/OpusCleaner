@@ -4,6 +4,10 @@ OpusCleaner is a machine translation/language model data cleaner and training sc
 ## Cleaner
 The cleaner bit takes care of downloading and cleaning multiple different datasets and preparing them for translation.
 
+```sh
+opuscleaner-clean --parallel 4 data/train-parts/dataset.filter.json | gzip -c > clean.gz
+```
+
 ### Installation for cleaning
 If you just want to use OpusCleaner for cleaning, you can install it from PyPI, and then run it
 
@@ -41,6 +45,7 @@ Compare the dataset at different stages of filtering to see what the impact is o
 ### Paths
 - `data/train-parts` is scanned for datasets. You can change this by setting the `DATA_PATH` environment variable, the default is `data/train-parts/*.*.gz`.
 - `filters` should contain filter json files. You can change the `FILTER_PATH` environment variable, the default is `<PYTHON_PACKAGE>/filters/*.json`.
+
 
 ### Installation for development
 ```sh

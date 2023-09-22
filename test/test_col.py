@@ -25,6 +25,13 @@ TEST_INPUT_SANE = "".join([
 ])
 
 
+TEST_INPUT_COL_MISSING = "".join([
+	*TEST_INPUT,
+	"single-col\n",
+	*TEST_INPUT_SANE
+])
+
+
 class TestCol(unittest.TestCase):
 	def _run(self, args:List[str], input:str) -> Tuple[str,str,int]:
 		proc = subprocess.Popen(COL_PY + args,
@@ -85,7 +92,7 @@ class TestCol(unittest.TestCase):
 		""")
 
 		out, err, retval = self._run(['0', sys.executable, '-c', overproduce], TEST_INPUT)
-		self.assertIn('Subprocess produced more lines of output than it was given.', err)
+		self.assertIn('subprocess produced more lines of output than it was given', err)
 		self.assertNotEqual(retval, 0)
 
 	def test_underproduce(self):
@@ -98,7 +105,7 @@ class TestCol(unittest.TestCase):
 		""")
 
 		out, err, retval = self._run(['0', sys.executable, '-c', underproduce], TEST_INPUT)
-		self.assertIn('Subprocess produced fewer lines than it was given.', err)
+		self.assertIn('subprocess produced fewer lines than it was given', err)
 		self.assertNotEqual(retval, 0)
 
 	def test_error_incorrect_subprocess(self):
@@ -122,5 +129,17 @@ class TestCol(unittest.TestCase):
 
 		out, err, retval = self._run(['0', sys.executable, '-c', underproduce], TEST_INPUT)
 		self.assertEqual(retval, 42)
-		self.assertIn('Subprocess exited with status code 42', err)
+		self.assertIn('subprocess exited with status code 42', err)
 
+	def test_error_col_missing(self):
+		"""A missing column in the input should raise an error"""
+		reproduce = dedent("""
+			import sys
+			for line in sys.stdin:
+				sys.stdout.write(line)
+		""")
+
+		out, err, retval = self._run(['1', sys.executable, '-u', '-c', reproduce], TEST_INPUT_COL_MISSING)
+		self.assertEqual(retval, 1)
+		self.assertIn('line does not contain enough columns', err)
+		

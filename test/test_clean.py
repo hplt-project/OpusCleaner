@@ -4,9 +4,10 @@ import unittest
 import subprocess
 import json
 import gzip
-from typing import List
+from typing import List, Iterable
 from pathlib import Path
 from contextlib import ExitStack
+from collections import defaultdict
 from tempfile import TemporaryFile, NamedTemporaryFile
 
 
@@ -22,6 +23,15 @@ SCENARIOS = {
 	'parallel': ['--parallel', '2', '--batch-size', '32000'], # parallel
 }
 
+
+def parse_record(line:str) -> dict:
+	return json.loads(line)
+
+def accumulate_records(records_it:Iterable[dict]) -> Iterable[dict]:
+	records = defaultdict(dict)
+	for record in records_it:
+		records[record['id']].update(record)
+	return records.values()
 
 class TestClean(unittest.TestCase):
 	def _run(self, args:List[str], **kwargs):
@@ -55,9 +65,9 @@ class TestClean(unittest.TestCase):
 		with NamedTemporaryFile(mode='w', dir=TEST_CWD / 'data/train-parts') as fh:
 			json.dump(config, fh)
 			fh.flush()
-			for mode in [[], ['--parallel', '1']]:
+			for mode, args in SCENARIOS.items():
 				with self.subTest(mode=mode):
-					out, err, retval = self._run([*mode, fh.name])
+					out, err, retval = self._run([*args, fh.name])
 					self.assertEqual(out.count(b'\n'), 62195)
 					self.assertEqual(retval, 0)
 
@@ -140,3 +150,38 @@ class TestClean(unittest.TestCase):
 
 						self.assertEqual(out.count(b'\n'), 62195)
 						self.assertEqual(retval, 0)
+
+	def test_trace_time(self):
+		"""Test that running with --trace and --time will give us time records"""
+		config = {
+			"version": 1,
+			"files": FILES,
+			"filters": [
+				{
+					"filter": "deescape_tsv",
+					"parameters": {},
+					"language": None
+				}
+			]
+		}
+		with NamedTemporaryFile(mode='w', dir=TEST_CWD / 'data/train-parts') as fh:
+			json.dump(config, fh)
+			fh.flush()
+			for mode, args in SCENARIOS.items():
+				with self.subTest(mode=mode), NamedTemporaryFile(mode='r+') as trace_fh:
+					out, err, retval = self._run(['--trace', trace_fh.name, '--time', *args, fh.name])
+					self.assertEqual(err, b'')
+					self.assertEqual(out.count(b'\n'), 62195)
+					self.assertEqual(retval, 0)
+
+					time_records = [
+						record 
+						for record in accumulate_records(parse_record(line) for line in trace_fh)
+						if 'time' in record
+					]
+
+					self.assertGreater(len(time_records), 0)
+					for record in time_records:
+						self.assertEqual(set(record['time'].keys()), {'user', 'real', 'sys'})
+						self.assertGreater(record['time']['real'], 0.0)
+

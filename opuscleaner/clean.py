@@ -46,8 +46,17 @@ BatchQueue = CancelableQueue[Union[None,Tuple[int,str]]]
 MergeQueue = CancelableQueue[Union[None,Tuple[int,str]]]
 
 
+def load_time(fh:TextIO) -> Dict[str,float]:
+    time = {}
+    for line in fh:
+        match = re.match(r'^(real|user|sys)\s+(\d+\.\d+)$', line.rstrip('\r\n'))
+        if match:
+            time[match[1]] = float(match[2])
+    return time
+
+
 @logging.trace
-def babysit_child(n: int, child: Popen, name: str, print_queue: PrintQueue, ctrl_queue: ControlQueue, time_fd:Optional[int]=None) -> None:
+def babysit_child(n: int, child: Popen, name: str, print_queue: PrintQueue, ctrl_queue: ControlQueue, time_read_fd:Optional[int]=None) -> None:
     """Thread that looks after a child process and passes (and prefixes) all of
     its stderr to a queue. It will tell the parent thread about the end of the
     child through the ctrl_queue.
@@ -64,13 +73,12 @@ def babysit_child(n: int, child: Popen, name: str, print_queue: PrintQueue, ctrl
 
         logging.event('child_exited', n=n, retval=child.returncode)
 
-        if time_fd is not None:
-            with os.fdopen(time_fd, 'r') as fh:
-                time = {}
-                for line in fh:
-                    match = re.match(r'^(real|user|sys)\s+(\d+\.\d+)$', line.rstrip('\r\n'))
-                    time[match[1]] = float(match[2])
-                logging.update(time=time)
+        # If the command was wrapped by `time`, we want to read its output as
+        # well. It's written to a separate pipe as to not end up in the stderr
+        # of the main command.
+        if time_read_fd is not None:
+            with os.fdopen(time_read_fd, 'r') as fh:
+                logging.update(time=load_time(fh))
     finally:
         ctrl_queue.put((n, child.returncode))
 
@@ -134,18 +142,21 @@ class ProcessPool:
         self.children = []
 
     def start(self, name:str, cmd: Union[str,List[str]], *, shell:bool=False, time:bool=False, **kwargs) -> Popen:
-        time_out = None
+        time_read_fd, time_write_fd = None, None
 
         args = ([cmd] if isinstance(cmd, str) else cmd)
         
         if shell:
             args = ['/bin/sh', '-c', *args]
 
+        # If we're measuring time, prepend `/usr/bin/time` and let it write to
+        # a pipe we will read out later. Massive assumption: that pipe's buffer
+        # will be sufficient for time's output.
         if time:
-            time_out, time_in = os.pipe()
-            os.set_inheritable(time_in, True)
-            args = ['/usr/bin/time', '-p', '-o', f'/dev/fd/{time_in}', *args]
-            kwargs['pass_fds'] = (time_in, *kwargs.get('pass_fds', tuple()))
+            time_read_fd, time_write_fd = os.pipe()
+            os.set_inheritable(time_write_fd, True) # TODO is this necessary?
+            args = ['/usr/bin/time', '-p', '-o', f'/dev/fd/{time_write_fd}', *args]
+            kwargs['pass_fds'] = (time_write_fd, *kwargs.get('pass_fds', tuple()))
         
         child = Popen(args, **{
             **kwargs,
@@ -155,10 +166,14 @@ class ProcessPool:
                 **(kwargs.get('env') or dict())
             }
         })
-        if time_in:
-            os.close(time_in)
+
+        # If we have a time pipe, make sure we release our handle of the write
+        # side. We just keep the read side.
+        if time_write_fd:
+            os.close(time_write_fd)
+
         n = len(self.children)
-        thread = Thread(target=babysit_child, args=[n, child, name, self.print_queue, self.ctrl_queue, time_out])
+        thread = Thread(target=babysit_child, args=[n, child, name, self.print_queue, self.ctrl_queue, time_read_fd])
         thread.start()
         self.children.append(Child(name, child, thread))
         return child

@@ -34,7 +34,7 @@ def accumulate_records(records_it:Iterable[dict]) -> Iterable[dict]:
 	return records.values()
 
 class TestClean(unittest.TestCase):
-	def _run(self, args:List[str], **kwargs):
+	def _run(self, args:List[str]):
 		proc = subprocess.Popen(
 			args=[sys.executable, '-m', 'opuscleaner.clean'] + args,
 			cwd=TEST_CWD, # so it can find filters
@@ -42,8 +42,7 @@ class TestClean(unittest.TestCase):
 				'PYTHONPATH': os.path.join(os.path.dirname(__file__), '..') # so it can find opuscleaner code
 			},
 			stdout=subprocess.PIPE,
-			stderr=subprocess.PIPE,
-			**kwargs)
+			stderr=subprocess.PIPE)
 
 		out, err = proc.communicate()
 		proc.wait()
@@ -67,7 +66,7 @@ class TestClean(unittest.TestCase):
 			fh.flush()
 			for mode, args in SCENARIOS.items():
 				with self.subTest(mode=mode):
-					out, err, retval = self._run([*args, fh.name])
+					out, _, retval = self._run([*args, fh.name])
 					self.assertEqual(out.count(b'\n'), 62195)
 					self.assertEqual(retval, 0)
 
@@ -94,6 +93,7 @@ class TestClean(unittest.TestCase):
 				with self.subTest(mode=mode):
 					out, err, retval = self._run([*args, fh.name])
 					self.assertEqual(out.count(b'\n'), 0)
+					self.assertIn(b'subprocess exited with status code 42', err)
 					self.assertNotEqual(retval, 0)
 
 	def test_stdin(self):

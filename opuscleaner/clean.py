@@ -8,27 +8,23 @@ import argparse
 import json
 import os
 import re
-import shlex
 import signal
 import sys
 import traceback
-from contextlib import ExitStack
-from glob import glob
-from pprint import pprint
-from queue import Queue, SimpleQueue
+from queue import SimpleQueue
 from shlex import quote
 from shutil import copyfileobj
 from subprocess import Popen, PIPE
-from tempfile import TemporaryFile, NamedTemporaryFile, TemporaryDirectory
+from tempfile import NamedTemporaryFile, TemporaryDirectory
 from threading import Thread
-from typing import Dict, List, Any, BinaryIO, TextIO, Optional, TypeVar, Iterable, Tuple, NamedTuple, Union
+from typing import Dict, List, IO, Optional, TypeVar, Iterable, Tuple, NamedTuple, Union
 from io import TextIOWrapper
 
 from pydantic import parse_obj_as
 
 from opuscleaner import logging
-from opuscleaner.config import COL_PY, FILTER_PATH
-from opuscleaner.filters import list_filters, set_global_filters, filter_format_command, Filter, FilterStep, FilterPipeline, quote, format_shell
+from opuscleaner.config import FILTER_PATH
+from opuscleaner.filters import list_filters, set_global_filters, filter_format_command, Filter, FilterPipeline, quote, format_shell
 from opuscleaner._util import none_throws, ThreadPool, CancelableQueue, Cancelled
 
 
@@ -46,7 +42,7 @@ BatchQueue = CancelableQueue[Union[None,Tuple[int,str]]]
 MergeQueue = CancelableQueue[Union[None,Tuple[int,str]]]
 
 
-def load_time(fh:TextIO) -> Dict[str,float]:
+def load_time(fh:IO[str]) -> Dict[str,float]:
     time = {}
     for line in fh:
         match = re.match(r'^(real|user|sys)\s+(\d+\.\d+)$', line.rstrip('\r\n'))
@@ -83,7 +79,7 @@ def babysit_child(n: int, child: Popen, name: str, print_queue: PrintQueue, ctrl
         ctrl_queue.put((n, child.returncode))
 
 
-def print_lines(queue: PrintQueue, fout: BinaryIO) -> None:
+def print_lines(queue: PrintQueue, fout: IO[bytes]) -> None:
     """Thread that prints stderr lines from all the children to stderr in an
     orderly fashion.
     """
@@ -119,10 +115,16 @@ class Child(NamedTuple):
     process: Popen
     babysitter: Thread
 
+
 @logging.trace_context
 class ProcessPool:
     """Context manager for spawning and babysitting child processes that are
-    siblings connected by their pipes.
+    siblings connected by their pipes. Exiting the context will cause it to
+    block and wait for the children to finish.
+    If any of the children exits early or with an error, or there was an
+    uncaught exception inside the context, it will terminate all the other
+    processes in the pool and raise an exception on exit. SIGPIPE errors, and
+    errors caused by the pool terminating the process, are ignored.
     """
     print_prefix: str
 
@@ -142,12 +144,17 @@ class ProcessPool:
         self.children = []
 
     def start(self, name:str, cmd: Union[str,List[str]], *, shell:bool=False, time:bool=False, **kwargs) -> Popen:
+        """Set up a process in the pool. Similar to Popen. `name` is used for
+        identifying the process in log messages and exceptions. `time` can be
+        set to True to wrap the process in `/usr/bin/time`. Furthermore all
+        arguments to `Popen` are accepted.
+        """
         time_read_fd, time_write_fd = None, None
 
         args = ([cmd] if isinstance(cmd, str) else cmd)
         
         if shell:
-            args = ['/bin/sh', '-c', *args]
+            args = ['/bin/sh', '-c', *args] # TODO: sorry Windows, Andriod
 
         # If we're measuring time, prepend `/usr/bin/time` and let it write to
         # a pipe we will read out later. Massive assumption: that pipe's buffer
@@ -181,7 +188,7 @@ class ProcessPool:
     def __enter__(self) -> 'ProcessPool':
         return self
 
-    def __exit__(self, err_type, err_inst, err_trace) -> None:
+    def __exit__(self, err_type, err_inst, _) -> None:
         # Wait for the children to exit, and depending on their retval exit early
         running_children = len(self.children)
 
@@ -235,6 +242,10 @@ class PipelineStep(NamedTuple):
 
 
 class Pipeline:
+    """Description of a set of filter steps with all their variables filled in
+    set up to execute in a certain environment. A Pipeline can either be dumped
+    as a bash script, or executed on a ProcessPool.
+    """
     def __init__(self, filters:Dict[str,Filter], languages: List[str], pipeline: FilterPipeline):
         self.steps: List[PipelineStep] = []
 
@@ -268,7 +279,15 @@ class Pipeline:
             command_str = filter_format_command(filter_def, step, languages)
             self.steps.append(PipelineStep(step.filter, command_str, filter_def.basedir))
 
-    def run(self, pool:ProcessPool, stdin:BinaryIO, stdout:BinaryIO, *, tee:bool=False, basename:str="", time:bool=False) -> None:
+    def run(self, pool:ProcessPool, stdin:IO[bytes], stdout:IO[bytes], *, tee:bool=False, basename:str="", time:bool=False) -> None:
+        """Set up all the processes on `pool`, processing `stdin` to `stdout`.
+        Note that this function will return as soon as the processes have been
+        set up. You will have to use the ProcessPool to wait for them to finish.
+        Optionally you can `tee` the output of each filter step to a separate
+        file for debugging (with the name "{basename}.step-{i}.tsv". You can 
+        use `time` two wrap every filter step command in `/usr/bin/time` and
+        the baby sitter will measure how much processing time the filter process
+        used."""
         if not self.steps:
             copyfileobj(stdin, stdout)
             return
@@ -293,7 +312,7 @@ class Pipeline:
             # If we are tee-ing for debug, shunt the output to a separate file
             # TODO: uncompressed at the moment. Might be trouble.
             if tee:
-                tee_child = pool.start(f'tee {i}',
+                tee_child = pool.start(f'{pool.print_prefix}{i}:tee',
                     ['tee', f'{basename}.step-{i}.tsv'],
                     stdin=stdin,
                     stdout=stdout if is_last_step else PIPE,
@@ -302,18 +321,19 @@ class Pipeline:
                 stdin.close()
                 stdin = none_throws(tee_child.stdout)
 
-    def dump(self, out:TextIO) -> None:
+    def dump(self, out:IO[str]) -> None:
+        """Write this pipeline as a bash script."""
         if self.env:
             for key, val in self.env:
                 out.write(f'export {key}={quote(format_shell(val))}\n')
 
-        for i, (is_last_step, step) in enumerate(mark_last(self.steps)):
+        for is_last_step, step in mark_last(self.steps):
             out.write(f'(cd {quote(format_shell(step.basedir))} && ({step.command}))')
             out.write('\n' if is_last_step else ' |\n')
 
 
 
-def split_input(print_queue:PrintQueue, parallel: int, batch_queue: BatchQueue, batch_size:int, stdin:BinaryIO) -> None:
+def split_input(parallel: int, batch_queue: BatchQueue, batch_size:int, stdin:IO[bytes]) -> None:
     """Reads data from `stdin` and splits it into chunks of `batch_size` lines.
     These chunks are stored in temporary files, whose filenames are put onto
     `batch_queue`.
@@ -361,6 +381,7 @@ def split_input(print_queue:PrintQueue, parallel: int, batch_queue: BatchQueue, 
 def run_pipeline(print_queue:PrintQueue, batch_queue:BatchQueue, merge_queue:MergeQueue, pipeline:Pipeline, *, time:bool=False) -> None:
     """Receives an input filename from `batch_queue`, and once that has been processed
     with `pipeline`, it will post the output filename to `merge_queue`.
+    stderr from any of the filter processes will be forwarded to `print_queue`.
 
     TODO: This could also instead run ./run.py on the input and output files
     directly as opposed to using `ProcessPool` + `pipeline.run()`.
@@ -384,21 +405,23 @@ def run_pipeline(print_queue:PrintQueue, batch_queue:BatchQueue, merge_queue:Mer
                 # Write pipeline output to tempfile that is then passed on to merger.
                 stdout = NamedTemporaryFile(delete=False)
 
-                # Open chunk file and process pool and run the pipeline with it.
-                # The pool's __exit__() will make us wait till the pipeline is done.
-                with logging.span('run_pipeline_batch', batch_index=batch_index), \
-                    open(filename, 'rb') as stdin, \
-                    ProcessPool(print_queue, env={'TMPDIR': tmpdir}, print_prefix=f'{batch_index}/') as pool:
-                    pipeline.run(pool, stdin, stdout, time=time)
+                try:
+                    # Open chunk file and process pool and run the pipeline with it.
+                    # The pool's __exit__() will make us wait till the pipeline is done.
+                    with logging.span('run_pipeline_batch', batch_index=batch_index), \
+                        open(filename, 'rb') as stdin, \
+                        ProcessPool(print_queue, env={'TMPDIR': tmpdir}, print_prefix=f'{batch_index}/') as pool:
+                        pipeline.run(pool, stdin, stdout, time=time)
 
-                stdout.close()
+                    stdout.close()
 
-                # Tell merger that they can process this batch when the time comes
-                merge_queue.put((batch_index, stdout.name))
+                    # Tell merger that they can process this batch when the time comes
+                    merge_queue.put((batch_index, stdout.name))
+                except Exception as exc:
+                    # Didn't get to put it on the queue, delete it.
+                    os.unlink(stdout.name)
+                    raise
             except Exception as exc:
-                # Didn't get to put it on the queue, delete it.
-                os.unlink(stdout.name)
-                
                 # Add a bit more info, and re-raise
                 raise RuntimeError(f'Error while processing batch {batch_index}') from exc
             finally:
@@ -409,7 +432,7 @@ def run_pipeline(print_queue:PrintQueue, batch_queue:BatchQueue, merge_queue:Mer
         merge_queue.put(None)
 
 
-def merge_output(print_queue:PrintQueue, parallel:int, merge_queue:MergeQueue, stdout:BinaryIO) -> None:
+def merge_output(parallel:int, merge_queue:MergeQueue, stdout:IO[bytes]) -> None:
     """Takes batch filenames and numbers from `merge_queue` and will concatenate
     files in the order of the batches. If batches arrive out of order, it will
     wait for the next in order batch to arrive before continuing to concatenate.
@@ -451,27 +474,34 @@ def merge_output(print_queue:PrintQueue, parallel:int, merge_queue:MergeQueue, s
     if len(pending_batches) and next_batch_index <= max(pending_batches.keys()):
         raise RuntimeError(f'Not all batches got merged: {next_batch_index=} <= {max(pending_batches.keys())=}')
 
+
 @logging.trace
-def run_parallel(pipeline:Pipeline, stdin:BinaryIO, stdout:BinaryIO, *, parallel:int, batch_size:int, print_queue: PrintQueue, time:bool=False) -> None:
+def run_parallel(pipeline:Pipeline, stdin:IO[bytes], stdout:IO[bytes], *, parallel:int, batch_size:int, print_queue: PrintQueue, time:bool=False) -> None:
+    """Run `parallel` copies of the processing pipeline in parallel, each
+    working on a batch of `batch_size` lines at a time. Batches will be cut
+    from `stdin` and printed to `stdout`, in order. stderr from the filter
+    processes will be forwarded to `print_queue`. `time` is forwarded to
+    ProcessPool.
+    """
     batch_queue: BatchQueue = CancelableQueue(parallel * 2)
 
     merge_queue: MergeQueue = CancelableQueue()
 
     with ThreadPool() as pool:
         # Splits stdin into files of `batch_size` lines, and puts those on `batch_queue`
-        pool.start(split_input, print_queue, parallel, batch_queue, batch_size, stdin)
+        pool.start(split_input, parallel, batch_queue, batch_size, stdin)
 
         # Read `batch_queue` for batch filenames, and process them. Put output files
         # on `merge_queue`.
-        for n in range(parallel):
+        for _ in range(parallel):
             pool.start(run_pipeline, print_queue, batch_queue, merge_queue, pipeline, time=time)
 
         # Read from `merge_queue` and combine files in order.
-        pool.start(merge_output, print_queue, parallel, merge_queue, stdout)
+        pool.start(merge_output, parallel, merge_queue, stdout)
 
         try:
             pool.join()
-        except BaseException as exc: # Note: also catches KeyboardInterrupt
+        except BaseException: # Note: also catches KeyboardInterrupt
             batch_queue.cancel()
             merge_queue.cancel()
             raise
@@ -505,7 +535,7 @@ def main() -> None:
             parser.error('When --input is specified, each column\'s LANG has to be specified as well')
 
         if args.tee and args.parallel > 1:
-            parser.error('When --parallel is used, --tee does not have any effect')
+            parser.error('Using --tee is not supported when using --parallel')
 
         if args.time and not args.trace:
             parser.error('You need to use --trace to see the output of --time')
@@ -529,10 +559,10 @@ def main() -> None:
         pipeline = Pipeline(filters, languages, pipeline_config)
 
         # Input for next child
-        stdin: BinaryIO
+        stdin: IO[bytes]
 
         # Output of this program
-        stdout:BinaryIO = args.output
+        stdout:IO[bytes] = args.output
 
         # If we're just dumping the pipeline, do so to the specified output
         if args.dump:

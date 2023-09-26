@@ -58,7 +58,7 @@ def babysit_child(n: int, child: Popen, name: str, print_queue: PrintQueue, ctrl
     child through the ctrl_queue.
     """
     try:
-        logging.update(pid=child.pid)
+        logging.update(n=n, pid=child.pid)
 
         prefix = f'[{name}] '.encode()
 
@@ -67,7 +67,7 @@ def babysit_child(n: int, child: Popen, name: str, print_queue: PrintQueue, ctrl
 
         child.wait()
 
-        logging.event('child_exited', n=n, retval=child.returncode)
+        logging.event('child_exited', retval=child.returncode)
 
         # If the command was wrapped by `time`, we want to read its output as
         # well. It's written to a separate pipe as to not end up in the stderr
@@ -206,7 +206,7 @@ class ProcessPool:
                 child_i, retval = self.ctrl_queue.get()
                 running_children -= 1
 
-                logging.event('child_stopped', child_i=child_i, retval=retval)
+                logging.event('child_exit_received', n=child_i, retval=retval)
 
                 # Early exit when a process errored out. SIGPIPE is retuned by
                 # processes that can no longer write to the next one. E.g. when

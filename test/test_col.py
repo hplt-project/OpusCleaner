@@ -31,6 +31,12 @@ TEST_INPUT_COL_MISSING = "".join([
 	*TEST_INPUT_SANE
 ])
 
+TEST_INPUT_COL_OVERFLOW = "".join([
+	*TEST_INPUT,
+	"triple-col\ttriple-col\ttriple-col\n",
+	*TEST_INPUT_SANE
+])
+
 
 class TestCol(unittest.TestCase):
 	def _run(self, args:List[str], input:str) -> Tuple[str,str,int]:
@@ -141,5 +147,17 @@ class TestCol(unittest.TestCase):
 
 		out, err, retval = self._run(['1', sys.executable, '-u', '-c', reproduce], TEST_INPUT_COL_MISSING)
 		self.assertEqual(retval, 1)
-		self.assertIn('line does not contain enough columns', err)
+		self.assertIn('line contains a different number of fields', err)
+		
+	def test_error_col_overflow(self):
+		"""A line with too many columns should raise an error"""
+		reproduce = dedent("""
+			import sys
+			for line in sys.stdin:
+				sys.stdout.write(line)
+		""")
+
+		out, err, retval = self._run(['1', sys.executable, '-u', '-c', reproduce], TEST_INPUT_COL_OVERFLOW)
+		self.assertEqual(retval, 1)
+		self.assertIn('line contains a different number of fields', err)
 		

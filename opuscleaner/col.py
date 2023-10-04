@@ -37,15 +37,18 @@ class RaisingThread(Thread):
 
 def split(column, queue, fin, fout):
 	try:
+		field_count = None
 		for line in fin:
 			fields = line.rstrip(b'\r\n').split(b'\t')
+			if field_count is None:
+				field_count = len(fields)
+			elif field_count != len(fields):
+				raise RuntimeError(f'line contains a different number of fields: {len(fields)} vs {field_count}')
 			field = fields[column] # Doing column selection first so that if this fails, we haven't already written it to the queue
 			queue.put(fields[:column] + fields[(column+1):])
 			fout.write(field + b'\n')
 	except BrokenPipeError:
 		pass
-	except IndexError:
-		raise RuntimeError('line does not contain enough columns')
 	finally:
 		try:
 			fout.close() # might fail if BrokenPipeError

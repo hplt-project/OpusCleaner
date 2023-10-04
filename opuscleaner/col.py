@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
 import sys
-import os
-import signal
-from traceback import print_exc
 from subprocess import Popen, PIPE
 from threading import Thread
 from queue import SimpleQueue
-from typing import Optional, TypeVar, List
-from functools import wraps
+from typing import Optional, TypeVar
 
 
 queue = SimpleQueue() # type: SimpleQueue[list[bytes]]
@@ -33,7 +29,7 @@ class RaisingThread(Thread):
 		except Exception as exc:
 			self.exception = exc
 
-	def join(self, timeout:float=None):
+	def join(self, timeout:Optional[float]=None):
 		super().join(timeout=timeout)
 		if self.exception is not None:
 			raise self.exception

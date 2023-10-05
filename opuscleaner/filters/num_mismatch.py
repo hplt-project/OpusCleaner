@@ -38,9 +38,10 @@ def filter_numerical_mismatch(fin: TextIO, fout: TextIO, ratio: float, *, debug:
 			# Big > 1.0 number if lots of overlap, small < 1.0 number if lots of differences
 			line_ratio = (len(overlap) + 1) / (len(difference) + 1)
 
+			if debug:
+				print(f"{len(overlap)} / {len(difference)} : {overlap!r} | {difference!r}", file=sys.stderr)
+
 			if line_ratio < ratio:
-				if debug:
-					print(f"{len(overlap)} / {len(difference)} : {overlap!r} | {difference!r}", file=sys.stderr)
 				continue
 
 		fout.write(line)

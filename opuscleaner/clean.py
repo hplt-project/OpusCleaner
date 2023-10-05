@@ -58,7 +58,7 @@ def babysit_child(n: int, child: Popen, name: str, print_queue: PrintQueue, ctrl
     child through the ctrl_queue.
     """
     try:
-        logging.update(n=n, pid=child.pid)
+        logging.update(n=n, pid=child.pid, args=child.args)
 
         prefix = f'[{name}] '.encode()
 
@@ -107,7 +107,6 @@ def mark_last(iterable: Iterable[T]) -> Iterable[Tuple[bool,T]]:
         except StopIteration:
             break
     yield True, curr_el
-
 
 
 class Child(NamedTuple):

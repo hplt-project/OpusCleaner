@@ -31,7 +31,7 @@ def filter_numerical_mismatch(fin: TextIO, fout: TextIO, ratio: float, *, debug:
 		nums_left, nums_right = (set(map(normalize, re.finditer(NUM_EXPR, col))) for col in cols[:2])
 
 		# Only bother calculating the ratio if there were any numbers to begin with
-		if nums_left and nums_right:
+		if nums_left or nums_right:
 			overlap = nums_left & nums_right
 			difference = nums_left ^ nums_right
 

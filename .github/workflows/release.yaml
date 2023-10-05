@@ -44,8 +44,11 @@ jobs:
       - name: Install
         run: python3 -m pip install .
 
-      - name: Run unittest
+      - name: Run runtime unittest
         run: python3 -m unittest discover -s test
+
+      - name: Run filters unittest
+        run: python3 -m unittest discover -s opuscleaner/filters
 
   build_sdist:
     needs: [build_frontend]

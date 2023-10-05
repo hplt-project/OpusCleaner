@@ -518,7 +518,7 @@ def main() -> None:
     parser.add_argument('--batch-size', type=int, default=1_000_000, help='Batch size in lines that each parallel copy processes (only if --parallel > 1)')
     parser.add_argument('--first', type=int, default=0, help='Limit reading input to the N first lines')
     parser.add_argument('--dump', action='store_true', help='Print shell script instead')
-    parser.add_argument('--trace', type=argparse.FileType('w'), help='Write tracing JSON to file')
+    parser.add_argument('--trace', type=argparse.FileType('w'), nargs='?', const='/dev/stderr', help='Write tracing JSON to file (defaults to stderr)')
     parser.add_argument('--time', action='store_true', help='Measure real/user/sys times for each filter step')
     parser.add_argument('pipeline', metavar='PIPELINE', type=argparse.FileType('r'), help='Pipeline steps specification file, e.g. *.filters.json')
     parser.add_argument('languages', metavar='LANG', type=str, nargs='*', help='Language codes of the columns in the input TSV. Only used when --input is set')

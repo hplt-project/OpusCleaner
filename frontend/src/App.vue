@@ -27,6 +27,9 @@ import horizonLogo from './assets/horizon-europe.png';
         European Union.
       </p>
     </div>
+    <div class="version">
+      <p><a href="https://github.com/hplt-project/OpusCleaner/tree/__OPUS_CLEANER_COMMIT__" title="Commit __OPUS_CLEANER_COMMIT__">Version __OPUS_CLEANER_VERSION__</a></p>
+    </div>
   </div>
 </template>
 
@@ -74,6 +77,10 @@ body {
 
 .thanking {
   display: flex;
+}
+
+.version {
+  white-space: nowrap;
 }
 
 .icon-button {

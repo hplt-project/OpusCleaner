@@ -46,3 +46,11 @@ class TestNumMismatch(unittest.TestCase):
 		self.assertReject('The current temp is -7.5 degrees\tI walked 7.5 miles', 1.0)
 		self.assertReject('The difference is +7.5 degrees\tI walked 7.5 miles', 1.0) # questionable?
 		self.assertReject('The current temp is -7.5 degrees\tI changed the value by +7.5', 1.0)
+
+	def test_word_boundary(self):
+		self.assertAccept('I am a 30something\tThat just40 should be ignored', 1.0)
+	
+	def test_word_boundary_dash(self):
+		self.assertAccept('-30 is the number\tThe number -30', 1.0)
+		self.assertAccept('The-number-30\tThe number 30', 1.0)
+		self.assertReject('Beep-30\tThe number is -30', 1.0)

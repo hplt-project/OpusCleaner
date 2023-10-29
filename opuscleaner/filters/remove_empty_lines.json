@@ -1,6 +1,6 @@
 {
     "description": "Remove lines that are empty or just whitespace on either side",
     "type": "bilingual",
-    "command": "grep -avP '^\\s*\\t|\\t\\s*$'",
+    "command": "grep -avE '^\\s*\\t|\\t\\s*$'",
     "parameters": {}
 }

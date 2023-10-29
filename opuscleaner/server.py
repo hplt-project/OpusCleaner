@@ -214,6 +214,7 @@ async def exec_filter_step(filter_step: FilterStep, langs: List[str], input: byt
 
 
 def cancel_cached_tasks(name:str, offset:int) -> None:
+    assert offset > 0 # offset == 0 is sample.py itself, and should never be cancelled through this method.
     for entry in sample_cache[name][offset:]:
         entry.future.cancel()
     del sample_cache[name][offset:]
@@ -231,6 +232,10 @@ async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[Filter
     # If we don't have a sample stored, generate one. Doing it in bytes because
     # it might save us parsing utf-8 (also assumptions! It it utf-8?)
     if not name in sample_cache or sample_cache[name][0].checksum != checksum:
+        # If the there is a sampler running, but it is outdated, cancel it.
+        if name in sample_cache:
+            sample_cache[name][0].future.cancel()
+
         sample_cache[name] = [
             SampleCacheEntry(
                 checksum=checksum,
@@ -238,7 +243,9 @@ async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[Filter
             )
         ]
 
-    sample = await sample_cache[name][0].future
+    # Using `asyncio.shield()` so that when get_sample gets cancelled because
+    # the request got aborted, we don't stop computing the sample.
+    sample = await asyncio.shield(sample_cache[name][0].future)
 
     # Return a clean unfiltered sample first
     yield sample

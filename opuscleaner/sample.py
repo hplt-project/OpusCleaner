@@ -104,6 +104,10 @@ def gunzip(path:str) -> Iterator[IO[bytes]]:
 	with subprocess.Popen(['gzip', '-cd', path], stdout=subprocess.PIPE) as proc:
 		assert proc.stdout is not None
 		yield proc.stdout
+
+		# Context is done with proc.stdout, so we close it. It might be that it
+		# isn't completely read yet, and thus proc.wait() would block otherwise.
+		proc.stdout.close()
 		if proc.wait() != 0:
 			raise RuntimeError(f'gzip returned error code {proc.returncode}')
 

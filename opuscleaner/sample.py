@@ -109,7 +109,7 @@ def gunzip(path:str) -> Iterator[IO[bytes]]:
 		# isn't completely read yet, and thus proc.wait() would block otherwise.
 		proc.stdout.close()
 		if proc.wait() != 0:
-			raise RuntimeError(f'gzip returned error code {proc.returncode}')
+			raise RuntimeError(f'gzip returned error code {proc.returncode} while decompressing {path}')
 
 
 def magic_open_or_stdin(ctx:ExitStack, path:str) -> IO[bytes]:

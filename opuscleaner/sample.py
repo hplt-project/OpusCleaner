@@ -37,7 +37,7 @@ def reservoir_sample(k:int, it:Iterable[T], *, rand:random.Random = random._inst
 				while i < next_i:
 					i, line = next(numbered_it)
 
-				sample[rand.randrange(k)] = (i, line)
+				sample[rand.randrange(k)] = (i, line) # type:ignore
 				w = w * exp(log(rand.random()) / k)
 	except StopIteration:
 		pass

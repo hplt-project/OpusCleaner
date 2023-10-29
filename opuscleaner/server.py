@@ -329,12 +329,12 @@ def api_get_dataset(name:str) -> Dataset:
 
 
 @app.get('/api/datasets/{name:path}/sample')
-async def api_get_sample(name:str) -> Response:
+def api_get_sample(name:str) -> Response:
     return stream_jsonl(ParsedFilterOutput(output) async for output in get_sample(name, []))
 
 
 @app.post('/api/datasets/{name:path}/sample')
-async def api_get_filtered_sample(name:str, filters:List[FilterStep]) -> Response:
+def api_get_filtered_sample(name:str, filters:List[FilterStep]) -> Response:
     return stream_jsonl(ParsedFilterOutput(output) async for output in get_sample(name, filters))
 
 

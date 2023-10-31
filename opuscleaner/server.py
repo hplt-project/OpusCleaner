@@ -253,7 +253,12 @@ async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[Filter
     for i, filter_step in enumerate(filters, start=1):
         filter_definition = get_global_filter(filter_step.filter)
 
-        checksum = cache_hash(jsonable_encoder(filter_step),
+        # Cache invalidation checksum, includes:
+        # - arguments
+        # - command itself
+        # - stdin input (via checksum of previous step)
+        checksum = cache_hash(
+            jsonable_encoder(filter_step),
             cache_hash(jsonable_encoder(filter_definition),
                 sample_cache[name][i-1].checksum))
 
@@ -269,7 +274,9 @@ async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[Filter
 
             assert len(sample_cache[name]) == i + 1
         
-        sample = await sample_cache[name][i].future
+        # Again shield from cancellation. If we don't need this filter's output
+        # in the next `get_sample()`, `cancel_cached_tasks()` will cancel it.
+        sample = await asyncio.shield(sample_cache[name][i].future)
         
         # Return the (partially) filtered sample
         yield sample

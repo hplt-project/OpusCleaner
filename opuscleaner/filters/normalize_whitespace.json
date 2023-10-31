@@ -1,0 +1,13 @@
+{
+    "description": "Strips and normalizes whitespace",
+    "command": "./normalize_whitespace.py ${COLLAPSE:+--collapse}",
+    "parameters": {
+	"COLLAPSE": {
+	    "help": "Collapse whitespace groups into single space",
+	    "required": false,
+	    "type": "bool",
+	    "default": true
+	}
+    },
+    "type": "monolingual"
+}

@@ -17,27 +17,13 @@ def collapse_whitespace(s):
 def clean(collapse):
     """Runs the filter."""
 
-    for i, line in enumerate(sys.stdin):
-        fields = line.split("\t")
-
-        if len(fields) == 1:
-            src = fields[0].strip()
-            trg = None
-        elif len(fields) == 2:
-            src = fields[0].strip()
-            trg = fields[1].strip()
-        else:
-            raise ValueError(f"Too many tabs on input line {i + 1}")
+    for line in sys.stdin:
+        line = line.strip()
 
         if collapse:
-            src = collapse_whitespace(src)
-            if trg is not None:
-                trg = collapse_whitespace(trg)
+            line = collapse_whitespace(line)
 
-        if trg is not None:
-            sys.stdout.write(f"{src}\t{trg}\n")
-        else:
-            sys.stdout.write(f"{src}\n")
+        sys.stdout.write(f"{line}\n")
 
 
 if __name__ == "__main__":

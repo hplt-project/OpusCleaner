@@ -17,17 +17,17 @@ def collapse_whitespace(s):
 def clean(collapse):
     """Runs the filter."""
 
-    for line in sys.stdin:
-        fields = line.strip().split("\t")
+    for i, line in enumerate(sys.stdin):
+        fields = line.split("\t")
 
         if len(fields) == 1:
             src = fields[0].strip()
             trg = None
-        else:
-            # Similar to max_length filter, here we throw away potential
-            # newlines.
+        elif len(fields) == 2:
             src = fields[0].strip()
             trg = fields[1].strip()
+        else:
+            raise ValueError(f"Too many tabs on input line {i + 1}")
 
         if collapse:
             src = collapse_whitespace(src)

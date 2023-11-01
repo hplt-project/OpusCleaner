@@ -240,8 +240,8 @@ def filter_format_command(filter_definition:Filter, filter_step:FilterStep, lang
     if filter_definition.type == FilterType.BILINGUAL:
         command = filter_definition.command
     elif filter_definition.type == FilterType.MONOLINGUAL:
-        column = langs.index(none_throws(filter_step.language))
-        command = f'{" ".join(map(quote, path_to_col))} {column} {filter_definition.command}'
+        columns = [langs.index(language) for language in none_throws(filter_step.language).split(',')]
+        command = f'{" ".join(map(quote, path_to_col))} {",".join(map(str, columns))} {filter_definition.command}'
     else:
         raise NotImplementedError()
 

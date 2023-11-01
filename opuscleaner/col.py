@@ -3,10 +3,10 @@ import sys
 from subprocess import Popen, PIPE
 from threading import Thread
 from queue import SimpleQueue
-from typing import Optional, TypeVar
+from typing import BinaryIO, Optional, TypeVar, List
 
 
-queue = SimpleQueue() # type: SimpleQueue[list[bytes]]
+queue = SimpleQueue() # type: SimpleQueue[None|list[bytes]]
 
 T = TypeVar("T")
 
@@ -14,6 +14,10 @@ def none_throws(optional: Optional[T], message: str = "Unexpected `None`") -> T:
 	if optional is None:
 		raise AssertionError(message)
 	return optional
+
+
+def parse_columns(text:str) -> List[int]:
+	return sorted(int(col) for col in text.split(','))
 
 
 class RaisingThread(Thread):
@@ -35,18 +39,20 @@ class RaisingThread(Thread):
 			raise self.exception
 
 
-def split(column, queue, fin, fout):
+def split(columns:List[int], queue:'SimpleQueue[None|list[bytes]]', fin:BinaryIO, fout:BinaryIO):
 	try:
 		field_count = None
+		passthru_columns = []
 		for line in fin:
 			fields = line.rstrip(b'\r\n').split(b'\t')
 			if field_count is None:
 				field_count = len(fields)
+				passthru_columns = [n for n in range(field_count) if n not in columns]
 			elif field_count != len(fields):
 				raise RuntimeError(f'line contains a different number of fields: {len(fields)} vs {field_count}')
-			field = fields[column] # Doing column selection first so that if this fails, we haven't already written it to the queue
-			queue.put(fields[:column] + fields[(column+1):])
-			fout.write(field + b'\n')
+			queue.put([fields[column] for column in passthru_columns])
+			for column in columns:
+				fout.write(fields[column] + b'\n')
 	except BrokenPipeError:
 		pass
 	finally:
@@ -57,19 +63,34 @@ def split(column, queue, fin, fout):
 		queue.put(None) # End indicator
 		fin.close()
 
-def merge(column, queue, fin, fout):
+
+def merge(columns:List[int], queue:'SimpleQueue[None|list[bytes]]', fin:BinaryIO, fout:BinaryIO):
 	try:
-		for field in fin:
-			fields = queue.get()
-			if fields is None:
-				raise RuntimeError('subprocess produced more lines of output than it was given')
-			fout.write(b'\t'.join(fields[:column] + [field.rstrip(b'\n')] + fields[column:]) + b'\n')
-		if queue.get() is not None:
-			raise RuntimeError('subprocess produced fewer lines than it was given')
-		fout.close()
+		while True:
+			passthru_fields = queue.get()
+			if passthru_fields is None:
+				if fin.readline() != b'':
+					raise RuntimeError('subprocess produced more lines of output than it was given')
+				break
+
+			passthru_it = iter(passthru_fields)
+			for column in range(len(passthru_fields) + len(columns)):
+				if column in columns:
+					field = fin.readline()
+					if field == b'':
+						raise RuntimeError('subprocess produced fewer lines than it was given')
+					field = field.rstrip(b'\r\n')
+				else:
+					field = next(passthru_it)
+
+				if column > 0:
+					fout.write(b'\t')
+				fout.write(field)
+			fout.write(b'\n')
 	except BrokenPipeError:
 		pass
 	finally:
+		fout.close()
 		fin.close()
 
 
@@ -77,14 +98,14 @@ def main():
 	retval = 0
 
 	try:
-		column = int(sys.argv[1])
+		columns = parse_columns(sys.argv[1])
 
 		child = Popen(sys.argv[2:], stdin=PIPE, stdout=PIPE)
 
-		feeder = RaisingThread(target=split, args=[column, queue, sys.stdin.buffer, none_throws(child).stdin])
+		feeder = RaisingThread(target=split, args=[columns, queue, sys.stdin.buffer, none_throws(child).stdin])
 		feeder.start()
 
-		consumer = RaisingThread(target=merge, args=[column, queue, none_throws(child).stdout, sys.stdout.buffer])
+		consumer = RaisingThread(target=merge, args=[columns, queue, none_throws(child).stdout, sys.stdout.buffer])
 		consumer.start()
 
 		retval = child.wait()

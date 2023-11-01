@@ -83,10 +83,12 @@ class TestCol(unittest.TestCase):
 			sys.stdout.write(sys.stdin.read())
 		""")
 
-		out, err, retval = self._run(['0', sys.executable, '-c', reproduce], TEST_INPUT)
-		self.assertEqual(out, TEST_INPUT)
-		self.assertEqual(err, ''),
-		self.assertEqual(retval, 0)
+		for colset in ('0', '1', '0,1'):
+			with self.subTest(colset=colset):
+				out, err, retval = self._run([colset, sys.executable, '-c', reproduce], TEST_INPUT)
+				self.assertEqual(out, TEST_INPUT)
+				self.assertEqual(err, ''),
+				self.assertEqual(retval, 0)
 
 	def test_overproduce(self):
 		"""Test that an overproducing program is caught"""

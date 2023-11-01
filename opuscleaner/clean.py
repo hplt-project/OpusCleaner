@@ -546,7 +546,7 @@ def main() -> None:
         }
 
         # set_global_filters() provides the filters to the validators in FilterPipeline
-        set_global_filters(filters)
+        set_global_filters(filters.values())
         pipeline_config = parse_obj_as(FilterPipeline, json.load(args.pipeline))
 
         # Order of columns. Matches datasets.py:list_datasets(path)

@@ -36,7 +36,7 @@ export default defineConfig({
     }
   },
   define: {
-    '__OPUS_CLEANER_VERSION__': getPythonPackageVersion(new URL('../opuscleaner/__about__.py', import.meta.url)),
-    '__OPUS_CLEANER_COMMIT__': getGitCommit(),
+    '__OPUS_CLEANER_VERSION__': JSON.stringify(getPythonPackageVersion(new URL('../opuscleaner/__about__.py', import.meta.url))),
+    '__OPUS_CLEANER_COMMIT__': JSON.stringify(getGitCommit()),
   }
 })

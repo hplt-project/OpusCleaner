@@ -3,6 +3,10 @@ import { RouterLink, RouterView } from 'vue-router'
 import appLogo from './assets/datailor-logo.svg';
 import euLogo from './assets/eu.png';
 import horizonLogo from './assets/horizon-europe.png';
+
+const commit = __OPUS_CLEANER_COMMIT__;
+const version = __OPUS_CLEANER_VERSION__;
+
 </script>
 
 <template>
@@ -28,7 +32,7 @@ import horizonLogo from './assets/horizon-europe.png';
       </p>
     </div>
     <div class="version">
-      <p><a href="https://github.com/hplt-project/OpusCleaner/tree/__OPUS_CLEANER_COMMIT__" title="Commit __OPUS_CLEANER_COMMIT__">Version __OPUS_CLEANER_VERSION__</a></p>
+      <p><a v-bind:href="`https://github.com/hplt-project/OpusCleaner/tree/${commit}`" v-bind:title="`Commit ${commit}`">Version {{ version }}</a></p>
     </div>
   </div>
 </template>

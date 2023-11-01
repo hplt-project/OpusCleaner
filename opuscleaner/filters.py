@@ -208,12 +208,9 @@ def list_filters(paths:str) -> Iterable[Filter]:
                 warn(f"Could not parse {filename}: {e}")
 
 
-def set_global_filters(filters:Union[Dict[str,Filter], Iterable[Filter]]) -> None:
+def set_global_filters(filters:Iterable[Filter]) -> None:
     global _FILTERS
-    if isinstance(filters, dict):
-        _FILTERS = dict(filters)
-    else:
-        _FILTERS = {filter.name: filter for filter in filters}
+    _FILTERS = {filter.name: filter for filter in filters}
 
 
 def get_global_filters() -> Dict[str,Filter]:

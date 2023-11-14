@@ -34,7 +34,7 @@ from opuscleaner.categories import app as categories_app
 from opuscleaner.config import DATA_PATH, FILTER_PATH, COL_PY, SAMPLE_PY, SAMPLE_SIZE
 from opuscleaner.datasets import list_datasets, Path
 from opuscleaner.download import app as download_app
-from opuscleaner.filters import filter_format_command, get_global_filter, get_global_filters, set_global_filters, list_filters, FilterType, FilterStep, FilterPipeline
+from opuscleaner.filters import filter_format_command, format_shell, get_global_filter, get_global_filters, set_global_filters, list_filters, FilterType, FilterStep, FilterPipeline
 from opuscleaner.sample import sample
 
 
@@ -128,7 +128,7 @@ class ParsedFilterOutput(BaseModel):
     returncode: int
     stdout: List[Dict[str,str]]
     stderr: str
-    
+
     def __init__(self, output:FilterOutput):
         lines = []
 
@@ -173,17 +173,6 @@ async def get_dataset_sample(name:str, columns:List[Tuple[str,Path]]) -> FilterO
     return FilterOutput([lang for lang, _ in columns], 0, stdout, bytes())
 
 
-def format_shell(val: Any) -> str:
-    if isinstance(val, bool):
-        return '1' if val else ''
-    elif isinstance(val, tuple):
-        raise NotImplementedError()
-    elif isinstance(val, list):
-        raise NotImplementedError()
-    else:
-        return str(val)
-
-
 async def exec_filter_step(filter_step: FilterStep, langs: List[str], input: bytes) -> Tuple[bytes,bytes]:
     filter_definition = get_global_filter(filter_step.filter)
 
@@ -191,7 +180,7 @@ async def exec_filter_step(filter_step: FilterStep, langs: List[str], input: byt
 
     # Make sure the path to the python binary (and the installed utils)
     # is in the PATH variable. If you load a virtualenv this happens by
-    # default, but if you call it with the virtualenv's python binary 
+    # default, but if you call it with the virtualenv's python binary
     # directly it wont.
     pyenv_bin_path = os.path.dirname(sys.executable)
     os_env_bin_paths = os.environ.get('PATH', '').split(os.pathsep)
@@ -199,7 +188,7 @@ async def exec_filter_step(filter_step: FilterStep, langs: List[str], input: byt
         **os.environ,
         'PATH': os.pathsep.join([pyenv_bin_path] + os_env_bin_paths)
     } if pyenv_bin_path not in os_env_bin_paths else None
-    
+
     p_filter = await asyncio.create_subprocess_shell(command,
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
@@ -273,11 +262,11 @@ async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[Filter
             ))
 
             assert len(sample_cache[name]) == i + 1
-        
+
         # Again shield from cancellation. If we don't need this filter's output
         # in the next `get_sample()`, `cancel_cached_tasks()` will cancel it.
         sample = await asyncio.shield(sample_cache[name][i].future)
-        
+
         # Return the (partially) filtered sample
         yield sample
 
@@ -396,7 +385,7 @@ def api_get_dataset_filters_as_openfilter(name:str) -> Response:
     }
 
     input_files = pipeline.files
-    
+
     preprocess_steps = []
 
     filter_steps: List[Dict[str,Any]] = []

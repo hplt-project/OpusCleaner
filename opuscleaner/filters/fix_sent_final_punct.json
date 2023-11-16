@@ -1,0 +1,6 @@
+{
+    "type": "bilingual",
+    "description": "Fixes mismatched punctuation at the end of the sentences. Works for latin/cyrillic based languages, WILL BREAK CJK AND ANY LANGUAGE THAT USES NON ENGLISH LIKE SENTENCE ENDING TOKENS.",
+    "parameters": {},
+    "command": "./fix_sent_final_punct.py"
+}

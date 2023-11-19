@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Lists datasets given a directory. It works by scanning the directory and looking for gz files."""
-import os
-from functools import wraps
 from glob import glob
 from itertools import groupby
 from pathlib import Path as Path
-from typing import Iterable, Dict, List, Tuple
+from typing import Dict, List, Tuple
+
+from opuscleaner.config import DATA_PATH
 
 
 def list_datasets(path:str) -> Dict[str,List[Tuple[str,Path]]]:
@@ -42,7 +42,10 @@ def list_datasets(path:str) -> Dict[str,List[Tuple[str,Path]]]:
 def main() -> None:
     import sys
     import pprint
-    pprint.pprint(list_datasets(sys.argv[1]))
+    if len(sys.argv) == 1:
+        pprint.pprint(list_datasets(DATA_PATH))
+    else:
+        pprint.pprint(list_datasets(sys.argv[1]))
 
 
 if __name__ == '__main__':

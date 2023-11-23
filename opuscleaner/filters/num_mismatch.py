@@ -12,7 +12,7 @@ NUM_EXPR = re.compile(r"""
 	)
 	(?:0*)                         # allow for 0 prefixes which we then ignore when comparing
 	(?P<value>\d+                  # digits before the first comma or dot
-		(?:[\.,]\d+)*                # allow commas or dots, i.e. 300,000.0 but not 3,,,5
+		(?:[\.,:]\d+)*                # allow commas or dots, i.e. 300,000.0 but not 3,,,5
 	)
 	\b                             # disallow 30beep, but also 30th and 1st #TODO
 """, re.X)

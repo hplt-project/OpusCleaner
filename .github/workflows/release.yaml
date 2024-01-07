@@ -63,6 +63,10 @@ jobs:
         with:
           name: frontend
           path: frontend/dist
+
+      - name: Set version number
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: echo "VERSION = \"${GITHUB_REF_NAME:1}\"" > opuscleaner/__about__.py
       
       - name: Build sdist
         run: pipx run build --sdist
@@ -92,6 +96,10 @@ jobs:
           name: frontend
           path: frontend/dist
 
+      - name: Set version number
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: echo "VERSION = \"${GITHUB_REF_NAME:1}\"" > opuscleaner/__about__.py
+      
       - name: Build wheels
         run: python -m pip wheel -w wheelhouse .
       

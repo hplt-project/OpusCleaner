@@ -1,6 +1,6 @@
 {
     "description": "Remove lines that are empty or just whitespace on either side",
     "type": "bilingual",
-    "command": "grep -avE $'^\\\\s*\\t|\\t\\\\s*$|^[^\\t]*$'",
+    "command": "./remove_empty_lines.py",
     "parameters": {}
 }

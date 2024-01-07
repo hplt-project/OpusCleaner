@@ -41,6 +41,14 @@ Filter each individual dataset, showing you the results immediately.
 Compare the dataset at different stages of filtering to see what the impact is of each filter.
 [<img src="https://github.com/hplt-project/OpusCleaner/raw/main/.github/screenshots/diff-filter-output.png" width="100%">](https://github.com/hplt-project/OpusCleaner/blob/main/.github/screenshots/diff-filter-output.png)
 
+### Using your own data
+OpusCleaner scans for datasets and finds them automatically if they're in the right format. When you download OPUS data, it will get converted to this format, and there's nothing stopping you from adding your own in the same format.
+
+By default, it scans for files matching `data/train-parts/*.*.gz` and will derive which files make up a dataset from the filenames: `name.en.gz` and `name.de.gz` will be a dataset called _name_. The files are your standard moses format: a single sentence per line, and each Nth line in the first file will match with the Nth line of the second file.
+
+When in doubt, just download one of the OPUS datasets through OpusCleaner, and replicate the format for your own dataset.
+
+If you want to use another path, you can use the `DATA_PATH` environment variable to change it, e.g. run `DATA_PATH="./my-datasets/*.*.gz" opuscleaner-server`.
 
 ### Paths
 - `data/train-parts` is scanned for datasets. You can change this by setting the `DATA_PATH` environment variable, the default is `data/train-parts/*.*.gz`.
@@ -91,6 +99,8 @@ python -m laserembeddings download-models
 ## Packaging
 
 Run `npm build` in the `frontend/` directory first, and then run `hatch build .` in the project directory to build the wheel and source distribution.
+
+To push a new release to Pypi from Github, tag a commit with a `vX.Y.Z` version number (including the `v` prefix). Then publish a release on Github. This should trigger a workflow that pushes a sdist + wheel to pypi.
 
 # Acknowledgements
 

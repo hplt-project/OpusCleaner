@@ -408,10 +408,11 @@ def main():
                         shutil.copy(source_path,target_dir)
                 else:
                     LOG.debug(f"Queueing corpus {corpus_id}")
-                    #get_bilingual_dataset(entry, target_dir)
+                    get_bilingual_dataset(entry, target_dir)
                     #downloader.download(entry) # Currently downloads to DOWNLOAD_PATH
-    # # This does not work, because works do not exit
-    # for thread in downloader.threads:
+    # # This does not work, because workers do not exit
+    
+    #for thread in downloader.threads:
     #    thread.join()
                  
 

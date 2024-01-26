@@ -35,6 +35,7 @@ opuscleaner-clean = "opuscleaner.clean:main"
 opuscleaner-col = "opuscleaner.col:main"
 opuscleaner-threshold = "opuscleaner.threshold:main"
 opuscleaner-sample = "opuscleaner.sample:main"
+opuscleaner-download = "opuscleaner.download:main"
 
 [project.urls]
 Documentation = "https://github.com/hplt-project/opuscleaner#readme"

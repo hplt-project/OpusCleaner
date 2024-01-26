@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Various mtdata dataset downloading utilities"""
+import argparse
 import os
 import sys
 import asyncio
@@ -355,3 +356,9 @@ def cancel_download(dataset_id:int) -> EntryDownloadView:
         entry = download.entry,
         state = download.state
     )
+    
+    
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-d", "--directory", help="Directory to search for categories.json files")
+    args = parser.parse_args() 

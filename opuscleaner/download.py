@@ -6,6 +6,8 @@ import sys
 import asyncio
 import json
 import gzip
+import logging
+import shutil
 from glob import iglob
 from itertools import chain
 from typing import Iterable, Dict, List, Optional, Set, Union, Tuple, cast, Any
@@ -24,6 +26,7 @@ from shutil import copyfileobj
 from multiprocessing import Process
 from zipfile import ZipFile
 from concurrent.futures import ProcessPoolExecutor
+from pathlib import Path
 
 from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException
@@ -357,8 +360,61 @@ def cancel_download(dataset_id:int) -> EntryDownloadView:
         state = download.state
     )
     
-    
+LOG = logging.getLogger("download")
+  
 def main():
+    logging.basicConfig(format='%(asctime)s %(levelname)s: %(name)s:  %(message)s', \
+        datefmt='%Y-%m-%d %H:%M:%S', level=logging.DEBUG)
     parser = argparse.ArgumentParser()
-    parser.add_argument("-d", "--directory", help="Directory to search for categories.json files")
-    args = parser.parse_args() 
+    parser.add_argument("-d", "--directory", help="Directory to search for categories.json files. Defaults to current directory.")
+    parser.add_argument("-t", "--threads", type=int, help="Threads for downloading", default=4)
+    args = parser.parse_args()
+    
+    root_dir = args.directory
+    if root_dir == None:
+        root_dir = Path.cwd()
+    else:
+        root_dir = Path(root_dir)
+        
+    LOG.info(f"Searching for categories.json in {root_dir}")
+    cat_files = [Path(dirpath,f) for dirpath,_,files in os.walk(root_dir) for f in files if Path(f).name == "categories.json"]
+    LOG.info(f"Found {len(cat_files)} categories.json files")
+    
+    entry_cache = {} # caches basename -> entry
+    downloader = Downloader(workers=args.threads)
+    for cat_file in cat_files:
+        target_dir = cat_file.parent
+        LOG.debug(f"Processing corpora in {cat_file}")
+        cat_data = json.load(open(cat_file))
+        for cat_list in cat_data['mapping'].values():
+            for corpus_id in cat_list:
+                entry = entry_cache.get(corpus_id)
+                if entry == None:
+                    # cache miss, download the list for this language from opus
+                    l1,l2 = corpus_id.split(".")[-1].split("-")
+                    entries_by_langs = api.find_datasets(l1,l2)
+                    for entry in entries_by_langs:
+                        entry_cache[entry.basename] = entry
+                    entry = entry_cache.get(corpus_id)
+                    if entry == None:
+                        raise RuntimeError(f"Unable to find corpus with basename: {corpus_id}")
+                #TODO: 
+                # - Use downloader for multithreaded downloading (but need to set target dir)
+                # - Do not download if file existing files
+                
+                if hasattr(entry, "paths"):
+                    for source_path in entry.paths:
+                        LOG.debug(f"Copying from {source_path}")
+                        shutil.copy(source_path,target_dir)
+                else:
+                    LOG.debug(f"Queueing corpus {corpus_id}")
+                    #get_bilingual_dataset(entry, target_dir)
+                    #downloader.download(entry) # Currently downloads to DOWNLOAD_PATH
+    # # This does not work, because works do not exit
+    # for thread in downloader.threads:
+    #    thread.join()
+                 
+
+        
+
+    

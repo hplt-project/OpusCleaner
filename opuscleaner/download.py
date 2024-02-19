@@ -400,20 +400,23 @@ def main():
                         raise RuntimeError(f"Unable to find corpus with basename: {corpus_id}")
                 #TODO: 
                 # - Use downloader for multithreaded downloading (but need to set target dir)
-                # - Do not download if file existing files
+                # - Do not download if file exists
                 
                 if hasattr(entry, "paths"):
                     for source_path in entry.paths:
                         LOG.debug(f"Copying from {source_path}")
                         shutil.copy(source_path,target_dir)
                 else:
-                    LOG.debug(f"Queueing corpus {corpus_id}")
+                    LOG.debug(f"Downloading corpus {corpus_id}")
                     get_bilingual_dataset(entry, target_dir)
                     #downloader.download(entry) # Currently downloads to DOWNLOAD_PATH
     # # This does not work, because workers do not exit
     
     #for thread in downloader.threads:
     #    thread.join()
+    #import time
+    #time.sleep(10)
+    #print(downloader.queue.get())
                  
 
         

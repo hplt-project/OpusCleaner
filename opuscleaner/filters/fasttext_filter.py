@@ -30,7 +30,9 @@ def download_model(model_type: str):
         handle.write(response.content)
 
 
-def verify_lang(model: fasttext.FastText._FastText, texts: List[str], desired_lang: str, debug: bool) -> List[bool]:
+def verify_lang(
+    model: fasttext.FastText._FastText, texts: List[str], desired_lang: str, debug: bool
+) -> List[bool]:
     # Langs is a list of list - for each row we get a list of identified languages, sorted by their probability.
     # Future work - using `model.predict(texts, k=10)` get the 10 most probable languages
     #   and do some clever filtering based on the distribution.
@@ -42,10 +44,21 @@ def verify_lang(model: fasttext.FastText._FastText, texts: List[str], desired_la
 
 
 def main():
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--source-lang", type=str, help="Code of the desired source language.")
-    parser.add_argument("--target-lang", type=str, help="Code of the desired target language.")
-    parser.add_argument("--batch-size", type=int, default=16, help="Size of the batch to send the data to fasttext.")
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    parser.add_argument(
+        "--source-lang", type=str, help="Code of the desired source language."
+    )
+    parser.add_argument(
+        "--target-lang", type=str, help="Code of the desired target language."
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=16,
+        help="Size of the batch to send the data to fasttext.",
+    )
     parser.add_argument("--debug", action="store_true")
     parser.add_argument(
         "--model-type",

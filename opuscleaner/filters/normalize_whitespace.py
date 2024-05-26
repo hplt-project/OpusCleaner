@@ -5,6 +5,7 @@ Strips all leading and trailing whitespaces. Optionally, collapses all groups
 of whitespaces into a single space
 
 """
+
 import argparse
 import sys
 
@@ -29,7 +30,9 @@ def clean(collapse):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--collapse", action="store_true",
-        help="Collapse whitespace groups into single spaces")
+        "--collapse",
+        action="store_true",
+        help="Collapse whitespace groups into single spaces",
+    )
     args = parser.parse_args()
     clean(args.collapse)

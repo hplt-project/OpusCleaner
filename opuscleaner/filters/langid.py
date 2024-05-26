@@ -5,7 +5,7 @@ import argparse
 
 import pycld2
 
-# Similar languages, taken from 
+# Similar languages, taken from
 # https://github.com/mbanon/fastspell/blob/main/fastspell/config/similar.yaml
 SIMILAR = {
     "ca": {"es", "ca"},
@@ -19,16 +19,17 @@ SIMILAR = {
     "me": {"bs", "hr", "me", "sr"},
     "mk": {"bg", "mk"},
     "nb": {"nn", "da", "nb"},
-    "nl": {"nl", "af"}, # Maybe also Frisian (fy) and French (fr) because of
-                        # short sentences are often misidentified as one of
-                        # those (and honestly cld2 has probably been trained
-                        # with a lot of Dutch in their Frisian corpora.)
+    "nl": {"nl", "af"},  # Maybe also Frisian (fy) and French (fr) because of
+    # short sentences are often misidentified as one of
+    # those (and honestly cld2 has probably been trained
+    # with a lot of Dutch in their Frisian corpora.)
     "nn": {"nb", "da", "nn"},
     "sk": {"cs", "sk"},
     "sr": {"bs", "hr", "me", "sr"},
 }
 
 LANG_UNKNOWN = "un"
+
 
 def parse_user_args():
     """Parse the arguments necessary for this filter"""
@@ -61,8 +62,11 @@ def detect_language_parallel(args: argparse.Namespace, fin: BinaryIO, fout: Bina
                     continue
 
                 if args.debug:
-                    print(f"Line {n} rejected. Detected '{detected_lang}', expected '{lang}': {field.decode()}", file=stderr)
-                
+                    print(
+                        f"Line {n} rejected. Detected '{detected_lang}', expected '{lang}': {field.decode()}",
+                        file=stderr,
+                    )
+
                 # Break because no need to look at the other columns. Also will
                 # stop the else clause from being executed!
                 break

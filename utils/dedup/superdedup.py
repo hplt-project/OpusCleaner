@@ -3,17 +3,18 @@ import sys
 import os
 import pickle
 
+
 def main():
     shashes, thashes = set(), set()
     # Try to old existing hashes
-    if os.path.isfile('shashes.pickle'):
-        with open('shashes.pickle', 'rb') as f:
+    if os.path.isfile("shashes.pickle"):
+        with open("shashes.pickle", "rb") as f:
             shashes = pickle.load(f)
-    if os.path.isfile('thashes.pickle'):
-        with open('thashes.pickle', 'rb') as f:
+    if os.path.isfile("thashes.pickle"):
+        with open("thashes.pickle", "rb") as f:
             thashes = pickle.load(f)
     for line in sys.stdin:
-        parts = line.rstrip("\n").split('\t')
+        parts = line.rstrip("\n").split("\t")
 
         src_hash = parts[2]
         trg_hash = parts[3]
@@ -23,10 +24,11 @@ def main():
         shashes.add(src_hash)
         thashes.add(trg_hash)
     # Write a list of seen hashes
-    with open('shashes.pickle','wb') as f:
-         pickle.dump(shashes, f)
-    with open('thashes.pickle','wb') as f:
-         pickle.dump(thashes, f)
+    with open("shashes.pickle", "wb") as f:
+        pickle.dump(shashes, f)
+    with open("thashes.pickle", "wb") as f:
+        pickle.dump(thashes, f)
+
 
 if __name__ == "__main__":
     main()

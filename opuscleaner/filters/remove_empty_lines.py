@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import sys
 
+
 def main():
     for line in sys.stdin:
         fields = line.strip("\r\n").split("\t")
@@ -12,5 +13,6 @@ def main():
         if ok:
             sys.stdout.write(line)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

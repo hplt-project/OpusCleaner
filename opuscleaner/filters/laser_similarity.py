@@ -12,7 +12,9 @@ from collections import deque
 from io import TextIOBase
 
 
-def _compute_similarity(laser: Laser, batch: List[Tuple[str, str]], src_lang: str, tgt_lang: str) -> List[float]:
+def _compute_similarity(
+    laser: Laser, batch: List[Tuple[str, str]], src_lang: str, tgt_lang: str
+) -> List[float]:
     assert len(batch) > 0
     embeddings_src = laser.embed_sentences([line[0] for line in batch], lang=src_lang)
     embeddings_tgt = laser.embed_sentences([line[1] for line in batch], lang=tgt_lang)
@@ -23,20 +25,30 @@ def _cosine_sim(emb1: np.ndarray, emb2: np.ndarray) -> np.ndarray:
     return np.sum(emb1 * emb2, axis=-1) / (norm(emb1, axis=-1) * norm(emb2, axis=-1))
 
 
-def interpolate(sample: Iterable[Tuple[int, float]], target:float) -> int:
-    poly = Polynomial.fit([duration for size, duration in sample], [size for size, duration in sample], 1)
+def interpolate(sample: Iterable[Tuple[int, float]], target: float) -> int:
+    poly = Polynomial.fit(
+        [duration for size, duration in sample], [size for size, duration in sample], 1
+    )
     return int(poly(target)), poly
 
 
 class NullIO(TextIOBase):
     """TextIO that does nothing, as if writing to /dev/null."""
-    def write(self, data:str) -> int:
+
+    def write(self, data: str) -> int:
         return len(data)
 
 
-T = TypeVar('T')
+T = TypeVar("T")
 
-def chunked(iterable: Iterable[T], *, chunk_size:Optional[int]=None, chunk_time:Optional[float]=None, verbose:Optional[TextIO]=NullIO()) -> Iterable[List[T]]:
+
+def chunked(
+    iterable: Iterable[T],
+    *,
+    chunk_size: Optional[int] = None,
+    chunk_time: Optional[float] = None,
+    verbose: Optional[TextIO] = NullIO(),
+) -> Iterable[List[T]]:
     """Self-tuning batching iterator"""
     it = iter(iterable)
 
@@ -76,23 +88,42 @@ def chunked(iterable: Iterable[T], *, chunk_size:Optional[int]=None, chunk_time:
             except StopIteration:
                 # No, we've run all the samples. Use previous measurements
                 limit, poly = interpolate(measurements, chunk_time)
-                print(f'Fitted {poly}', file=verbose)
+                print(f"Fitted {poly}", file=verbose)
 
             print(f"Setting chunk size to {limit}", file=verbose)
 
 
 def main():
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                                     description="Filter a parallel dataset using LASER.")
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        description="Filter a parallel dataset using LASER.",
+    )
     parser.add_argument("--verbose", action="store_true", help="Print tuning info")
     parser.add_argument("--batch-size", type=int, help="LASER batch size")
-    parser.add_argument("--batch-latency", type=float, default=10.0, help="Tune batch size to process a batch every N seconds (defaults to 10s, ignored if --batch-size is given)")
-    parser.add_argument("--src-lang", type=str, required=True, help="Two-letter source language code (ISO 639-1)")
-    parser.add_argument("--tgt-lang", type=str, required=True, help="Two-letter target language code (ISO 639-1)")
-    
+    parser.add_argument(
+        "--batch-latency",
+        type=float,
+        default=10.0,
+        help="Tune batch size to process a batch every N seconds (defaults to 10s, ignored if --batch-size is given)",
+    )
+    parser.add_argument(
+        "--src-lang",
+        type=str,
+        required=True,
+        help="Two-letter source language code (ISO 639-1)",
+    )
+    parser.add_argument(
+        "--tgt-lang",
+        type=str,
+        required=True,
+        help="Two-letter target language code (ISO 639-1)",
+    )
+
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--threshold", type=float, help="Minimum accepted LASER score.")
-    group.add_argument("--scores", action="store_true", help="Print scores instead of lines")
+    group.add_argument(
+        "--scores", action="store_true", help="Print scores instead of lines"
+    )
 
     args = parser.parse_args()
 
@@ -101,9 +132,19 @@ def main():
 
     laser = Laser()
 
-    for batch in chunked(sys.stdin, chunk_size=args.batch_size, chunk_time=args.batch_latency, verbose=sys.stderr if args.verbose else NullIO()):
+    for batch in chunked(
+        sys.stdin,
+        chunk_size=args.batch_size,
+        chunk_time=args.batch_latency,
+        verbose=sys.stderr if args.verbose else NullIO(),
+    ):
         # TODO error checking of column count?
-        scores = _compute_similarity(laser, [tuple(line.rstrip("\r\n").split("\t")[:2]) for line in batch], args.src_lang, args.tgt_lang)
+        scores = _compute_similarity(
+            laser,
+            [tuple(line.rstrip("\r\n").split("\t")[:2]) for line in batch],
+            args.src_lang,
+            args.tgt_lang,
+        )
 
         if args.scores:
             for score in scores:

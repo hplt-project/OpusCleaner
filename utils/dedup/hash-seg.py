@@ -6,18 +6,19 @@ from xxhash import xxh64
 import sys
 
 parser = ArgumentParser()
-parser.add_argument('-a', '--aggressive', action='store_true', default=False)
+parser.add_argument("-a", "--aggressive", action="store_true", default=False)
 args = parser.parse_args()
 
 # Translate table to remove non alphabetic characters
-tbl = [chr(i) for i in range(sys.maxunicode) if not cat(chr(i)).startswith('L')]
-remove_non_alpha = str.maketrans('', '', ''.join(tbl))
+tbl = [chr(i) for i in range(sys.maxunicode) if not cat(chr(i)).startswith("L")]
+remove_non_alpha = str.maketrans("", "", "".join(tbl))
+
 
 def main():
     shashes, thashes = set(), set()
     for line in sys.stdin:
-        sline = line.rstrip('\n')
-        parts = sline.split('\t')
+        sline = line.rstrip("\n")
+        parts = sline.split("\t")
         src = parts[0]
         trg = parts[1]
 

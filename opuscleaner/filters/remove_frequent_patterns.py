@@ -37,17 +37,31 @@ def load_patterns(file_path: str) -> List[Pattern]:
         for line in lines:
             parts = line.split("\t")
             if len(parts) == 2:
-                patterns.append(Pattern(group_match=re.compile(parts[0]), replacement=parts[1]))
+                patterns.append(
+                    Pattern(group_match=re.compile(parts[0]), replacement=parts[1])
+                )
             elif len(parts) == 3:
-                patterns.append(Pattern(pattern_on_both_cols=re.compile(parts[0]), group_match=re.compile(parts[1]), replacement=parts[2]))
+                patterns.append(
+                    Pattern(
+                        pattern_on_both_cols=re.compile(parts[0]),
+                        group_match=re.compile(parts[1]),
+                        replacement=parts[2],
+                    )
+                )
             else:
-                raise ValueError(f"Patterns have to have 2 or 3 columns, but got {len(parts)}")
+                raise ValueError(
+                    f"Patterns have to have 2 or 3 columns, but got {len(parts)}"
+                )
         return patterns
 
 
 def main():
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--pattern-file", type=str, help="Path to the file with patterns.")
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    parser.add_argument(
+        "--pattern-file", type=str, help="Path to the file with patterns."
+    )
     parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()
     patterns = load_patterns(args.pattern_file)
@@ -57,7 +71,10 @@ def main():
         source, target = line.split("\t", 1)
         for pattern in patterns:
             # Either pattern_on_both_cols is not set or it matches the whole line
-            if pattern.pattern_on_both_cols is None or pattern.pattern_on_both_cols.match(line):
+            if (
+                pattern.pattern_on_both_cols is None
+                or pattern.pattern_on_both_cols.match(line)
+            ):
                 source = pattern.group_match.sub(pattern.replacement, source)
                 target = pattern.group_match.sub(pattern.replacement, target)
         sys.stdout.write(f"{source}\t{target}\n")

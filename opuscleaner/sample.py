@@ -8,7 +8,7 @@ from contextlib import ExitStack, contextmanager
 from itertools import count
 from math import exp, log, floor
 from typing import IO, Iterator
-from typing import TypeVar, Iterable, Iterator, Generic, List, Tuple, IO
+from typing import TypeVar, Iterable, List, Tuple
 
 
 T = TypeVar('T')

@@ -2,7 +2,7 @@
 import sys
 import argparse
 import json
-from typing import Union, Literal, Any, cast, Dict
+from typing import Any, cast, Dict
 
 script_path = sys.argv[1]
 

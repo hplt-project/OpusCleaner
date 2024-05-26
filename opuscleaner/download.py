@@ -2,26 +2,18 @@
 """Various mtdata dataset downloading utilities"""
 import argparse
 import os
-import sys
-import asyncio
 import json
 import gzip
 import logging
 import shutil
 from glob import iglob
-from itertools import chain
-from typing import Iterable, Dict, List, Optional, Set, Union, Tuple, cast, Any
+from typing import Iterable, Dict, List, Optional, Set, Tuple, Any
 from enum import Enum
 from queue import SimpleQueue
-from subprocess import Popen, PIPE
 from threading import Thread
-from collections import defaultdict
-from urllib.request import Request, urlopen
+from urllib.request import urlopen
 from urllib.parse import urlencode
-from pprint import pprint
-from operator import itemgetter
-from warnings import warn
-from tempfile import TemporaryDirectory, TemporaryFile, NamedTemporaryFile
+from tempfile import TemporaryDirectory, NamedTemporaryFile
 from shutil import copyfileobj
 from multiprocessing import Process
 from zipfile import ZipFile

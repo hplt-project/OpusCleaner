@@ -1,22 +1,15 @@
 #!/usr/bin/env python3
 import asyncio
-import gzip
 import hashlib
 import json
 import os
 import re
-import subprocess
 import sys
-import traceback
-from contextlib import ExitStack, asynccontextmanager
-from enum import Enum
-from glob import glob
-from itertools import chain, zip_longest
-from pprint import pprint
+from contextlib import asynccontextmanager
+from itertools import zip_longest
 from shutil import copyfileobj
 from tempfile import TemporaryFile
-from typing import NamedTuple, Optional, Iterable, TypeVar, Union, Literal, Any, AsyncIterator, Awaitable, cast, IO, List, Dict, Tuple, AsyncIterator
-from warnings import warn
+from typing import NamedTuple, Iterable, Any, List, Dict, Tuple, AsyncIterator
 
 import yaml
 from fastapi import FastAPI, HTTPException
@@ -24,18 +17,14 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, parse_obj_as, validator, ValidationError
-from starlette.datastructures import URL
-from starlette.responses import FileResponse, RedirectResponse, Response
-from starlette.types import Scope
+from pydantic import BaseModel, parse_obj_as, ValidationError
+from starlette.responses import RedirectResponse, Response
 
-from opuscleaner._util import none_throws
 from opuscleaner.categories import app as categories_app
-from opuscleaner.config import DATA_PATH, FILTER_PATH, COL_PY, SAMPLE_PY, SAMPLE_SIZE
+from opuscleaner.config import DATA_PATH, FILTER_PATH, SAMPLE_PY, SAMPLE_SIZE
 from opuscleaner.datasets import list_datasets, Path
 from opuscleaner.download import app as download_app
-from opuscleaner.filters import filter_format_command, format_shell, get_global_filter, get_global_filters, set_global_filters, list_filters, FilterType, FilterStep, FilterPipeline
-from opuscleaner.sample import sample
+from opuscleaner.filters import filter_format_command, get_global_filter, get_global_filters, set_global_filters, list_filters, FilterType, FilterStep, FilterPipeline
 
 
 import mimetypes
@@ -220,7 +209,7 @@ async def get_sample(name:str, filters:List[FilterStep]) -> AsyncIterator[Filter
 
     # If we don't have a sample stored, generate one. Doing it in bytes because
     # it might save us parsing utf-8 (also assumptions! It it utf-8?)
-    if not name in sample_cache or sample_cache[name][0].checksum != checksum:
+    if name not in sample_cache or sample_cache[name][0].checksum != checksum:
         # If the there is a sampler running, but it is outdated, cancel it.
         if name in sample_cache:
             sample_cache[name][0].future.cancel()
@@ -474,7 +463,7 @@ app.mount('/api/categories/', categories_app)
 
 def main_serve(args):
     import uvicorn
-    uvicorn.run(f'opuscleaner.server:app', host=args.host, port=args.port, reload=args.reload, log_level='info')
+    uvicorn.run('opuscleaner.server:app', host=args.host, port=args.port, reload=args.reload, log_level='info')
 
 
 async def sample_all_datasets(args):

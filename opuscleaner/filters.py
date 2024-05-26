@@ -1,12 +1,10 @@
 import json
 import os
 import re
-import threading
-from contextlib import contextmanager
 from enum import Enum
 from glob import glob
 from shlex import quote
-from typing import Optional, Iterable, Union, Literal, Any, List, Dict, Iterator
+from typing import Optional, Iterable, Union, Literal, Any, List, Dict
 from warnings import warn
 
 import yaml

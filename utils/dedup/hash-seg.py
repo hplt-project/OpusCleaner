@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from argparse import ArgumentParser, FileType
+from argparse import ArgumentParser
 from unicodedata import category as cat
 from unidecode import unidecode
 from xxhash import xxh64

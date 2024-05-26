@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """An encoder/decoder for placeholders in python3, using spm vocabulary"""
 import sys
-from typing import List, Dict, Type, Tuple, Optional
-from copy import deepcopy
+from typing import List, Dict, Tuple
 from dataclasses import dataclass
 import re
 import argparse

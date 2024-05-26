@@ -416,7 +416,7 @@ def run_pipeline(print_queue:PrintQueue, batch_queue:BatchQueue, merge_queue:Mer
 
                     # Tell merger that they can process this batch when the time comes
                     merge_queue.put((batch_index, stdout.name))
-                except Exception as exc:
+                except Exception:
                     # Didn't get to put it on the queue, delete it.
                     os.unlink(stdout.name)
                     raise
@@ -446,7 +446,7 @@ def merge_output(parallel:int, merge_queue:MergeQueue, stdout:IO[bytes]) -> None
             batch_index, filename = next_batch_index, pending_batches[next_batch_index]
 
             try:
-                with logging.span(f'merge_output_batch', batch_index=batch_index), open(filename, 'rb') as fh:
+                with logging.span('merge_output_batch', batch_index=batch_index), open(filename, 'rb') as fh:
                     copyfileobj(fh, stdout)
             except Exception as exc:
                 raise RuntimeError(f'Error while merging batch {batch_index}') from exc

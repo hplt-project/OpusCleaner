@@ -4,6 +4,9 @@
 CHARS = {
     'ar': r'[\u0600-\u06FF]', # This is not entirely right, as it also includes farsi symbols and whatnot
     'bg': r'[АаБбВвГгДддЕеЖжЗзИиЙйКкkasЛлМмНнОоПпРрСсТтУуФфХхЦцЧчШшЩщЪъЬьЮюЯя]',
+    # Bosnian uses Latin script, but excludes [ywxq]
+    #   Common diacritics: [čćđšžž]
+    'bs': r'[abcdefghijklmnoprstuvzčćđšžž]',
     'bn': r'[\u0980-\u09FF]', # bangla
     'ca': r'[a-zÀàÈèÉéÍíÒòÓóÚúÇç]',
     'cs': r'[a-zÁáČčĎďÉéěÍíŇňÓóŘřŠšŤťÚúůÝýŽž]',
@@ -22,6 +25,8 @@ CHARS = {
     'hr': r'[abcčČćĆdđĐefghijklmnoprsšŠtuvzžŽ]',
     'hu': r'[a-zÁáÉéÍíÓóÖöŐőŰű]',
     'hy': r'[\u0530-\u058F]',
+    # Indonesian uses the Latin script, without diacritics.
+    'id': r'[a-z]',
     'is': r'[abdefghijklmnoprstuvxyÁáðÐÉéÍíÓóÚúÝýÞþÆæÖö]',
     'it': r'[a-zàÀèÈéÉìÌíÍîÎòÒóÓùÙúÚ]',
     'ko': r'[\uac00-\ud7af]|[\u1100-\u11ff]|[\u3130-\u318f]|[\ua960-\ua97f]|[\ud7b0-\ud7ff]',
@@ -38,7 +43,20 @@ CHARS = {
     'ru': r'[а-я]',
     'sk': r'[a-záäÁÄčČďĎžéÉíÍĺĹľĽňŇóÓôÔŕŔšŠťŤúÚýÝžŽ]',
     'sl': r'[abcčČdđĐefghijklmnoprsšŠtuvzžŽ]',
+    # Serbian is digraphic, and uses both Latin and Cyrillic
+    #   Cyrillic outside of а-я: [јћњљђ]
+    #   Latin extended: [ščćžđ]
+    'sr': r'[a-zа-яјћњљђščćžđ]',
     'sv': r'[a-zÅåÄäÖö]',
+    # Turkish is primarily Latin, with addition of the dotless i (ı) and other commonly
+    # used diacritics:
+    #   Latin Extended-A: [ışğ]
+    #   Latin-1 Supplement: [üçöâîûÿ]
+    #   U+0307 - Combining Dot Above ◌̇
+    'tr': r'[a-zışğüçöâîûÿ\u0307]',
     'uk': r'[А-ЩЬЮЯҐЄІЇа-щьюяґєії\'`’ʼ]',
     'zh': r'[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]',
+    # Vietnamese uses the Latin script [a-z]
+    #   Sampled diacritics from HPLT data: 'àảãáạăằẳẵắặâầẩẫấậðđèẻẽéẹêềểễếệìỉĩíịòỏõóọôồổỗốộơờởỡớợùủũúụưừửữứựỳỷỹýỵ'
+    'vi': r'[a-zàảãáạăằẳẵắặâầẩẫấậðđèẻẽéẹêềểễếệìỉĩíịòỏõóọôồổỗốộơờởỡớợùủũúụưừửữứựỳỷỹýỵ]',
 }

@@ -3,6 +3,7 @@ from sys import stdin, stdout, stderr
 from typing import Optional
 import argparse
 import re
+import unicodedata
 from clean_common import CHARS
 
 def parse_user_args():
@@ -29,6 +30,12 @@ trg_lang: Optional[str], ratio_words_trg: float, ratio_alpha_trg: float,\
         else: # Assumes that the multiline filter already run
             src = fields[-2].strip()
             trg = fields[-1].strip()
+
+        # Ensure the text is normalized, so that combining diacritical marks are
+        # represented as a single codepoint. This will better match the alphabet regexes.
+        src = unicodedata.normalize("NFC", src)
+        if trg:
+            trg = unicodedata.normalize("NFC", trg)
 
         if src_lang in CHARS:
             src_toks = src.split()

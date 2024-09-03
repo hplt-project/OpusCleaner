@@ -54,7 +54,7 @@ jobs:
           path: dist
 
       - name: Install
-        run: python3 -m pip install dist/opuscleaner-*.tar.gz
+        run: python3 -m pip install dist/opuscleaner-*.whl
 
       - name: Run runtime unittest
         run: python3 -m unittest discover -s test

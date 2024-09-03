@@ -40,6 +40,7 @@ path = "opuscleaner/__about__.py"
 
 [tool.hatch.envs.default]
 dependencies = ["pytest", "pytest-cov"]
+
 [tool.hatch.envs.default.scripts]
 cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=opuscleaner --cov=tests {args}"
 no-cov = "cov --no-cov {args}"
@@ -50,8 +51,13 @@ python = ["39", "310", "311"]
 [tool.hatch.build]
 include = ["/opuscleaner"]
 
-[tool.hatch.build.force-include]
+[tool.hatch.build.targets.sdist.force-include]
 "frontend/dist" = "/opuscleaner/frontend"
+
+[tool.hatch.build.targets.sdist.hooks.custom]
+path = "utils/frontend_build_hook.py"
+working_dir = "frontend"
+artifacts = ["frontend/dist"]
 
 [tool.hatch.metadata.hooks.requirements_txt]
 files = ["requirements.txt"]

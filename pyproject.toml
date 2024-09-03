@@ -50,10 +50,10 @@ python = ["39", "310", "311"]
 [tool.hatch.build]
 include = ["/opuscleaner"]
 
-[tool.hatch.build.force-include]
+[tool.hatch.build.targets.sdist.force-include]
 "frontend/dist" = "/opuscleaner/frontend"
 
-[tool.hatch.build.hooks.custom]
+[tool.hatch.build.targets.sdist.hooks.custom]
 path = "utils/frontend_build_hook.py"
 working_dir = "frontend"
 artifacts = ["frontend/dist"]

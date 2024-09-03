@@ -39,6 +39,7 @@ path = "opuscleaner/__about__.py"
 
 [tool.hatch.envs.default]
 dependencies = ["pytest", "pytest-cov"]
+
 [tool.hatch.envs.default.scripts]
 cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=opuscleaner --cov=tests {args}"
 no-cov = "cov --no-cov {args}"
@@ -52,7 +53,7 @@ include = ["/opuscleaner"]
 [tool.hatch.build.force-include]
 "frontend/dist" = "/opuscleaner/frontend"
 
-[[tool.hatch.build.hooks.build-scripts.scripts]]
+[[tool.hatch.build.target.sdist.hooks.build-scripts.scripts]]
 work_dir = "frontend"
 commands = ["npm clean-install && npm run build"]
 artifacts = ["/frontend/dist"]

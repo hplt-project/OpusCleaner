@@ -27,17 +27,12 @@ jobs:
         run: echo "VERSION = \"${GITHUB_REF_NAME:1}\"" > opuscleaner/__about__.py
 
       - name: Build
-        run: python -m build
+        run: python -m build --sdist
 
       - uses: actions/upload-artifact@v3
         with:
           name: sdist
           path: dist/opuscleaner-*.tar.gz
-
-      - uses: actions/upload-artifact@v3
-        with:
-          name: wheels
-          path: dist/opuscleaner-*.whl
 
   run_tests:
     needs: [build]
@@ -50,11 +45,11 @@ jobs:
 
       - uses: actions/download-artifact@v3
         with:
-          name: wheels
+          name: sdist
           path: dist
 
       - name: Install
-        run: python3 -m pip install dist/opuscleaner-*.whl
+        run: python3 -m pip install dist/opuscleaner-*.tar.gz
 
       - name: Run runtime unittest
         run: python3 -m unittest discover -s test
@@ -67,11 +62,6 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'release' && github.event.action == 'published'
     steps:
-      - uses: actions/download-artifact@v3
-        with:
-          name: wheels
-          path: dist
-
       - uses: actions/download-artifact@v3
         with:
           name: sdist

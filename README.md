@@ -13,7 +13,7 @@ If you just want to use OpusCleaner for cleaning, you can install it from PyPI, 
 
 ```sh
 pip3 install opuscleaner
-opuscleaner-server serve
+opuscleaner-server
 ```
 
 Then you can go to http://127.0.0.1:8000/ to show the interface.
@@ -56,12 +56,9 @@ If you want to use another path, you can use the `DATA_PATH` environment variabl
 
 
 ### Installation for development
-```sh
-cd frontend
-npm clean-install
-npm run build
-cd ..
+For building from source (i.e. git, not anything downloaded from Pypi) you'll need to have node + npm installed.
 
+```sh
 python3 -m venv .env
 bash --init-file .env/bin/activate
 pip install -e .
@@ -105,4 +102,3 @@ To push a new release to Pypi from Github, tag a commit with a `vX.Y.Z` version 
 # Acknowledgements
 
 This project has received funding from the European Union’s Horizon Europe research and innovation programme under grant agreement No 101070350 and from UK Research and Innovation (UKRI) under the UK government’s Horizon Europe funding guarantee [grant number 10052546]
-

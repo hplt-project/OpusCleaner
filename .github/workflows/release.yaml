@@ -27,7 +27,7 @@ jobs:
         run: echo "VERSION = \"${GITHUB_REF_NAME:1}\"" > opuscleaner/__about__.py
 
       - name: Build
-        run: python -m build --sdist
+        run: python -m build
 
       - uses: actions/upload-artifact@v3
         with:

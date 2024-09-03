@@ -31,6 +31,7 @@ jobs:
 
       - uses: actions/upload-artifact@v3
         with:
+          name: build-output
           path: dist/opuscleaner-*.*
 
   run_tests:
@@ -44,6 +45,7 @@ jobs:
 
       - uses: actions/download-artifact@v3
         with:
+          name: build-output
           path: dist
 
       - name: Install
@@ -62,7 +64,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v3
         with:
-          name: sdist
+          name: build-output
           path: dist
 
       - uses: pypa/gh-action-pypi-publish@v1.5.0

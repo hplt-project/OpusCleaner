@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling", "hatch-requirements-txt", "hatch-build-scripts"]
+requires = ["hatchling", "hatch-requirements-txt"]
 build-backend = "hatchling.build"
 
 [project]
@@ -53,10 +53,10 @@ include = ["/opuscleaner"]
 [tool.hatch.build.force-include]
 "frontend/dist" = "/opuscleaner/frontend"
 
-[[tool.hatch.build.targets.sdist.hooks.build-scripts.scripts]]
-work_dir = "frontend"
-commands = ["npm clean-install && npm run build"]
-artifacts = ["/frontend/dist"]
+[tool.hatch.build.hooks.custom]
+path = "utils/frontend_build_hook.py"
+working_dir = "frontend"
+artifacts = ["frontend/dist"]
 
 [tool.hatch.metadata.hooks.requirements_txt]
 files = ["requirements.txt"]

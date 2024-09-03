@@ -19,6 +19,9 @@ jobs:
         with:
           node-version: 22
 
+      - name: Install build
+        run: python -m pip install build
+
       - name: Set version number
         if: startsWith(github.ref, 'refs/tags/v')
         run: echo "VERSION = \"${GITHUB_REF_NAME:1}\"" > opuscleaner/__about__.py

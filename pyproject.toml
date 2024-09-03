@@ -9,23 +9,17 @@ readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
 keywords = []
-authors = [
-  { name = "Jelmer van der Linde", email = "jelmer@ikhoefgeen.nl" },
-]
+authors = [{ name = "Jelmer van der Linde", email = "jelmer@ikhoefgeen.nl" }]
 classifiers = [
-  "Development Status :: 4 - Beta",
-  "Programming Language :: Python",
-  "Programming Language :: Python :: 3.9",
-  "Programming Language :: Python :: 3.10",
-  "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: Implementation :: CPython",
-  "Programming Language :: Python :: Implementation :: PyPy",
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
 ]
-dynamic = [
-  "version",
-  "dependencies",
-  "optional-dependencies"
-]
+dynamic = ["version", "dependencies", "optional-dependencies"]
 
 [project.scripts]
 opuscleaner-server = "opuscleaner.server:main"
@@ -44,10 +38,8 @@ Source = "https://github.com/hplt-project/opuscleaner"
 path = "opuscleaner/__about__.py"
 
 [tool.hatch.envs.default]
-dependencies = [
-  "pytest",
-  "pytest-cov",
-]
+dependencies = ["pytest", "pytest-cov"]
+
 [tool.hatch.envs.default.scripts]
 cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=opuscleaner --cov=tests {args}"
 no-cov = "cov --no-cov {args}"
@@ -56,12 +48,15 @@ no-cov = "cov --no-cov {args}"
 python = ["39", "310", "311"]
 
 [tool.hatch.build]
-include = [
-  "/opuscleaner",
-]
+include = ["/opuscleaner"]
 
-[tool.hatch.build.force-include]
+[tool.hatch.build.targets.sdist.force-include]
 "frontend/dist" = "/opuscleaner/frontend"
+
+[tool.hatch.build.targets.sdist.hooks.custom]
+path = "utils/frontend_build_hook.py"
+working_dir = "frontend"
+artifacts = ["frontend/dist"]
 
 [tool.hatch.metadata.hooks.requirements_txt]
 files = ["requirements.txt"]
@@ -72,13 +67,7 @@ all = ["requirements-all.txt"]
 [tool.coverage.run]
 branch = true
 parallel = true
-omit = [
-  "opuscleaner/__about__.py",
-]
+omit = ["opuscleaner/__about__.py"]
 
 [tool.coverage.report]
-exclude_lines = [
-  "no cov",
-  "if __name__ == .__main__.:",
-  "if TYPE_CHECKING:",
-]
+exclude_lines = ["no cov", "if __name__ == .__main__.:", "if TYPE_CHECKING:"]

@@ -27,6 +27,7 @@ opuscleaner-clean = "opuscleaner.clean:main"
 opuscleaner-col = "opuscleaner.col:main"
 opuscleaner-threshold = "opuscleaner.threshold:main"
 opuscleaner-sample = "opuscleaner.sample:main"
+opuscleaner-datasets = "opuscleaner.datasets:main"
 opuscleaner-download = "opuscleaner.download:main"
 
 [project.urls]

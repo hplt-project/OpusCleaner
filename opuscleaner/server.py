@@ -12,9 +12,8 @@ from contextlib import ExitStack, asynccontextmanager
 from enum import Enum
 from glob import glob
 from itertools import chain, zip_longest
+from pathlib import Path
 from pprint import pprint
-from shutil import copyfileobj
-from tempfile import TemporaryFile
 from typing import NamedTuple, Optional, Iterable, TypeVar, Union, Literal, Any, AsyncIterator, Awaitable, cast, IO, List, Dict, Tuple, AsyncIterator
 from warnings import warn
 
@@ -32,7 +31,7 @@ from starlette.types import Scope
 from opuscleaner._util import none_throws
 from opuscleaner.categories import app as categories_app
 from opuscleaner.config import DATA_PATH, FILTER_PATH, COL_PY, SAMPLE_PY, SAMPLE_SIZE
-from opuscleaner.datasets import list_datasets, Path
+from opuscleaner.datasets import list_datasets, dataset_path, sample_path, filter_configuration_path, compute_sample
 from opuscleaner.download import app as download_app
 from opuscleaner.filters import filter_format_command, format_shell, get_global_filter, get_global_filters, set_global_filters, list_filters, FilterType, FilterStep, FilterPipeline
 from opuscleaner.sample import sample
@@ -65,53 +64,6 @@ class Dataset(BaseModel):
 class FilterPipelinePatch(BaseModel):
     """A list of changes to a filter pipeline (used when updating filters)"""
     filters: List[FilterStep]
-
-
-def dataset_path(name:str, template:str) -> str:
-    # TODO: fix this hack to get the file path from the name this is silly we
-    # should just use get_dataset(name).path or something
-    root = DATA_PATH.split('*')[0]
-
-    # If the dataset name is a subdirectory, do some hacky shit to get to a
-    # .sample.gz file in said subdirectory.
-    parts = name.rsplit('/', maxsplit=2)
-    if len(parts) == 2:
-        root = os.path.join(root, parts[0])
-        filename = parts[1]
-    else:
-        filename = parts[0]
-
-    return os.path.join(root, template.format(filename))
-
-
-def sample_path(name:str, langs:Iterable[str]) -> str:
-    languages = '.'.join(sorted(langs))
-    return dataset_path(name, f'.sample.{{}}.{languages}')
-
-
-def filter_configuration_path(name:str) -> str:
-    return dataset_path(name, '{}.filters.json')
-
-
-async def compute_sample(name:str, columns:List[Tuple[str,Path]]) -> None:
-    langs = [lang for lang, _ in columns]
-    with TemporaryFile() as tempfile:
-        proc = await asyncio.subprocess.create_subprocess_exec(
-            *SAMPLE_PY,
-            '-n', str(SAMPLE_SIZE),
-            *[str(file.resolve()) for _, file in columns],
-            stdout=tempfile,
-            stderr=asyncio.subprocess.PIPE)
-
-        _, stderr = await proc.communicate()
-
-        if proc.returncode != 0:
-            raise Exception(f'sample.py returned {proc.returncode}: {stderr.decode()}')
-
-        tempfile.seek(0)
-
-        with open(sample_path(name, langs), 'wb') as fdest:
-            copyfileobj(tempfile, fdest)
 
 
 class FilterOutput(NamedTuple):
@@ -173,7 +125,7 @@ async def get_dataset_sample(name:str, columns:List[Tuple[str,Path]]) -> FilterO
     return FilterOutput([lang for lang, _ in columns], 0, stdout, bytes())
 
 
-async def exec_filter_step(filter_step: FilterStep, langs: List[str], input: bytes) -> Tuple[bytes,bytes]:
+async def exec_filter_step(filter_step: FilterStep, langs: List[str], input: bytes) -> FilterOutput:
     filter_definition = get_global_filter(filter_step.filter)
 
     command = filter_format_command(filter_definition, filter_step, langs)
@@ -198,6 +150,7 @@ async def exec_filter_step(filter_step: FilterStep, langs: List[str], input: byt
 
     # Check exit codes, testing most obvious problems first.
     stdout, stderr = await p_filter.communicate(input=input)
+    assert p_filter.returncode is not None
 
     return FilterOutput(langs, p_filter.returncode, stdout, stderr)
 
@@ -472,56 +425,24 @@ app.mount('/api/download/', download_app)
 
 app.mount('/api/categories/', categories_app)
 
+
 def main_serve(args):
     import uvicorn
     uvicorn.run(f'opuscleaner.server:app', host=args.host, port=args.port, reload=args.reload, log_level='info')
-
-
-async def sample_all_datasets(args):
-    tasks = []
-
-    for name, columns in list_datasets(DATA_PATH).items():
-        langs = [lang for lang, _ in columns]
-        if not os.path.exists(sample_path(name, langs)):
-            print(f"Sampling {name}...", file=sys.stderr)
-            tasks.append([name, columns])
-
-    for task, result in zip(tasks, await asyncio.gather(*[compute_sample(*task) for task in tasks], return_exceptions=True)):
-        if isinstance(result, Exception):
-            print(f"Could not compute sample for {task[0]}: {result!s}", file=sys.stderr)
-
-
-def main_sample(args):
-    asyncio.run(sample_all_datasets(args))
-
-
-def main_list_commands(args):
-    print("Error: No command specified.\n\n"
-          "Available commands:\n"
-          "  serve      run webserver\n"
-          "  sample     sample all datasets\n"
-          "", file=sys.stderr)
-    sys.exit(1)
 
 
 def main(argv=sys.argv):
     import argparse
 
     parser = argparse.ArgumentParser(description='Fill up those seats on your empty train.')
-    parser.set_defaults(func=main_list_commands)
-    subparsers = parser.add_subparsers()
-
-    parser_serve = subparsers.add_parser('serve')
-    parser_serve.add_argument('--host', type=str, default='127.0.0.1', help='Bind socket to this host. (default: 127.0.0.1)')
-    parser_serve.add_argument('-p', '--port', type=int, default=8000, help='Bind socket to this port. (default: 8000)')
-    parser_serve.add_argument('--reload', action='store_true', help='Enable auto-reload.')
-    parser_serve.set_defaults(func=main_serve)
-
-    parser_sample = subparsers.add_parser('sample')
-    parser_sample.set_defaults(func=main_sample)
+    parser.add_argument('--host', type=str, default='127.0.0.1', help='Bind socket to this host. (default: 127.0.0.1)')
+    parser.add_argument('-p', '--port', type=int, default=8000, help='Bind socket to this port. (default: 8000)')
+    parser.add_argument('--reload', action='store_true', help='Enable auto-reload.')
+    parser.set_defaults(func=main_serve)
 
     args = parser.parse_args()
     args.func(args)
+
 
 if __name__ == '__main__':
     main()

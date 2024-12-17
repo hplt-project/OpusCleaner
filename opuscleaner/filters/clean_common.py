@@ -29,6 +29,14 @@ CHARS = {
     'id': r'[a-z]',
     'is': r'[abdefghijklmnoprstuvxyÁáðÐÉéÍíÓóÚúÝýÞþÆæÖö]',
     'it': r'[a-zàÀèÈéÉìÌíÍîÎòÒóÓùÙúÚ]',
+    # http://www.rikai.com/library/kanjitables/kanji_codes.unicode.shtml
+    # Hiragana: \u3040-\u309F (Hiragana characters)
+    # Katakana: \u30A0-\u30FF (Katakana characters)
+    # Full-width roman characters and half-width katakana ( \uFF00-\uFFEF)
+    # Kanji: \u4E00-\u9FAF (CJK unifed ideographs - Common and uncommon kanji)
+    # Japanese Punctuation and Symbols: \u3000-\u303F (CJK Symbols and Punctuation, including ideographic spaces, quotation marks, iteration marks, etc.)
+    # CJK unified ideographs Extension A - Rare kanji ( \u3400-\u4DBF )
+    'ja': r'[\u3040-\u309F\u30A0-\u30FF\uFF00-\uFFEF\u4E00-\u9FAF\u3000-\u303F\u3400-\u4DBF]',
     'ko': r'[\uac00-\ud7af]|[\u1100-\u11ff]|[\u3130-\u318f]|[\ua960-\ua97f]|[\ud7b0-\ud7ff]',
     'lt': r'[aąbcČčdeĘęĖėfghiĮįyjklmnoprsŠštuŲųŪūvzŽž]',
     'lv': r'[aĀābcČčdeĒēfgĢģhiĪījkĶķlĻļmnŅņoprsŠštuŪūvzŽž]',

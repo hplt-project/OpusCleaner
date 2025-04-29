@@ -1,37 +1,13 @@
 {
-    "type": "bilingual/monolingual",
     "description": "Filters the lines based on the ratio between alphabetic characters in a line from the language and others",
-    "parameters": {
-        "RATIOWORDSSRC": {
-            "help": "Ratio between words and non words (eg numbers, foreign words) in a src sentence.",
-            "required": false,
-            "type": "float",
-            "default": 0.6
-        },
-        "RATIOWORDSTRG": {
-            "help": "Ratio between words and non words (eg numbers, foreign words) in a trg sentence.",
-            "required": false,
-            "type": "float",
-            "default": 0.6
-        },
-        "RATIOALPHASRC": {
-            "help": "Ratio between characters from the src language compared to all characters (eg numbers, emoji, punctuation, etc...)",
-            "required": false,
-            "type": "float",
-            "default": 0.4
-        },
-        "RATIOALPHATRG": {
-            "help": "Ratio between characters from the trg language compared to all characters (eg numbers, emoji, punctuation, etc...)",
-            "required": false,
-            "type": "float",
-            "default": 0.4
-        },
-        "SRCLANG": {
-            "help": null,
-            "required": false,
+    "command": "./alpha_ratio.py --src-lang $LANG1 ${LANG2:+--trg-lang $LANG2} --ratio-words-src $SRCWORDRAT --ratio-words-trg $TRGWORDRAT --ratio-alpha-src $SRCALPHARAT --ratio-alpha-trg $TRGALPHARAT ${DEBUG:+--debug}",
+    "parameters":
+    {
+        "LANG1":
+        {
             "type": "str",
-            "default": "en",
-            "allowed_values": [
+            "allowed_values":
+            [
                 "aa",
                 "ab",
                 "af",
@@ -394,12 +370,11 @@
                 "zu"
             ]
         },
-        "TRGLANG": {
-            "help": null,
-            "required": false,
+        "LANG2":
+        {
             "type": "str",
-            "default": null,
-            "allowed_values": [
+            "allowed_values":
+            [
                 "aa",
                 "ab",
                 "af",
@@ -762,12 +737,36 @@
                 "zu"
             ]
         },
-        "DEBUG": {
-            "help": null,
-            "required": false,
+        "SRCWORDRAT":
+        {
+            "type": "float",
+            "default": 0.4,
+            "help": "Ratio between words and non words (eg numbers, foreign words) in a src sentence."
+        },
+        "TRGWORDRAT":
+        {
+            "type": "float",
+            "default": 0.4,
+            "help": "Ratio between words and non words (eg numbers, foreign words) in a trg sentence."
+        },
+        "SRCALPHARAT":
+        {
+            "type": "float",
+            "default": 0.5,
+            "help": "Ratio between characters from the src language compared to all characters (eg numbers, emoji, punctuation, etc...)"
+        },
+        "TRGALPHARAT":
+        {
+            "type": "float",
+            "default": 0.5,
+            "help": "Ratio between characters from the trg language compared to all characters (eg numbers, emoji, punctuation, etc...)"
+        },
+        "DEBUG":
+        {
             "type": "bool",
-            "default": false
+            "default": false,
+            "help": "Print reason for each line that is filtered out"
         }
     },
-    "command": "alpha_ratio.py ${RATIOWORDSSRC:+--ratio-words-src $RATIOWORDSSRC} ${RATIOWORDSTRG:+--ratio-words-trg $RATIOWORDSTRG} ${RATIOALPHASRC:+--ratio-alpha-src $RATIOALPHASRC} ${RATIOALPHATRG:+--ratio-alpha-trg $RATIOALPHATRG} ${SRCLANG:+--src-lang $SRCLANG} ${TRGLANG:+--trg-lang $TRGLANG} ${DEBUG:+--debug}"
+    "type": "bilingual"
 }

@@ -1,5 +1,5 @@
 {
-    "type": "bilingual",
+    "type": "monolingual",
     "name": "opus.RegExpSub",
     "description": "Apply regular expression substitutions",
     "command": "./opusfilter-ersatz.py --quiet opusfilter.preprocessors.RegExpSub \"$PARAMETERS_AS_YAML\"",

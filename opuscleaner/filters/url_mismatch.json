@@ -1,0 +1,12 @@
+{
+    "type": "bilingual",
+    "description": "Compare URLs on both sides",
+    "parameters": {
+        "DEBUG": {
+            "type": "bool",
+            "default": false,
+            "help": "Output deleted lines and extracted URLs to stderr"
+        }
+    },
+    "command": "./url_mismatch.py ${DEBUG:+--debug}"
+}

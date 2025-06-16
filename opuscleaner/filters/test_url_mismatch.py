@@ -42,3 +42,7 @@ class TestUrlMismatch(unittest.TestCase):
     def test_mismatch_two(self):
         """Different multiple URLs should be rejected."""
         self.assertReject('1 amazon.co.uk 2 amazon.it are great\t1 amazon.it 2 amazon.co.uk hello')
+
+    def test_bad_end_of_sentence(self):
+        """End of sentence without a space shouldn't be treated as a URL."""
+        self.assertAccept('Hello world.World hello\tHello world. World hello')

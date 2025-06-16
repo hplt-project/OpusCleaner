@@ -32,10 +32,23 @@ URL_REGEX = re.compile(
     re.X | re.I,
 )
 
+# Pattern that marks a *false* URL because of a sentence border inside the host
+DOT_CAP_INSIDE = re.compile(r'[a-z0-9]\.[A-Z]')
+
 
 def extract_url_list(text: str) -> List[str]:
-    """Return a *list* (preserving order) of verbatim URLs in *text*."""
-    return [m.group(0) for m in URL_REGEX.finditer(text)]
+    """
+    Return a list of  **excluding** any match
+    whose host contains 'xx.Capital', which is treated as a sentence-border artefact.
+    """
+    urls: List[str] = []
+    for m in URL_REGEX.finditer(text):
+        host = m.group('host')
+        if DOT_CAP_INSIDE.search(host):
+            # Likely 'Hello.World' joining two sentences → skip
+            continue
+        urls.append(m.group(0))
+    return urls
 
 
 def filter_url_mismatch(fin: TextIO, fout: TextIO, *, debug: bool = False) -> None:
@@ -54,8 +67,7 @@ def filter_url_mismatch(fin: TextIO, fout: TextIO, *, debug: bool = False) -> No
         if urls_left or urls_right:
             if urls_left != urls_right:
                 if debug:
-                    print(f"L: {urls_left}  R: {urls_right}", file=sys.stderr)
-                    print(line, file=sys.stderr)
+                    print(f"L: {urls_left}  R: {urls_right} Line: {line.rstrip()}", file=sys.stderr)
                 continue  # mismatch → reject line
 
         fout.write(line)

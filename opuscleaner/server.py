@@ -33,7 +33,7 @@ from opuscleaner.categories import app as categories_app
 from opuscleaner.config import DATA_PATH, FILTER_PATH, COL_PY, SAMPLE_PY, SAMPLE_SIZE
 from opuscleaner.datasets import list_datasets, dataset_path, sample_path, filter_configuration_path, compute_sample
 from opuscleaner.download import app as download_app
-from opuscleaner.filters import filter_format_command, format_shell, get_global_filter, get_global_filters, set_global_filters, list_filters, FilterType, FilterStep, FilterPipeline
+from opuscleaner.filtering import filter_format_command, format_shell, get_global_filter, get_global_filters, set_global_filters, list_filters, FilterType, FilterStep, FilterPipeline
 from opuscleaner.sample import sample
 
 

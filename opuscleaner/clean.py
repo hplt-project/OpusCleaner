@@ -24,7 +24,7 @@ from pydantic import parse_obj_as
 
 from opuscleaner import logging
 from opuscleaner.config import FILTER_PATH
-from opuscleaner.filters import list_filters, set_global_filters, filter_format_command, Filter, FilterPipeline, quote, format_shell
+from opuscleaner.filtering import list_filters, set_global_filters, filter_format_command, Filter, FilterPipeline, quote, format_shell
 from opuscleaner._util import none_throws, ThreadPool, CancelableQueue, Cancelled
 
 

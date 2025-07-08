@@ -10,3 +10,4 @@ sacremoses
 spacy-pkuseg
 more_itertools
 requests
+Babel

@@ -1,0 +1,17 @@
+{
+    "type": "bilingual",
+    "description": "Compare currencies (symbols and ISO codes) on both sides",
+    "parameters": {
+        "DEBUG": {
+            "type": "bool",
+            "default": false,
+            "help": "Output deleted or fixed lines and extracted currencies to stderr"
+        },
+        "FIX": {
+            "type": "bool",
+            "default": false,
+            "help": "Attempt fixing target sentence where possible"
+        }
+    },
+    "command": "./currency_mismatch.py ${DEBUG:+--debug} ${FIX:+--fix}"
+}

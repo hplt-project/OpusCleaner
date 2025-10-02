@@ -1,0 +1,28 @@
+{
+    "description": "Detect language with heliport",
+    "command": "./langid_heliport.py ${DEBUG:+--debug} ${ALLOW_NOTEXT:+--allow-notext} $SRC_LANG $TRG_LANG",
+    "type": "bilingual",
+    "parameters":
+    {
+        "SRC_LANG":
+        {
+            "type": "str",
+            "default": ""
+        },
+        "TRG_LANG":
+        {
+            "type": "str",
+            "default": ""
+        },
+        "ALLOW_NOTEXT":
+        {
+            "help": "Allow sentences with no textual information (e.g. only punctuation, spaces and/or numbers)",
+            "type": "bool",
+            "default": "true"
+        },
+        "DEBUG":
+        {
+            "type": "bool"
+        }
+    }
+}

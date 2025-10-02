@@ -3,6 +3,7 @@ bicleaner
 fasttext
 fugashi[unidic-lite]==1.1.2
 hanziconv==0.3.2
+iso639-lang==2.6.3
 laserembeddings[ja,zh]==1.1.2
 opusfilter==2.6.0
 pycld2==0.41

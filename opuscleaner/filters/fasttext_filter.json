@@ -7,11 +7,13 @@
         "FASTTEXT_MODEL_TYPE":
         {
             "type": "str",
-            "default": "small",
+            "default": "nllb",
             "allowed_values":
             [        
                 "small",
-                "large"
+                "large",
+                "openlid-v2",
+                "nllb"
             ]
         },
         "LANG1":

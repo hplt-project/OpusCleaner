@@ -6,6 +6,7 @@ from typing import List
 
 # The filename has to have a different name than 'fasttext', otherwise we can't import the module correctly
 import fasttext
+import iso639
 
 from more_itertools import chunked
 import requests
@@ -19,6 +20,10 @@ def download_model(model_type: str):
         url = "https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.ftz"
     elif model_type == "large":
         url = "https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin"
+    elif model_type == "openlid-v2":
+        url = "https://huggingface.co/laurievb/OpenLID-v2/resolve/main/model.bin"
+    elif model_type == "nllb":
+        url = "https://dl.fbaipublicfiles.com/nllb/lid/lid218e.bin"
     else:
         raise TypeError("Fasttext model type has to be either 'small' or 'large'.")
     file_name = model_type + ".bin"
@@ -38,7 +43,31 @@ def verify_lang(model: fasttext.FastText._FastText, texts: List[str], desired_la
 
     if debug:
         sys.stderr.write(f"LANGUAGES\t{[lang[0] for lang in langs]}\n")
-    return [row_langs[0] == desired_lang for row_langs in langs]
+    # Split by fourth field separated by _, which is compatible with lid176 models and nllb
+    # for nllb we don't take into account script
+    return [row_langs[0].split('_')[4] == desired_lang for row_langs in langs]
+
+
+def get_langcode(model_type, lang):
+    '''
+    Convert to 3-letter language codes for nllb model
+    '''
+    if model_type in ("small", "large"):
+        return lang
+
+    # Map to 3-letter codes that are not direct in iso639
+    # because the 2-letter is mapped to a macrolang code
+    LANG_MAP = {
+        "ar": "arb",
+        "fa": "pes",
+        "id": "ind",
+        "ms": "zsm",
+    }
+
+    if lang in LANG_MAP:
+        return LANG_MAP[lang]
+
+    return iso639.Lang(lang).pt3
 
 
 def main():
@@ -50,12 +79,13 @@ def main():
     parser.add_argument(
         "--model-type",
         type=str,
-        help="Either 'small' or 'large'. See https://fasttext.cc/docs/en/language-identification.html for more info.",
+        help="Either 'small', 'large' or 'nllb'. See https://fasttext.cc/docs/en/language-identification.html for more info.",
     )
     args = parser.parse_args()
     # Fastext way to encode language codes
-    source_lang = "__label__" + args.source_lang
-    target_lang = "__label__" + args.target_lang
+    source_lang = get_langcode(args.model_type, args.source_lang)
+    target_lang = get_langcode(args.model_type, args.target_lang)
+    source_lang, target_lang
     download_model(args.model_type)
     # Disable fasttext to notify us about loading the model
     fasttext.FastText.eprint = lambda x: None
@@ -69,6 +99,8 @@ def main():
         for row, source_ok, target_ok in zip(batch, sources_ok, targets_ok):
             if source_ok and target_ok:
                 sys.stdout.write(row + "\n")
+            elif args.debug:
+                sys.stderr.write(f"Discarded: {row}\n")
 
 
 if __name__ == "__main__":

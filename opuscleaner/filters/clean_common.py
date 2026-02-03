@@ -225,6 +225,8 @@ CHARS = {
     'ha_NE': r'[a-or-uwy-zƙƴɓɗʼ]',
     # Hawaiian
     'haw': r'[aeh-ik-puwāēīōūʻ]',
+    # Serbo-Croatian
+    'hbs': r'[a-pr-vzćčđšžа-ик-шђј-ћџ]',
     # Hebrew
     'he': r'[א-ת]',
     # Hindi
